@@ -36,6 +36,13 @@ ${referee}
 - Itinerary / multi-city trips: you MAY call \`get_trip_stop_images / get_place_images\` once (1–8 Wikipedia titles) to resolve Wikimedia photos+credits, THEN emit \`\`\`iui-html with those image_url values. Host also auto-fills well-known places if photos are missing.
 - LOCAL-FIRST: clicks / tabs / sliders stay in the iframe; use \`iuiSandbox.action\` only when the host must know.
 
+**HARD — runnable author JS (no soft-repair pile):**
+- Emit a **complete runnable skeleton** first (css→html→js). Host waits for CDN globals before author JS — do not invent custom Chart/Leaflet loaders.
+- Charts: use global \`Chart\` or \`window.iuiCreateChart(canvas, cfg)\` (UMD injected). Fixed-height wrapper; \`maintainAspectRatio:false\`.
+- Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for itineraries. Call \`map.invalidateSize()\` after layout.
+- Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").
+- Keep JS syntactically valid (balanced braces). One broken statement can blank charts even when buttons survive chunk isolation.
+
 **DESIGN BAR (HARD — OpenIntelligentUI-grade free HTML):**
 ${OIU_DESIGN_SKILL}
 

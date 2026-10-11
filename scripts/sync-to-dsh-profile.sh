@@ -28,7 +28,7 @@ for f in SKILL.md README.md README.zh-CN.md CHANGELOG.md LICENSE NOTICE demo-pro
 done
 if [[ -d "$SRC/docs" ]]; then
   mkdir -p "$DST/docs"
-  for f in INSTALL.md SETTINGS.md PILOT.zh-CN.md ACCEPTANCE.md; do
+  for f in INSTALL.md SETTINGS.md PILOT.zh-CN.md ACCEPTANCE.md GOLDEN-PROMPTS.zh-CN.md; do
     [[ -f "$SRC/docs/$f" ]] && cp "$SRC/docs/$f" "$DST/docs/" || true
   done
 fi

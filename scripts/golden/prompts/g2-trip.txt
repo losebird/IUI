@@ -1,0 +1,1 @@
+帮我做一个三日华东行程：苏州→杭州→上海，Leaflet 地图连线，每站 Wikimedia 实景卡，可 Pause/Replay。

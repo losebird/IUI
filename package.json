@@ -1,7 +1,7 @@
 {
   "name": "@losebird/iui",
   "description": "IUI for DeepSeek Harness: bubble-native free HTML/CSS/JS sandbox via ```iui-html. Plugin-only (no MCP). Fork of omdsh-dev/dsh-genui (MIT).",
-  "version": "0.13.0-iui.25",
+  "version": "0.13.0-iui.26",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/plugin/index.d.ts",
@@ -45,7 +45,8 @@
     "docs/HARD-WALLS.md",
     "docs/PLAN.zh-CN.md",
     "docs/FORMAT-ROUTER.md",
-    "docs/REDESIGN-SANDBOX-FIRST.zh-CN.md"
+    "docs/REDESIGN-SANDBOX-FIRST.zh-CN.md",
+    "docs/GOLDEN-PROMPTS.zh-CN.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -193,7 +194,9 @@
     "version:print": "node -p \"require(\\\"./package.json\\\").version\"",
     "smoke:fence-empty": "tsx scripts/smoke-fence-empty.mts",
     "e2e:session": "tsx scripts/e2e-session.mts",
-    "shots:sandbox-hd": "tsx scripts/render-sandbox-hd-shots.mts"
+    "shots:sandbox-hd": "tsx scripts/render-sandbox-hd-shots.mts",
+    "golden": "tsx scripts/golden-regression.mts",
+    "golden:fixture": "tsx scripts/golden-regression.mts --fixture-only"
   },
   "dsh": {
     "bundle": {

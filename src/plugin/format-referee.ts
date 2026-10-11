@@ -503,6 +503,7 @@ export function buildRefereePromptBlock(): string {
     '- Never emit legacy ```iui component trees ({"type":"hero"...}) or ```json for UI. Never use Markdown tables/lists as the UI.',
     '- Pattern: 1 short sentence → ```iui-html → optional 1 sentence.',
     '- Skeleton: `' + SANDBOX_RECIPE + '`',
+    '- Charts/maps: global Chart / L (host-injected). Prefer in-page controls over prompt()/alert().',
   ].join('\n')
 }
 

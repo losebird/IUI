@@ -1,0 +1,56 @@
+{
+  "version": "0.13.0-iui.26",
+  "cases": [
+    {
+      "id": "g1-billing",
+      "promptFile": "prompts/g1-billing.txt",
+      "mode": "live",
+      "expectChart": true,
+      "expectMap": false,
+      "expectFailStrip": false,
+      "timeoutSec": 180
+    },
+    {
+      "id": "g2-trip",
+      "promptFile": "prompts/g2-trip.txt",
+      "mode": "live",
+      "expectChart": false,
+      "expectMap": true,
+      "expectFailStrip": false,
+      "timeoutSec": 200
+    },
+    {
+      "id": "g3-weather",
+      "promptFile": "prompts/g3-weather.txt",
+      "mode": "live",
+      "expectChart": true,
+      "expectMap": false,
+      "expectFailStrip": false,
+      "timeoutSec": 180
+    },
+    {
+      "id": "g4-mealplan",
+      "promptFile": "prompts/g4-mealplan.txt",
+      "mode": "live",
+      "expectChart": false,
+      "expectMap": false,
+      "expectFailStrip": false,
+      "timeoutSec": 180
+    },
+    {
+      "id": "g5-coffee-map",
+      "promptFile": "prompts/g5-coffee-map.txt",
+      "mode": "live",
+      "expectChart": false,
+      "expectMap": true,
+      "expectFailStrip": false,
+      "timeoutSec": 200
+    },
+    {
+      "id": "f1-author-fail",
+      "mode": "fixture",
+      "expectFailStrip": true,
+      "timeoutSec": 30
+    }
+  ]
+}
