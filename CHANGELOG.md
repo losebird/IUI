@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0-iui.25
+
+Failure-visible sandbox UX (first-principles follow-up to .24):
+
+- In-sandbox failure strip when a chunked author-JS piece throws (SyntaxError/runtime), naming chunk n/total
+- Distinguishes **author** (model JS) vs **host/plugin** (CDN/pipeline) failures
+- In-strip + host chrome **重跑作者 JS / Re-run author JS** — re-runs author pipeline without full iframe reload (`force` runAuthorJs / `rerunAuthorJs`)
+- i18n zh/en keys; host ErrorState actions include rerun
+- No new soft-repair heuristics as the main path
+
+
 ## 0.13.0-iui.24
 
 P0 structural fix (readiness gate + chunked author JS):

@@ -375,5 +375,11 @@ export const EN = {
 'sandbox.reaskPrompt': 'Please regenerate the UI with a closed ```iui-html fence; itinerary cards must include Wikimedia photos and credits.',
 'sandbox.parseFail': 'Sandbox content could not be parsed — try a starter, or Regenerate',
 'sandbox.tileError': 'Map tiles failed to load — Reload, or check the network',
+'sandbox.rerunAuthorJs': 'Re-run author JS',
+'sandbox.authorChunkFail': 'Model author JS chunk {n}/{total} failed: {message}',
+'sandbox.authorFail': 'Model author JS failed: {message}',
+'sandbox.hostFail': 'Host / plugin failure: {message}',
+'sandbox.authorFailHint': 'This is model-authored script (not a plugin crash). Other chunks may still work; re-run author JS only.',
+'sandbox.hostFailHint': 'This is an IUI host/plugin issue (not model author JS). Try a full reload.',
 
 } as const

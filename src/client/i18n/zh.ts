@@ -370,5 +370,11 @@ export const ZH: Record<keyof typeof EN, string> = {
 'sandbox.reaskPrompt': '请用 ```iui-html 重新生成刚才的界面；行程卡必须带 Wikimedia 实景图与署名。',
 'sandbox.parseFail': '沙箱内容无法解析 — 可点示例模板，或点「重新生成」让模型重写',
 'sandbox.tileError': '地图瓦片加载失败 — 可点重新加载，或换网络后重试',
+'sandbox.rerunAuthorJs': '重跑作者 JS',
+'sandbox.authorChunkFail': '模型作者 JS 第 {n}/{total} 片失败：{message}',
+'sandbox.authorFail': '模型作者 JS 失败：{message}',
+'sandbox.hostFail': '宿主 / 插件失败：{message}',
+'sandbox.authorFailHint': '这是模型写出的脚本问题（不是插件挂了）。其它分片可能仍可用；可只重跑作者 JS。',
+'sandbox.hostFailHint': '这是 IUI 沙箱宿主 / 插件问题（不是模型作者 JS）。可重新加载整页。',
 
 }
