@@ -749,7 +749,7 @@ export function mergeSandboxDesignTokens(
 }
 
 /** Bridge: resize + action postMessage (no allow-same-origin). */
-function buildSandboxBridgeScript(frameId: string): string {
+export function buildSandboxBridgeScript(frameId: string): string {
   const idLiteral = JSON.stringify(frameId)
   return `<script>
 (function () {
@@ -1019,44 +1019,133 @@ function buildSandboxBridgeScript(frameId: string): string {
       try { window.iuiSandbox.restoreLocalState(data.state); measure(); } catch (e) {}
     }
     // P1-STATE: run author JS in-place on the frozen preview shell (no srcdoc rebuild → keep photos/DOM).
+    // CRITICAL: preview-shell posts ready BEFORE CDN <script src> tags finish (tags follow this
+    // bridge in body, or may be missing if shell froze before map html/js arrived). Wait for
+    // globals and inject allowlisted UMD builds if needed — otherwise L/Chart are undefined.
     if (data.type === 'runAuthorJs' && typeof data.js === 'string' && !window.__iuiAuthorJsRan) {
       window.__iuiAuthorJsRan = true;
       function softHarden(src) {
         if (typeof src !== 'string') return '';
-        return src
-          .replace(/[\u2018\u2019\u2032]/g, "'")
-          .replace(/[\u201C\u201D\u2033]/g, '"')
-          .replace(/import\s*\(\s*['"]chart\.js(?:\/auto)?['"]\s*\)/g,
-            'Promise.resolve(window.__iuiChartMod||{Chart:window.Chart,default:window.Chart,registerables:[]})');
-      }
-      try {
-        var fnSrc = softHarden(typeof data.jsFunctions === 'string' ? data.jsFunctions : '');
-        var body = softHarden(data.js);
-        var exprs = Array.isArray(data.jsExpressions) ? data.jsExpressions.slice(0, 64) : [];
-        try {
-          (0, eval)(fnSrc + '\n' + body);
-        } catch (err1) {
-          // One retry: if SyntaxError, leave body as-is but ensure chart import rewrite applied (already).
-          if (!(err1 && err1.name === 'SyntaxError')) throw err1;
-          console.warn('[iui-html] author JS SyntaxError, soft retry', err1);
-          (0, eval)(fnSrc + '\n' + body);
+        var q = String.fromCharCode;
+        var out = src
+          .split(q(0x2018)).join("'").split(q(0x2019)).join("'").split(q(0x2032)).join("'")
+          .split(q(0x201C)).join('"').split(q(0x201D)).join('"').split(q(0x2033)).join('"');
+        var needle = 'import(';
+        var idx = 0;
+        while ((idx = out.indexOf(needle, idx)) !== -1) {
+          var end = out.indexOf(')', idx);
+          if (end === -1) break;
+          var chunk = out.slice(idx, end + 1);
+          if (chunk.indexOf('chart.js') !== -1) {
+            out = out.slice(0, idx) + 'Promise.resolve(window.__iuiChartMod||{Chart:window.Chart,default:window.Chart,registerables:[]})' + out.slice(end + 1);
+            idx += 80;
+          } else idx = end + 1;
         }
-        exprs.forEach(function (src, i) {
-          try { (0, eval)(softHarden(src)); } catch (err) {
-            console.error('[iui-html] expr', i, err);
-            try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-          }
-        });
-      } catch (err) {
-        console.error('[iui-html]', err);
-        try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-        var banner = document.createElement('pre');
-        banner.className = 'iui-sandbox-muted';
-        banner.setAttribute('data-iui-error', '1');
-        banner.textContent = String(err && err.message ? err.message : err);
-        document.body.appendChild(banner);
+        return out;
       }
-      measure();
+      function wantsLeaflet(src) {
+        return src.indexOf('L.map') !== -1
+          || src.indexOf('L.tileLayer') !== -1
+          || src.indexOf('L.marker') !== -1
+          || src.indexOf('L.polyline') !== -1
+          || src.indexOf('L.divIcon') !== -1
+          || src.indexOf('L.circleMarker') !== -1
+          || src.indexOf('createTripAnimator') !== -1
+          || src.indexOf('iui-map-wrap') !== -1
+          || !!(document.querySelector && document.querySelector('.iui-map-wrap, #map'));
+      }
+      function wantsChart(src) {
+        return src.indexOf('new Chart') !== -1
+          || src.indexOf('iuiCreateChart') !== -1
+          || src.indexOf('iui-weather-chart') !== -1
+          || src.indexOf('wxChart') !== -1
+          || src.indexOf('__iuiChartMod') !== -1;
+      }
+function ensureCss(href) {
+        if (document.querySelector('link[href="' + href + '"]')) return;
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        (document.head || document.documentElement).appendChild(link);
+      }
+      function ensureScript(src, done) {
+        if (document.querySelector('script[src="' + src + '"]')) { done(); return; }
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        s.onload = function () { done(); };
+        s.onerror = function () { done(); };
+        (document.head || document.documentElement).appendChild(s);
+      }
+      function waitGlobal(check, done) {
+        if (check()) { done(true); return; }
+        var n = 0;
+        var t = setInterval(function () {
+          if (check()) { clearInterval(t); done(true); }
+          else if (++n > 125) { clearInterval(t); done(false); }
+        }, 40);
+      }
+      function runAuthor() {
+        try {
+          var fnSrc = softHarden(typeof data.jsFunctions === 'string' ? data.jsFunctions : '');
+          var body = softHarden(data.js);
+          var exprs = Array.isArray(data.jsExpressions) ? data.jsExpressions.slice(0, 64) : [];
+          try {
+            (0, eval)(fnSrc + '\\n' + body);
+          } catch (err1) {
+            if (!(err1 && err1.name === 'SyntaxError')) throw err1;
+            console.warn('[iui-html] author JS SyntaxError, soft retry', err1);
+            (0, eval)(fnSrc + '\\n' + body);
+          }
+          exprs.forEach(function (src, i) {
+            try { (0, eval)(softHarden(src)); } catch (err) {
+              console.error('[iui-html] expr', i, err);
+              try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+            }
+          });
+        } catch (err) {
+          console.error('[iui-html]', err);
+          try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+          var banner = document.createElement('pre');
+          banner.className = 'iui-sandbox-muted';
+          banner.setAttribute('data-iui-error', '1');
+          banner.textContent = String(err && err.message ? err.message : err);
+          document.body.appendChild(banner);
+        }
+        measure();
+      }
+      var probe = softHarden((typeof data.jsFunctions === 'string' ? data.jsFunctions : '') + '\\n' + data.js);
+      var chain = [];
+      if (wantsLeaflet(probe) && typeof L === 'undefined') {
+        chain.push(function (next) {
+          ensureCss('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css');
+          ensureScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js', function () {
+            waitGlobal(function () { return typeof L !== 'undefined'; }, function () { next(); });
+          });
+        });
+      } else if (wantsLeaflet(probe)) {
+        chain.push(function (next) {
+          waitGlobal(function () { return typeof L !== 'undefined'; }, function () { next(); });
+        });
+      }
+      if (wantsChart(probe) && typeof Chart === 'undefined') {
+        chain.push(function (next) {
+          ensureScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', function () {
+            waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
+          });
+        });
+      } else if (wantsChart(probe)) {
+        chain.push(function (next) {
+          waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
+        });
+      }
+      var i = 0;
+      function step() {
+        if (i >= chain.length) { runAuthor(); return; }
+        var fn = chain[i++];
+        fn(step);
+      }
+      step();
     }
   });
   setTimeout(measure, 0);
@@ -1402,8 +1491,9 @@ function autoCdnTags(html: string, js: string): string {
   // Inject whenever map APIs / itinerary chrome appear, unless a real leaflet.js <script src> is already present.
   const hasLeafletUmdScript = /<script[^>]+src=["'][^"']*leaflet(?:\.js|\.min\.js)/i.test(html)
   const wantsLeaflet =
-    /\bL\s*\.\s*(?:map|tileLayer|marker|polyline|divIcon|circleMarker)\s*\(/.test(all) ||
+    /\bL\s*\.\s*(?:map|tileLayer|marker|polyline|divIcon|circleMarker|latLngBounds|latLng)\s*\(/.test(all) ||
     /iui-map-wrap|createTripAnimator|openstreetmap\.org\/\{z\}/i.test(all) ||
+    /\bid\s*=\s*["']map["']/i.test(all) ||
     /\bimport\s*(?:\*|\{?\s*L\s*\}?)\s*from\s*['"]leaflet['"]/.test(all) ||
     (/leaflet/i.test(all) && /(?:map|tile|marker|lat|lng)/i.test(all))
   if (wantsLeaflet && !hasLeafletUmdScript) {
@@ -1492,7 +1582,8 @@ ${exprRunner}
 }
 });
 <\/script>`
-  const bridge = buildSandboxBridgeScript(frameId) + autoCdnTags(html, authorJs + fnSrc)
+  const cdnTags = autoCdnTags(html, authorJs + fnSrc)
+  const bridge = buildSandboxBridgeScript(frameId)
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag()
   const tripScript = buildTripAnimatorScriptTag()
@@ -1500,7 +1591,9 @@ ${exprRunner}
   // P1-PREVIEW-PHOTO: always inject runtime fill (well-known map). Volume trade for
   // stability — itinerary markers may arrive only in late html chunks / author JS.
   const photoFill = buildTripPhotoFillScript()
-  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}; style-src 'unsafe-inline' ${cdnCspOrigins()}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins()}; font-src https: data:; connect-src ${cdnCspOrigins()} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}<style>
+  // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
+  // `ready` (host may immediately runAuthorJs on the preview-shell path).
+  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}; style-src 'unsafe-inline' ${cdnCspOrigins()}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins()}; font-src https: data:; connect-src ${cdnCspOrigins()} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 ${authorCss}

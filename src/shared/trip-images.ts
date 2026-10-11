@@ -71,8 +71,10 @@ export const WELL_KNOWN_STOPS: Readonly<Record<string, KnownStop>> = {
   '陆家嘴': { file: 'Lujiazui_from_the_Bund.jpg', artist: 'Notwist', license: 'CC BY-SA 3.0', wiki: 'Lujiazui' },
   'nanjing road': { file: 'Nanjing_Road_Shanghai.jpg', artist: 'J. Patrick Fischer', license: 'CC BY-SA 3.0', wiki: 'Nanjing Road' },
   '南京路': { file: 'Nanjing_Road_Shanghai.jpg', artist: 'J. Patrick Fischer', license: 'CC BY-SA 3.0', wiki: 'Nanjing Road' },
-  'beijing': { file: 'Forbidden_City_Beijing_Shenwumen_Gate.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
-  '北京': { file: 'Forbidden_City_Beijing_Shenwumen_Gate.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
+  'beijing': { file: 'The_Forbidden_City_-_View_from_Coal_Hill.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
+  '北京': { file: 'The_Forbidden_City_-_View_from_Coal_Hill.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
+  'forbidden city': { file: 'The_Forbidden_City_-_View_from_Coal_Hill.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
+  '故宫': { file: 'The_Forbidden_City_-_View_from_Coal_Hill.jpg', artist: 'Charlie fong', license: 'CC BY-SA 4.0', wiki: 'Forbidden City' },
   'hangzhou': { file: 'West_Lake_-_Hangzhou.jpg', artist: 'Baycrest', license: 'CC BY-SA 2.5', wiki: 'West Lake' },
   '杭州': { file: 'West_Lake_-_Hangzhou.jpg', artist: 'Baycrest', license: 'CC BY-SA 2.5', wiki: 'West Lake' },
   'guangzhou': { file: 'Canton_Tower.jpg', artist: 'Zengame', license: 'CC BY-SA 3.0', wiki: 'Canton Tower' },
@@ -81,10 +83,14 @@ export const WELL_KNOWN_STOPS: Readonly<Record<string, KnownStop>> = {
   '深圳': { file: 'Shenzhen_Bay_Park.jpg', artist: 'Wtzdj', license: 'CC BY-SA 4.0', wiki: 'Shenzhen' },
   'chengdu': { file: 'Chengdu_IFS.jpg', artist: 'Base64bits', license: 'CC BY-SA 4.0', wiki: 'Chengdu' },
   '成都': { file: 'Chengdu_IFS.jpg', artist: 'Base64bits', license: 'CC BY-SA 4.0', wiki: 'Chengdu' },
-  'suzhou': { file: 'Humble_Administrator\'s_Garden.jpg', artist: 'Zhangzhugang', license: 'CC BY-SA 3.0', wiki: 'Humble Administrator\'s Garden' },
-  '苏州': { file: 'Humble_Administrator\'s_Garden.jpg', artist: 'Zhangzhugang', license: 'CC BY-SA 3.0', wiki: 'Humble Administrator\'s Garden' },
-  '南京': { file: 'Nanjing_Skyline_2018.jpg', artist: 'S5h', license: 'CC BY-SA 4.0', wiki: 'Nanjing' },
-  'nanjing': { file: 'Nanjing_Skyline_2018.jpg', artist: 'S5h', license: 'CC BY-SA 4.0', wiki: 'Nanjing' },
+  'suzhou': { file: 'Jinji_Lake_Suzhou_November_2017_001.jpg', artist: 'Alex Needham', license: 'CC BY-SA 4.0', wiki: 'Suzhou' },
+  '苏州': { file: 'Jinji_Lake_Suzhou_November_2017_001.jpg', artist: 'Alex Needham', license: 'CC BY-SA 4.0', wiki: 'Suzhou' },
+  'humble administrator': { file: 'Humble_Administrator\'s_Garden_Suzhou_November_2017_002.jpg', artist: 'Zhangzhugang', license: 'CC BY-SA 4.0', wiki: 'Humble Administrator\'s Garden' },
+  '拙政园': { file: 'Humble_Administrator\'s_Garden_Suzhou_November_2017_002.jpg', artist: 'Zhangzhugang', license: 'CC BY-SA 4.0', wiki: 'Humble Administrator\'s Garden' },
+  '南京': { file: 'Nanjing_Skyline.jpg', artist: 'S5h', license: 'CC BY-SA 4.0', wiki: 'Nanjing' },
+  'nanjing': { file: 'Nanjing_Skyline.jpg', artist: 'S5h', license: 'CC BY-SA 4.0', wiki: 'Nanjing' },
+  'jinan': { file: 'Jinan_Bahnhofsplatz-20150521-RM-123243.jpg', artist: 'Röntgenogram', license: 'CC BY-SA 4.0', wiki: 'Jinan' },
+  '济南': { file: 'Jinan_Bahnhofsplatz-20150521-RM-123243.jpg', artist: 'Röntgenogram', license: 'CC BY-SA 4.0', wiki: 'Jinan' },
   '西安': { file: 'Terracotta_Army-1.jpg', artist: 'Maros M r a z', license: 'CC BY 3.0', wiki: 'Terracotta Army' },
   'xian': { file: 'Terracotta_Army-1.jpg', artist: 'Maros M r a z', license: 'CC BY 3.0', wiki: 'Terracotta Army' },
   'xi\'an': { file: 'Terracotta_Army-1.jpg', artist: 'Maros M r a z', license: 'CC BY 3.0', wiki: 'Terracotta Army' },
@@ -547,33 +553,35 @@ export function buildTripPhotoFillScript(): string {
     }
     var img = photo.querySelector('img');
     var src = img && img.getAttribute('src');
-    var hasWiki = src && /wikimedia|commons\\.wikimedia/i.test(src);
-    if (!hasWiki) {
-      if (!img) {
-        img = document.createElement('img');
-        img.loading = 'lazy';
-        photo.appendChild(img);
-      }
+    var hasWiki = src && /wikimedia|commons\.wikimedia/i.test(src);
+    if (!img) {
+      img = document.createElement('img');
+      img.loading = 'lazy';
+      photo.appendChild(img);
+    }
+    // Prefer host well-known URL whenever missing/non-wiki OR already-broken wiki src.
+    // Models often emit 404 Commons filenames; Special:FilePath then yields broken icons.
+    var shouldForce = !hasWiki || img.getAttribute('data-iui-photo-host') === '1';
+    if (shouldForce || !src) {
+      img.setAttribute('data-iui-photo-host', '1');
       img.src = info.url;
       img.alt = String(place).trim() || 'destination';
       photo.style.backgroundImage = '';
-      img.onerror = function () {
-        if (img.getAttribute('data-iui-photo-fallback') === '1') return;
-        img.setAttribute('data-iui-photo-fallback', '1');
-        img.src = info.url;
-      };
-    } else {
-      // Existing img may be a broken Commons filename — swap to well-known on error/zero size.
-      (function (el, placeInfo) {
-        function swap() {
-          if (el.getAttribute('data-iui-photo-fallback') === '1') return;
-          el.setAttribute('data-iui-photo-fallback', '1');
-          el.src = placeInfo.url;
-        }
-        el.addEventListener('error', swap);
-        if (el.complete && el.naturalWidth === 0) swap();
-      })(img, info);
     }
+    (function (el, placeInfo) {
+      function swap() {
+        if (el.getAttribute('data-iui-photo-fallback') === '1' && el.getAttribute('src') === placeInfo.url) return;
+        el.setAttribute('data-iui-photo-fallback', '1');
+        el.setAttribute('data-iui-photo-host', '1');
+        el.src = placeInfo.url;
+      }
+      el.addEventListener('error', swap);
+      if (el.complete && el.naturalWidth === 0) swap();
+      // Late decode failure / cached broken icon
+      setTimeout(function () {
+        if (el.naturalWidth === 0) swap();
+      }, 1200);
+    })(img, info);
     ensureCredit(card, info);
     return true;
   }
