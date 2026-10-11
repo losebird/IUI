@@ -1173,6 +1173,13 @@ function mapConnectOrigins(): string {
     'https://server.arcgisonline.com',
     'https://services.arcgisonline.com',
     'https://basemap.nationalmap.gov',
+    // Trip photo runtime: Wikipedia REST + Commons API (generic place lookup)
+    'https://en.wikipedia.org',
+    'https://zh.wikipedia.org',
+    'https://*.wikipedia.org',
+    'https://commons.wikimedia.org',
+    'https://upload.wikimedia.org',
+    'https://thumb.wikimedia.org',
   ].join(' ')
 }
 
@@ -1194,7 +1201,9 @@ function mapImgOrigins(): string {
   ].join(' ')
 }
 
-/** Runtime: rewrite blocked OSM/Carto tiles + fallback chain on tileerror. */
+/** Runtime: rewrite blocked OSM/Carto tiles + fallback chain on tileerror.
+ * Also registers maps and refreshes tiles on Replay / moveend blank-outs.
+ */
 function buildLeafletTileGuardScript(): string {
   const primaryUrl = JSON.stringify(IUI_DEFAULT_MAP_TILE_URL)
   const primaryAttr = JSON.stringify(IUI_DEFAULT_MAP_TILE_ATTR)
@@ -1211,6 +1220,7 @@ function buildLeafletTileGuardScript(): string {
   var activeIndex = 0;
   var tileFails = 0;
   var swapped = false;
+  var maps = [];
   function opts(extra, idx) {
     var entry = chain[idx != null ? idx : activeIndex] || chain[0];
     var o = { attribution: entry.attribution, maxZoom: 19, crossOrigin: true };
@@ -1236,6 +1246,60 @@ function buildLeafletTileGuardScript(): string {
     }
     return 1;
   }
+  function trackMap(map) {
+    if (!map || maps.indexOf(map) !== -1) return;
+    maps.push(map);
+    try {
+      map.on('unload', function () {
+        var i = maps.indexOf(map);
+        if (i >= 0) maps.splice(i, 1);
+      });
+    } catch (e) {}
+  }
+  function refreshOne(map, reason) {
+    if (!map) return;
+    try { map.invalidateSize({ animate: false }); } catch (e1) {
+      try { map.invalidateSize(); } catch (e2) {}
+    }
+    var hasTile = false;
+    try {
+      map.eachLayer(function (layer) {
+        if (!layer) return;
+        var isTile = (typeof L !== 'undefined' && L.TileLayer && layer instanceof L.TileLayer)
+          || (layer && typeof layer.setUrl === 'function' && typeof layer._url === 'string')
+          || (layer && layer._url && /arcgisonline|openstreetmap|cartocdn|nationalmap/i.test(String(layer._url)));
+        if (!isTile) return;
+        hasTile = true;
+        try {
+          if (typeof layer.redraw === 'function') layer.redraw();
+        } catch (e) {}
+      });
+    } catch (e) {}
+    if (!hasTile && origTile) {
+      try { origTile(currentUrl(), opts(null, activeIndex)).addTo(map); hasTile = true; } catch (e) {}
+    }
+    // If DOM tiles are empty after pan/replay, force a soft re-add of the active basemap.
+    try {
+      var stats = countTiles(map);
+      if (stats.ok < 1 && origTile) {
+        map.eachLayer(function (layer) {
+          if (layer && typeof layer.setUrl === 'function' && typeof layer._url === 'string') {
+            try { map.removeLayer(layer); } catch (e) {}
+          }
+        });
+        origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
+        try { map.invalidateSize({ animate: false }); } catch (e) {}
+      }
+    } catch (e) {}
+    if (reason) {
+      try { console.warn('[iui-html] map refresh', reason); } catch (e) {}
+    }
+  }
+  function refreshAll(reason) {
+    for (var i = 0; i < maps.length; i++) {
+      try { refreshOne(maps[i], reason); } catch (e) {}
+    }
+  }
   function swapLayer(map, reason) {
     if (activeIndex >= chain.length - 1) return false;
     activeIndex++;
@@ -1253,6 +1317,8 @@ function buildLeafletTileGuardScript(): string {
     try {
       origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
       console.warn('[iui-html] map tile fallback →', currentUrl(), reason || '');
+      setTimeout(function () { refreshOne(map, 'post-swap'); }, 40);
+      setTimeout(function () { refreshOne(map, 'post-swap-late'); }, 280);
     } catch (e) {}
     return true;
   }
@@ -1271,9 +1337,6 @@ function buildLeafletTileGuardScript(): string {
       var w = im.naturalWidth || 0, h = im.naturalHeight || 0;
       if (w <= 0 || h <= 0) continue;
       if (w <= 16 || h <= 16) { tiny++; continue; }
-      // Esri gap stubs are often full 256 tiles with flat "Map data not yet available"
-      // text — we cannot read pixels (CORS), but after settle with arcgis URL +
-      // zero meaningful basemap we still swap via gapText / low-ok heuristics.
       if (w >= 64 && h >= 64) ok++;
       else gapish++;
     }
@@ -1297,9 +1360,11 @@ function buildLeafletTileGuardScript(): string {
     L.iuiDefaultTileLayer = function (map) {
       return origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
     };
+    L.iuiRefreshMaps = function (reason) { refreshAll(reason || 'api'); };
     var origMap = L.map.bind(L);
     L.map = function () {
       var map = origMap.apply(this, arguments);
+      trackMap(map);
       try {
         map.on('tileerror', function () {
           tileFails++;
@@ -1316,7 +1381,6 @@ function buildLeafletTileGuardScript(): string {
           }
         });
       } catch (e) {}
-      // East Asia: Esri Street commonly returns gap stubs — start on OSM FR HOT.
       function preferAsiaBasemap() {
         try {
           if (swapped || activeIndex > 0) return;
@@ -1336,13 +1400,12 @@ function buildLeafletTileGuardScript(): string {
         try {
           var hasTile = false;
           map.eachLayer(function (layer) {
-            if (layer instanceof L.TileLayer) hasTile = true;
+            if (typeof L !== 'undefined' && L.TileLayer && layer instanceof L.TileLayer) hasTile = true;
             else if (layer && typeof layer._url === 'string') hasTile = true;
           });
           if (!hasTile) origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
         } catch (e) {}
       }, 120);
-      // Settle checks: no tiles / gap text / only tiny stubs → advance fallback.
       function settleCheck(reason) {
         try {
           if (activeIndex >= chain.length - 1) return;
@@ -1356,8 +1419,50 @@ function buildLeafletTileGuardScript(): string {
       }
       setTimeout(function () { settleCheck('settle-1.2s'); }, 1200);
       setTimeout(function () { settleCheck('settle-2.8s'); }, 2800);
+      // After pan/zoom (Replay animation calls panTo repeatedly) tiles can blank — recover.
+      var moveTimer = null;
+      function onViewChange() {
+        if (moveTimer) clearTimeout(moveTimer);
+        moveTimer = setTimeout(function () {
+          try {
+            var stats = countTiles(map);
+            if (stats.ok < 1) refreshOne(map, 'view-empty');
+            else {
+              try { map.invalidateSize({ animate: false }); } catch (e) {}
+            }
+          } catch (e) {}
+        }, 180);
+      }
+      try {
+        map.on('moveend', onViewChange);
+        map.on('zoomend', onViewChange);
+      } catch (e) {}
       return map;
     };
+    // Replay chrome: models use #replay, #bReplay, or button label "Replay"/"重播".
+    if (!window.__iuiReplayTileHook) {
+      window.__iuiReplayTileHook = true;
+      document.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (!t) return;
+        var el = t;
+        try {
+          if (t.closest) el = t.closest('button, [role="button"], a, .iui-sandbox-btn') || t;
+        } catch (e) {}
+        var id = String((el && el.id) || '').toLowerCase();
+        var label = String((el && (el.textContent || el.getAttribute && el.getAttribute('aria-label'))) || '').toLowerCase();
+        var isReplay = id === 'replay' || id === 'breplay'
+          || id.indexOf('replay') !== -1
+          || label.indexOf('replay') !== -1
+          || label.indexOf('重播') !== -1
+          || label.indexOf('再播') !== -1;
+        if (!isReplay) return;
+        setTimeout(function () { refreshAll('replay-click'); }, 0);
+        setTimeout(function () { refreshAll('replay-click'); }, 120);
+        setTimeout(function () { refreshAll('replay-click'); }, 400);
+        setTimeout(function () { refreshAll('replay-click'); }, 900);
+      }, true);
+    }
     return true;
   }
   if (!patch()) {

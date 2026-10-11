@@ -32,7 +32,7 @@ stops.forEach(function(s,i){
   var card=document.createElement('div');
   card.className='iui-stop-card';
   card.dataset.i=String(i);
-  card.innerHTML='<div class="photo"><img src="'+s.img+'" alt="'+s.n+'" loading="lazy"/></div><div class="body"><span class="num">'+(i+1)+'</span><span class="name">'+s.n+'</span><div class="meta">'+s.d+' · '+s.desc+'</div></div>';
+  card.innerHTML='<div class="photo"><img src="'+s.img+'" alt="'+s.n+'" loading="eager" decoding="async"/></div><div class="body"><span class="num">'+(i+1)+'</span><span class="name">'+s.n+'</span><div class="meta">'+s.d+' · '+s.desc+'</div></div>';
   strip.appendChild(card);
 });
 map.fitBounds(L.latLngBounds(pts).pad(0.18));
@@ -52,6 +52,7 @@ var tour=window.createTripAnimator({
   stopCount: stops.length,
   durationMs: 6000,
   pinElements: pinEls,
+  map: map,
   onFrame: function(f){
     var count=f.pinIndex + (f.pinProgress >= 0.7 ? 1 : 0);
     line.setLatLngs(pts.slice(0, count));

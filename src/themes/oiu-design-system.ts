@@ -623,9 +623,29 @@ export function createTripAnimatorSource(): string {
     emit();
     if (onState) onState(elapsed >= duration ? "complete" : "paused");
   }
+  function refreshMaps() {
+    try {
+      if (options.map && typeof options.map.invalidateSize === 'function') {
+        try { options.map.invalidateSize({ animate: false }); } catch (e0) { options.map.invalidateSize(); }
+        try {
+          options.map.eachLayer(function (layer) {
+            if (layer && typeof layer.redraw === 'function') layer.redraw();
+          });
+        } catch (e1) {}
+      }
+    } catch (e) {}
+    try {
+      if (window.L && typeof L.iuiRefreshMaps === 'function') L.iuiRefreshMaps('animator-replay');
+    } catch (e2) {}
+  }
   function replay() {
     if (disposed) return;
-    pause(); elapsed = 0; emit(); play();
+    pause(); elapsed = 0; emit();
+    refreshMaps();
+    play();
+    setTimeout(refreshMaps, 80);
+    setTimeout(refreshMaps, 320);
+    setTimeout(refreshMaps, 800);
   }
   function onVisibility() { if (document.hidden) pause(); }
   function dispose() {
@@ -680,8 +700,8 @@ Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat).
 Editorial card: short title+subtitle, day/stop chips, REAL Leaflet map (height 300px, grayscale via .iui-map-wrap), Pause/Replay chrome, then horizontally scrollable destination cards (photo 110px + number + name + day + one-line desc).
 - Numbered L.divIcon pins with inner .iui-pin-dot (start opacity:0). Thin connecting polyline revealed as pins drop.
 - Host installs window.createTripAnimator — USE IT (do not invent timers):
-  createTripAnimator({ stopCount, durationMs:6000, pinElements, onFrame, onState })
-  → play()/pause()/replay()/seek(i)/dispose(). onFrame gives {pinIndex, pinProgress, activeStop}.
+  createTripAnimator({ stopCount, durationMs:6000, pinElements, map, onFrame, onState })
+  → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles. onFrame gives {pinIndex, pinProgress, activeStop}.
 - On activateStop: highlight card (aria-current), set strip.scrollLeft to card offset (not scrollIntoView), update status text.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
 - Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (Esri Light Gray → Topo → OSM FR HOT). Never tile.openstreetmap.org or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup.
@@ -690,8 +710,9 @@ Editorial card: short title+subtitle, day/stop chips, REAL Leaflet map (height 3
      (Tokyo, California coast, Shanghai daytrip, hotels, landmarks — not only France).
      Put each image_url into .photo / .cover img and show .iui-photo-credit (artist · license → credit_url).
   2) Or emit Wikimedia Commons HTTPS yourself (Special:FilePath / upload / thumb).
-  3) Host ALSO auto-fills empty .photo/.cover for well-known places + .iui-hotel-card / .iui-product-card /
-     .iui-place-card / .iui-cover-card / [data-iui-place] — still NEVER ship intentional text-only cards;
+  3) Host ALSO auto-fills .photo/.cover via soft well-known cache + Wikipedia/Commons lookup (zh/en, retries)
+     for .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card / [data-iui-place].
+     Model-invented Commons filenames are replaced when they 404. Prefer loading=eager on stop photos.
      NEVER invent Unsplash/random hosts; NEVER use solid muted blocks as photo stand-ins.
   Never invent live traffic/hours.
 
