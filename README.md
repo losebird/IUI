@@ -56,52 +56,63 @@ Mount works on stock dsh builds: **fence-registry** when the host exposes it, ot
 
 ## Install
 
-**Requirements:** Node `^22.19 || >=24`, pnpm `>=11.7 <12`, a working dsh web profile.
+**Requirements:** DeepSeek Harness `dsh` on PATH (or `npx @deepseek-ai/dsh` / `pnpm dsh` from a harness checkout), Node `^22.19 || >=24`, a working web profile.
 
-> **npm status.** First publish of `@losebird/iui` is blocked until the `@losebird` npm org exists (registry returns *Scope not found*). Until then, install from Git.
+You do **not** need to clone this repository first. `dsh plugin add` fetches the package into the profile.
 
-### From Git (current)
-
-In your dsh web profile `package.json`:
-
-```json
-{
-  "dependencies": {
-    "@losebird/iui": "github:losebird/IUI#main"
-  }
-}
-```
-
-Then install, ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` ships an `insert` for `@losebird/iui`), start the web profile, and hard-refresh the browser.
-
-### From npm (after org + publish)
+### Recommended: GitHub into a profile
 
 ```bash
-pnpm add @losebird/iui@0.13.0-iui.18
+dsh plugin --profile <profile> add github:losebird/IUI
+dsh web   # or: dsh --profile <profile>
 ```
 
-### From a local clone (dev)
+Replace `<profile>` with the profile you actually use (often `web`). If you started the UI with `npx` and have no `dsh` on PATH:
+
+```bash
+npx @deepseek-ai/dsh plugin --profile <profile> add github:losebird/IUI
+npx @deepseek-ai/dsh web
+```
+
+From a DeepSeek Harness source checkout, prefix with `pnpm`:
+
+```bash
+pnpm dsh plugin --profile <profile> add github:losebird/IUI
+```
+
+This repository ships `lib/`, so a git install does not need a local build. Do **not** run `npm dsh` or `pnpm dsh` from your home directory. `npx` does not install a global `dsh` command.
+
+Open the web URL **with the `?token=` from the start log**. Console should show `[iui] client active…`; Settings should list **IUI**.
+
+### After npm publish
+
+Once `@losebird/iui` is on the registry:
+
+```bash
+dsh plugin --profile <profile> add @losebird/iui
+```
+
+> **npm status.** First publish is still blocked: the `@losebird` npm org does not exist yet (registry returns *Scope not found*). Creating that org is a one-time step on [npmjs.com](https://www.npmjs.com/) — the CLI cannot create orgs. Until then, use the GitHub install above.
+
+### Desktop / Electron profile
+
+Some desktop hosts (DeepSeek Harness desktop, DSHEAC AIO, etc.) manage a profile exclusively and refuse CLI writes such as `dsh plugin add` (you may see `profile "desktop" is managed exclusively by the Electron application` or a profile-upgrade gate that rejects unexpected symlinks / `link:` deps). In that case use the **in-app plugin manager** (Settings → Plugins), or install as a **real directory** under the profile’s `node_modules` — not a `link:` / junction. See notes in [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) for the same desktop constraints.
+
+### Clone only for development
 
 ```bash
 git clone https://github.com/losebird/IUI.git
 cd IUI
 pnpm install
 pnpm run build
-
-# Point the profile at the built tree, e.g.
-# "@losebird/iui": "file:/absolute/path/to/IUI"
-#
-# Or sync into an existing profile:
+dsh plugin --profile <profile> add .
+# or sync into an existing install:
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui
 ```
-
-Open the web URL **with the `?token=` from the start log** (dsh web auth). Console should show `[iui] client active…`; Settings should list **IUI**.
 
 Do **not** run `@changfenhuang/dsh-genui` (or another GenUI fork) alongside IUI — they fight over the same fence surface.
 
 More detail: [docs/INSTALL.md](./docs/INSTALL.md) · [docs/SETTINGS.md](./docs/SETTINGS.md) · [docs/PILOT.zh-CN.md](./docs/PILOT.zh-CN.md)
-
----
 
 ## Try it
 
