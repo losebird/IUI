@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Version** | `0.13.0-iui.18` (sandbox-first) |
+| **Version** | `0.13.0-iui.20` (sandbox-first) |
 | **Shape** | dsh plugin only — **not** an MCP product |
 | **Fence** | `` ```iui-html `` (stream: css → html → js) |
 | **License** | MIT (fork lineage from [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)) |
@@ -28,6 +28,21 @@ Ask something visual — *“plan a three-day coastal trip”*, *“compare thes
 - **Soft guidance only** — system prompt, pre-step, steer, stream hints; no sampling hard-card in the plugin
 
 **Not in 0.13:** component pack catalogs, DIL compile, Gateway / IR / frames, whitelist-as-gate, weak-model hard guarantees. Those paths were removed on purpose so the product stays one clear story: **model writes a page → plugin sandboxes it.**
+
+---
+
+## Live examples
+
+These are **real live dsh screenshots** of pages rendered from `` ```iui-html `` fences inside the sandbox iframe (not mocked HD composites, not upstream GenUI catalog shots). Content and layout come from the model for that session — cities and themes below are **examples of what a page can look like**, not built-in product features.
+
+| Itinerary page (map + stop cards) | Weather chart page |
+|---|---|
+| ![Live dsh — itinerary in iui-html sandbox](./assets/examples/live-itinerary.jpg) | ![Live dsh — weather in iui-html sandbox](./assets/examples/live-weather.jpg) |
+
+![Live dsh — same weather page mounted in the chat bubble](./assets/examples/live-weather-in-chat.jpg)
+
+*Caption: weather page in the assistant bubble (dsh web + IUI + Muse Spark 1.3).*
+
 
 ---
 

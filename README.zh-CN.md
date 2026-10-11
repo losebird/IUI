@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **版本** | `0.13.0-iui.18`（沙箱优先） |
+| **版本** | `0.13.0-iui.20`（沙箱优先） |
 | **形态** | 仅 dsh 插件 — **不是** MCP 产品 |
 | **围栏** | `` ```iui-html ``（流式：css → html → js） |
 | **许可** | MIT（fork 自 [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)） |
@@ -28,6 +28,21 @@
 - **仅软约束**：systemPrompt、pre-step、steer、流式提示；插件侧不做采样硬卡
 
 **0.13 已移除：** 组件 pack 目录、DIL 编译、Gateway / IR / frames、白名单当门槛、弱模型硬保证。删掉是为了只剩一条清楚的产品故事：**模型写页 → 插件沙箱挂载。**
+
+---
+
+## 真机样张
+
+以下均为 **dsh 真机截图**：`` ```iui-html `` 围栏在沙箱 iframe 里挂载后的页面（不是假 HD 拼图，也不是上游 GenUI 目录组件样张）。页面内容与版式来自当次模型输出——图中的城市与主题只是**某次会话长什么样**，不是写死的产品功能。
+
+| 行程页（地图 + 站点卡） | 天气图表页 |
+|---|---|
+| ![真机 dsh — iui-html 沙箱行程页](./assets/examples/live-itinerary.jpg) | ![真机 dsh — iui-html 沙箱天气页](./assets/examples/live-weather.jpg) |
+
+![真机 dsh — 天气页在助手气泡内挂载](./assets/examples/live-weather-in-chat.jpg)
+
+*说明：天气页在助手气泡内（dsh web + IUI + Muse Spark 1.3）。*
+
 
 ---
 
