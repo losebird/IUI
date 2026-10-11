@@ -355,6 +355,12 @@ export function sanitizeSandboxMarkup(html: string): string {
     .replace(/\\p>/g, '<p>')
     .replace(/(?<=[>\n])\\(?=\s)/g, '') // stray model backslash junk
     .replace(/\\n(?=\s|[\u4e00-\u9fff])/g, '') // visible '\\n' leaked into text
+    // Keep simple author handlers (fn / fn() / fn(event)) as data-iui-on-* for bridge delegation.
+    // Anything else (alert(1), inline statements) is still stripped below.
+    .replace(
+      /\s+on(click|change|input|submit)\s*=\s*(["'])\s*([A-Za-z_$][\w$]*)\s*(?:\(\s*(?:event|ev|e)?\s*\))?\s*\2/gi,
+      (_full, evt: string, _q: string, fn: string) => ` data-iui-on-${String(evt).toLowerCase()}="${fn}"`,
+    )
     .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/<base\b[^>]*>/gi, '<!-- blocked base -->')
     .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '<!-- blocked meta -->')
@@ -905,6 +911,18 @@ export function buildSandboxBridgeScript(frameId: string): string {
     var reason = ev && ev.reason;
     post({ type: 'error', message: String(reason && reason.message ? reason.message : reason) });
   });
+  function invokeDataHandler(el, attr, ev) {
+    if (!el || !el.getAttribute) return false;
+    var name = el.getAttribute(attr);
+    if (!name || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return false;
+    var fn = window[name];
+    if (typeof fn !== 'function') return false;
+    try { fn.call(el, ev); } catch (err) {
+      console.error('[iui-html] handler', name, err);
+      try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+    }
+    return true;
+  }
   document.addEventListener('click', function (ev) {
     var el = ev.target;
     while (el && el !== document && el !== document.documentElement) {
@@ -930,8 +948,21 @@ export function buildSandboxBridgeScript(frameId: string): string {
         window.iuiSandbox.action(action, payload);
         break;
       }
+      if (invokeDataHandler(el, 'data-iui-on-click', ev)) break;
       el = el.parentElement;
     }
+  }, true);
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (el) invokeDataHandler(el, 'data-iui-on-change', ev);
+  }, true);
+  document.addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (el) invokeDataHandler(el, 'data-iui-on-input', ev);
+  }, true);
+  document.addEventListener('submit', function (ev) {
+    var el = ev.target;
+    if (el && invokeDataHandler(el, 'data-iui-on-submit', ev)) ev.preventDefault();
   }, true);
   document.addEventListener('submit', function (ev) {
     var form = ev.target;
@@ -1055,11 +1086,16 @@ export function buildSandboxBridgeScript(frameId: string): string {
           || !!(document.querySelector && document.querySelector('.iui-map-wrap, #map'));
       }
       function wantsChart(src) {
+        var hasCanvas = !!(document.querySelector && document.querySelector('canvas'));
         return src.indexOf('new Chart') !== -1
           || src.indexOf('iuiCreateChart') !== -1
           || src.indexOf('iui-weather-chart') !== -1
           || src.indexOf('wxChart') !== -1
-          || src.indexOf('__iuiChartMod') !== -1;
+          || src.indexOf('__iuiChartMod') !== -1
+          || src.indexOf('Chart.getChart') !== -1
+          || src.indexOf('chart.js') !== -1
+          || (src.indexOf('Chart') !== -1 && /line|bar|doughnut|pie|radar|polarArea/i.test(src))
+          || (hasCanvas && /Chart|chart\.js|doughnut|pie|radar/i.test(src));
       }
 function ensureCss(href) {
         if (document.querySelector('link[href="' + href + '"]')) return;
@@ -1090,19 +1126,41 @@ function ensureCss(href) {
           var fnSrc = softHarden(typeof data.jsFunctions === 'string' ? data.jsFunctions : '');
           var body = softHarden(data.js);
           var exprs = Array.isArray(data.jsExpressions) ? data.jsExpressions.slice(0, 64) : [];
-          try {
-            (0, eval)(fnSrc + '\\n' + body);
-          } catch (err1) {
-            if (!(err1 && err1.name === 'SyntaxError')) throw err1;
-            console.warn('[iui-html] author JS SyntaxError, soft retry', err1);
-            (0, eval)(fnSrc + '\\n' + body);
-          }
-          exprs.forEach(function (src, i) {
-            try { (0, eval)(softHarden(src)); } catch (err) {
-              console.error('[iui-html] expr', i, err);
-              try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+          // Preview-shell injects after DOMContentLoaded/load already fired — same race as final embed.
+          var origDocAdd = document.addEventListener.bind(document);
+          var origWinAdd = window.addEventListener.bind(window);
+          document.addEventListener = function (type, listener, opts) {
+            if ((type === 'DOMContentLoaded' || type === 'readystatechange') && document.readyState !== 'loading') {
+              try { listener.call(document, new Event(type)); } catch (e) {}
+              return;
             }
-          });
+            return origDocAdd(type, listener, opts);
+          };
+          window.addEventListener = function (type, listener, opts) {
+            if (type === 'load' && document.readyState === 'complete') {
+              try { listener.call(window, new Event(type)); } catch (e) {}
+              return;
+            }
+            return origWinAdd(type, listener, opts);
+          };
+          try {
+            try {
+              (0, eval)(fnSrc + '\\n' + body);
+            } catch (err1) {
+              if (!(err1 && err1.name === 'SyntaxError')) throw err1;
+              console.warn('[iui-html] author JS SyntaxError, soft retry', err1);
+              (0, eval)(fnSrc + '\\n' + body);
+            }
+            exprs.forEach(function (src, i) {
+              try { (0, eval)(softHarden(src)); } catch (err) {
+                console.error('[iui-html] expr', i, err);
+                try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+              }
+            });
+          } finally {
+            document.addEventListener = origDocAdd;
+            window.addEventListener = origWinAdd;
+          }
         } catch (err) {
           console.error('[iui-html]', err);
           try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
@@ -1584,7 +1642,9 @@ function autoCdnTags(html: string, js: string): string {
     /\bnew\s+Chart\s*\(/.test(all) ||
     /import\s*\(\s*['"]chart\.js/.test(all) ||
     /iui-weather-chart|wxChart|__iuiChartMod|iuiCreateChart/.test(all) ||
-    (/\bChart\b/.test(all) && /(?:line|bar|doughnut|pie|radar)/i.test(all))
+    (/\bChart\b/.test(all) && /(?:line|bar|doughnut|pie|radar|polarArea)/i.test(all)) ||
+    /<canvas\b[^>]*(?:id|class)\s*=\s*["'][^"']*[Cc]hart/i.test(html) ||
+    (/<canvas\b/i.test(html) && /(?:doughnut|pie|radar|polarArea|chart\.js)/i.test(all))
   if (wantsChart && !hasChartUmdScript) {
     tags.push('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>')
   }
