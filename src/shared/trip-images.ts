@@ -541,7 +541,7 @@ export function buildTripPhotoFillScript(): string {
     card.appendChild(c);
   }
   function fillCard(card) {
-    var nameEl = card.querySelector('.name') || card.querySelector('[data-place]');
+    var nameEl = card.querySelector('.name') || card.querySelector('[data-place]') || card.querySelector('[data-iui-place]') || card.querySelector('b') || card.querySelector('h3,h4');
     var place = (nameEl && (nameEl.getAttribute('data-place') || nameEl.getAttribute('data-iui-place') || nameEl.textContent)) || card.getAttribute('data-place') || card.getAttribute('data-iui-place') || '';
     var info = lookup(place);
     if (!info) return false;
@@ -561,13 +561,12 @@ export function buildTripPhotoFillScript(): string {
     }
     // Prefer host well-known URL whenever missing/non-wiki OR already-broken wiki src.
     // Models often emit 404 Commons filenames; Special:FilePath then yields broken icons.
-    var shouldForce = !hasWiki || img.getAttribute('data-iui-photo-host') === '1';
-    if (shouldForce || !src) {
-      img.setAttribute('data-iui-photo-host', '1');
-      img.src = info.url;
-      img.alt = String(place).trim() || 'destination';
-      photo.style.backgroundImage = '';
-    }
+    // Always prefer host well-known when we resolved a place — model Commons
+    // filenames are frequently 404 (spaces/%20, wrong title, etc.).
+    img.setAttribute('data-iui-photo-host', '1');
+    img.src = info.url;
+    img.alt = String(place).trim() || 'destination';
+    photo.style.backgroundImage = '';
     (function (el, placeInfo) {
       function swap() {
         if (el.getAttribute('data-iui-photo-fallback') === '1' && el.getAttribute('src') === placeInfo.url) return;
