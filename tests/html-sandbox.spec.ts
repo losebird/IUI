@@ -121,7 +121,8 @@ describe('html-sandbox', () => {
     const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'cap' })
     expect(doc).toContain('/* css truncated */')
     expect(doc).toContain('/* js truncated */')
-    expect(doc.length).toBeLessThan(200_000)
+    // Pipeline + OIU kit grew the baseline; still well under srcdoc hard cap (500k).
+    expect(doc.length).toBeLessThan(350_000)
   })
 })
 
@@ -353,6 +354,8 @@ describe('html-sandbox production harden (P1-3/5/6)', () => {
       frameId: 'fin',
       deferAuthorJs: false,
     })
-    expect(finalDoc).toContain('textContent="1"')
+    // Final path JSON-embeds author JS via jsChunks (shared pipeline).
+    expect(finalDoc).toContain('ensureLibsThenRun')
+    expect(finalDoc).toMatch(/textContent\\*=\\*"1"|textContent=\\"1\\"/)
   })
 })

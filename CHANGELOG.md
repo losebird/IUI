@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0-iui.24
+
+P0 structural fix (readiness gate + chunked author JS):
+
+- Single iframe pipeline: libs (CDN globals) → `#iui-preview-root` → chunked author JS → `authorSettled`
+- `bridgeReady`/`ready` are handshake only — not author-runnable
+- Host `splitAuthorJsChunks` + iframe try/catch per chunk so one SyntaxError cannot kill charts+buttons together
+- Preview-shell and final srcdoc share `ensureLibsThenRun` (no more divergent eval paths)
+- Removed same-source SyntaxError soft retry
+
+
 ## 0.13.0-iui.23
 
 Soft-repair excess Chart `}` (Ace billing follow-up):

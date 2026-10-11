@@ -28,6 +28,7 @@ import {
   sanitizeSandboxMarkup,
   starterToFenceBody,
   prepareAuthorJs,
+  splitAuthorJsChunks,
   type HtmlSandboxSpec,
 } from '../shared/html-sandbox.ts'
 import { enrichPlaceMediaHtml } from '../shared/trip-images.ts'
@@ -320,13 +321,15 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         html = `${html.slice(0, HTML_SANDBOX_MAX_HTML_BYTES)}\n<!-- html truncated -->`
       }
       win.postMessage({ source: 'iui-html-host', type: 'previewHtml', frameId, html }, '*')
+      const preparedJs = prepareAuthorJs(parsed.js)
       win.postMessage({
         source: 'iui-html-host',
         type: 'runAuthorJs',
         frameId,
-        js: prepareAuthorJs(parsed.js),
+        js: preparedJs,
         jsFunctions: prepareAuthorJs(parsed.jsFunctions ?? ''),
         jsExpressions: (parsed.jsExpressions ?? []).map((x) => prepareAuthorJs(x)),
+        jsChunks: splitAuthorJsChunks(preparedJs),
       }, '*')
     } catch {
       authorJsRanRef.current = false
@@ -366,7 +369,8 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         setAutoHeight(clampHeight(event.data.height, baseHeight))
         return
       }
-      if (event.data.type === 'ready') {
+      if (event.data.type === 'ready' || event.data.type === 'bridgeReady') {
+        // Handshake only — libs/author readiness is gated inside the iframe pipeline.
         setReady(true)
         // Push current bindings + typed appData into the sandbox frame.
         try {
@@ -392,6 +396,10 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
       }
       if (event.data.type === 'error') {
         setError(friendlyError(event.data.message, t))
+        return
+      }
+      if (event.data.type === 'authorSettled') {
+        // Chunk failures already posted as error; settled means pipeline finished.
         return
       }
       if (event.data.type === 'action') {
