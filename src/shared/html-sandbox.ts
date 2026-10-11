@@ -258,6 +258,12 @@ export function hardenAuthorJs(source: string): string {
     // Keep \t \n \r; strip other C0 controls that break parsers.
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     .replace(/<\/script/gi, '<\\/script')
+  // Soft-fix model typos BEFORE paren/brace balancing so we don't insert an extra `)`.
+  out = out.replace(
+    /\b(var|let|const)\s+([A-Za-z_$][\w$]*)\s+([A-Za-z_$][\w$]*)\s*(=)/g,
+    '$1 $3 $4',
+  )
+  out = softFixArrayCallbackParens(out)
   // Soft-close truncated objects/arrays/parens (common when model cuts mid-fence).
   const opens = { '{': 0, '[': 0, '(': 0 }
   let inStr: '"' | "'" | '`' | null = null
@@ -283,6 +289,82 @@ export function hardenAuthorJs(source: string): string {
   if (opens['{'] > 0 && opens['{'] <= 4) out += '}'.repeat(opens['{'])
   // Soft-strip invalid RegExp flags (common model typo → "Invalid regular expression flags").
   out = sanitizeAuthorRegexFlags(out)
+  return out
+}
+
+/**
+ * Models often write `arr.forEach(function (x) { ... };` (close with `};` instead of `});`).
+ * Insert the missing `)` before `;` when an array-callback call is left open.
+ */
+export function softFixArrayCallbackParens(source: string): string {
+  if (!source) return source
+  const re = /\.(forEach|map|filter|some|every|find|findIndex|reduce|reduceRight|flatMap)\s*\(\s*function\b/g
+  let out = source
+  let match: RegExpExecArray | null
+  const inserts: number[] = []
+  while ((match = re.exec(source)) !== null) {
+    // Walk from after `function` to find function body close, then expect `)` before `;`.
+    let i = match.index + match[0].length
+    // skip optional name
+    while (i < source.length && /\s/.test(source[i]!)) i++
+    if (/[A-Za-z_$]/.test(source[i]!)) {
+      while (i < source.length && /[\w$]/.test(source[i]!)) i++
+    }
+    while (i < source.length && /\s/.test(source[i]!)) i++
+    if (source[i] !== '(') continue
+    // skip params
+    let depth = 0
+    let inStr: '"' | "'" | '`' | null = null
+    let escape = false
+    for (; i < source.length; i++) {
+      const ch = source[i]!
+      if (inStr) {
+        if (escape) { escape = false; continue }
+        if (ch === '\\') { escape = true; continue }
+        if (ch === inStr) inStr = null
+        continue
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue }
+      if (ch === '(') depth++
+      else if (ch === ')') {
+        depth--
+        if (depth === 0) { i++; break }
+      }
+    }
+    while (i < source.length && /\s/.test(source[i]!)) i++
+    if (source[i] !== '{') continue
+    // walk function body
+    depth = 0
+    inStr = null
+    escape = false
+    for (; i < source.length; i++) {
+      const ch = source[i]!
+      if (inStr) {
+        if (escape) { escape = false; continue }
+        if (ch === '\\') { escape = true; continue }
+        if (ch === inStr) inStr = null
+        continue
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue }
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) { i++; break }
+      }
+    }
+    while (i < source.length && /\s/.test(source[i]!)) i++
+    // Expected `)` to close .forEach( — if we see `;` or another statement start, insert `)`.
+    if (source[i] === ')') continue
+    if (source[i] === ';' || source[i] === '}' || source[i] === '\n') {
+      inserts.push(i)
+    }
+  }
+  if (inserts.length === 0) return out
+  // apply from end
+  for (let k = inserts.length - 1; k >= 0; k--) {
+    const at = inserts[k]!
+    out = out.slice(0, at) + ')' + out.slice(at)
+  }
   return out
 }
 

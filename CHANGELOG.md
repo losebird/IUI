@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0-iui.22
+
+Subscription billing buttons + model JS typos (Ace):
+
+- **iframe**: `allow-modals` so `prompt`/`confirm`/`alert` work (models wire "+添加订阅" to `prompt()`; without modals it no-ops and looks dead).
+- **hardenAuthorJs**: soft-fix `var d ctx1 =` double-identifier typos and `arr.forEach(function () { ... };` missing `)` — otherwise SyntaxError kills charts + binders.
+- Builds on `.21` Chart wait + DOMContentLoaded + safe onclick.
+
 ## 0.13.0-iui.21
 
 Chart.js + button handlers on preview-shell (Ace — no hardcoding):
