@@ -227,6 +227,75 @@ function commonsFilenameFromUrl(url: string): string | null {
   }
 }
 
+function hasCjkText(s: string): boolean {
+  return /[\u3400-\u9fff]/.test(s)
+}
+
+function wikipediaTitleVariants(place: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (t: string) => {
+    const v = t.trim()
+    if (!v || v.length > 120 || seen.has(v)) return
+    seen.add(v)
+    out.push(v)
+  }
+  push(place)
+  // Generic civic suffix for short CJK toponyms (「苏州市」) — not a city allowlist.
+  if (hasCjkText(place) && place.length >= 2 && place.length <= 4
+    && !place.includes('市') && !place.includes('省')) {
+    push(`${place}市`)
+  }
+  return out
+}
+
+async function fetchWikiSummaryOnce(
+  lang: 'en' | 'zh',
+  title: string,
+  fetchImpl: typeof fetch,
+  signal?: AbortSignal,
+): Promise<{
+  image: string
+  original: string
+  article?: string
+  pageTitle: string
+}> {
+  const summaryUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
+  const summaryInit: RequestInit = {
+    headers: { 'User-Agent': WIKI_UA, Accept: 'application/json' },
+  }
+  if (signal) summaryInit.signal = signal
+  const summaryRes = await fetchImpl(summaryUrl, summaryInit)
+  if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`)
+  const data = (await summaryRes.json()) as {
+    title?: string
+    thumbnail?: { source?: string }
+    originalimage?: { source?: string }
+    content_urls?: { desktop?: { page?: string } }
+  }
+  const image = data.thumbnail?.source ?? ''
+  const original = data.originalimage?.source ?? image
+  if (!image) throw new Error('no thumbnail')
+  for (const url of [image, original]) {
+    if (!url) continue
+    const host = new URL(url).hostname
+    if (!IMAGE_HOSTS.has(host)) throw new Error('unsupported image host')
+  }
+  const out: {
+    image: string
+    original: string
+    article?: string
+    pageTitle: string
+  } = {
+    image,
+    original,
+    pageTitle: data.title ?? title,
+  }
+  const article = data.content_urls?.desktop?.page
+  if (article) out.article = article
+  return out
+}
+
 /** Fetch one destination photo via Wikipedia REST + Commons attribution (Node). */
 export async function fetchWikipediaTripImage(
   title: string,
@@ -242,73 +311,62 @@ export async function fetchWikipediaTripImage(
   if (typeof fetchImpl !== 'function') {
     return known ?? { status: 'unavailable', place, reason: 'No fetch available.' }
   }
-  try {
-    const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(place)}`
-    const summaryInit: RequestInit = {
-      headers: { 'User-Agent': WIKI_UA, Accept: 'application/json' },
+  const langs: Array<'en' | 'zh'> = hasCjkText(place) ? ['zh', 'en'] : ['en', 'zh']
+  const titles = wikipediaTitleVariants(place)
+  let lastErr: unknown
+  for (const lang of langs) {
+    for (const wikiTitle of titles) {
+      try {
+        const data = await fetchWikiSummaryOnce(lang, wikiTitle, fetchImpl, options.signal)
+        const filename = commonsFilenameFromUrl(data.original) ?? commonsFilenameFromUrl(data.image)
+        if (!filename) throw new Error('not commons-backed')
+        const metaInit: RequestInit = {
+          headers: { 'User-Agent': WIKI_UA, Accept: 'application/json' },
+        }
+        if (options.signal) metaInit.signal = options.signal
+        const metaRes = await fetchImpl(
+          `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
+            action: 'query',
+            format: 'json',
+            prop: 'imageinfo',
+            iiprop: 'extmetadata',
+            titles: `File:${filename}`,
+            origin: '*',
+          }).toString()}`,
+          metaInit,
+        )
+        if (!metaRes.ok) throw new Error(`commons ${metaRes.status}`)
+        const metaJson = (await metaRes.json()) as {
+          query?: { pages?: Record<string, { imageinfo?: Array<{ extmetadata?: Record<string, { value?: string }> }> }> }
+        }
+        const pages = metaJson.query?.pages ?? {}
+        const info = Object.values(pages)[0]?.imageinfo?.[0]?.extmetadata ?? {}
+        const artist = stripHtml(info.Artist?.value ?? '')
+        const license = stripHtml(info.LicenseShortName?.value ?? '')
+        // Soft attribution: Wikipedia thumbnail is still usable without Commons extmetadata.
+        const okLicense = !license || license.startsWith('CC') || license === 'Public domain'
+        return {
+          status: 'available',
+          place,
+          image_url: data.image,
+          artist: artist || data.pageTitle,
+          license: (okLicense && license) ? license : 'Wikipedia / Wikimedia',
+          credit_url: commonsFilePageUrl(filename),
+          article_url: data.article
+            ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(wikiTitle.replace(/ /g, '_'))}`,
+          note: 'Photo from this Wikipedia article; confirm the pictured subject fits the destination. It is not a live camera view.',
+          source: 'wikipedia',
+        }
+      } catch (err) {
+        lastErr = err
+      }
     }
-    if (options.signal) summaryInit.signal = options.signal
-    const summaryRes = await fetchImpl(summaryUrl, summaryInit)
-    if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`)
-    const data = (await summaryRes.json()) as {
-      thumbnail?: { source?: string }
-      originalimage?: { source?: string }
-      content_urls?: { desktop?: { page?: string } }
-    }
-    const image = data.thumbnail?.source ?? ''
-    const original = data.originalimage?.source ?? image
-    for (const url of [image, original]) {
-      if (!url) continue
-      const host = new URL(url).hostname
-      if (!IMAGE_HOSTS.has(host)) throw new Error('unsupported image host')
-    }
-    if (!image) throw new Error('no thumbnail')
-    const filename = commonsFilenameFromUrl(original) ?? commonsFilenameFromUrl(image)
-    if (!filename) throw new Error('not commons-backed')
-    const metaInit: RequestInit = {
-      headers: { 'User-Agent': WIKI_UA, Accept: 'application/json' },
-    }
-    if (options.signal) metaInit.signal = options.signal
-    const metaRes = await fetchImpl(
-      `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
-        action: 'query',
-        format: 'json',
-        prop: 'imageinfo',
-        iiprop: 'extmetadata',
-        titles: `File:${filename}`,
-        origin: '*',
-      }).toString()}`,
-      metaInit,
-    )
-    if (!metaRes.ok) throw new Error(`commons ${metaRes.status}`)
-    const metaJson = (await metaRes.json()) as {
-      query?: { pages?: Record<string, { imageinfo?: Array<{ extmetadata?: Record<string, { value?: string }> }> }> }
-    }
-    const pages = metaJson.query?.pages ?? {}
-    const info = Object.values(pages)[0]?.imageinfo?.[0]?.extmetadata ?? {}
-    const artist = stripHtml(info.Artist?.value ?? '')
-    const license = stripHtml(info.LicenseShortName?.value ?? '')
-    if (!artist || !license || !(license.startsWith('CC') || license === 'Public domain')) {
-      throw new Error('attribution unavailable')
-    }
-    return {
-      status: 'available',
-      place,
-      image_url: image,
-      artist,
-      license,
-      credit_url: commonsFilePageUrl(filename),
-      article_url: data.content_urls?.desktop?.page
-        ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(place.replace(/ /g, '_'))}`,
-      note: 'Photo from this Wikipedia article; confirm the pictured subject fits the destination. It is not a live camera view.',
-      source: 'wikipedia',
-    }
-  } catch {
-    return known ?? {
-      status: 'unavailable',
-      place,
-      reason: 'The photo source or reusable attribution could not be retrieved. Use a text card or host well-known fill for this stop.',
-    }
+  }
+  void lastErr
+  return known ?? {
+    status: 'unavailable',
+    place,
+    reason: 'The photo source or reusable attribution could not be retrieved. Use a text card or host well-known fill for this stop.',
   }
 }
 
@@ -508,13 +566,18 @@ export function buildTripPhotoFillScript(): string {
     }
   }
   const json = JSON.stringify(map)
+  // Runtime: soft well-known cache + generic Wikipedia/Commons lookup with retries.
+  // No city hardcoding in the network path — well-known is optional acceleration only.
   return `<script>
 (function () {
   var MAP = ${json};
+  var CACHE = Object.create(null);
+  var INFLIGHT = Object.create(null);
   function norm(s) {
     return String(s || '').replace(/[\\u3000\\s]+/g, ' ').replace(/[·•、,，.。!！?？:：;；"'「」『』【】\\[\\]()（）]/g, ' ').trim().toLowerCase();
   }
-  function lookup(place) {
+  function hasCjk(s) { return /[\\u3400-\\u9fff]/.test(String(s || '')); }
+  function lookupKnown(place) {
     var key = norm(place);
     if (!key) return null;
     if (MAP[key]) return MAP[key];
@@ -527,24 +590,262 @@ export function buildTripPhotoFillScript(): string {
     }
     return best;
   }
+  function placeCandidates(card) {
+    var out = [], seen = Object.create(null);
+    function add(raw) {
+      var s = String(raw || '').trim();
+      if (!s || s.length > 160) return;
+      if (seen[s]) return;
+      seen[s] = 1;
+      out.push(s);
+      var key = norm(s);
+      if (key && !seen['~' + key]) { seen['~' + key] = 1; }
+      // Split compound labels: "苏州 · 拙政园平江路", "Day 2 Suzhou", "Shanghai Bund"
+      var parts = s.split(/[·•|/→\\-–,，]+/);
+      for (var i = 0; i < parts.length; i++) {
+        var p = String(parts[i] || '').replace(/^Day\\s*\\d+\\s*/i, '').replace(/^第\\s*\\d+\\s*站\\s*/i, '').trim();
+        if (!p || p.length < 2) continue;
+        if (/^day\\s*\\d+/i.test(p)) continue;
+        if (seen[p]) continue;
+        seen[p] = 1;
+        out.push(p);
+      }
+    }
+    add(card.getAttribute('data-iui-place'));
+    add(card.getAttribute('data-place'));
+    var marked = card.querySelectorAll('[data-iui-place],[data-place]');
+    for (var mi = 0; mi < marked.length; mi++) {
+      add(marked[mi].getAttribute('data-iui-place'));
+      add(marked[mi].getAttribute('data-place'));
+    }
+    var nameEl = card.querySelector('.name') || card.querySelector('b') || card.querySelector('h3,h4,h2') || card.querySelector('[title]');
+    if (nameEl) {
+      add(nameEl.getAttribute('data-iui-place'));
+      add(nameEl.getAttribute('data-place'));
+      add(nameEl.getAttribute('title'));
+      add(nameEl.textContent);
+    }
+    var img0 = card.querySelector('.photo img, .cover img, img');
+    if (img0) {
+      add(img0.getAttribute('data-iui-place'));
+      add(img0.getAttribute('data-place'));
+      add(img0.getAttribute('alt'));
+    }
+    return out;
+  }
+  function cleanWikiUrl(url) {
+    try {
+      var u = new URL(url);
+      u.searchParams.delete('utm_source');
+      u.searchParams.delete('utm_campaign');
+      u.searchParams.delete('utm_content');
+      return u.toString();
+    } catch (e) { return url; }
+  }
+  function isUsableWikiUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      var h = new URL(url).hostname;
+      return h === 'upload.wikimedia.org' || h === 'thumb.wikimedia.org' || h === 'commons.wikimedia.org';
+    } catch (e) { return false; }
+  }
+  function titleVariants(place) {
+    var s = String(place || '').trim();
+    var out = [], seen = Object.create(null);
+    function push(t) {
+      t = String(t || '').trim();
+      if (!t || t.length > 120 || seen[t]) return;
+      seen[t] = 1;
+      out.push(t);
+    }
+    push(s);
+    // Generic civic suffix — not a city list; helps zh Wikipedia titles (「苏州市」).
+    if (hasCjk(s) && s.length >= 2 && s.length <= 4 && s.indexOf('市') === -1 && s.indexOf('省') === -1) {
+      push(s + '市');
+    }
+    return out;
+  }
+  function fetchJson(url, cb) {
+    var tries = 0;
+    function once() {
+      tries++;
+      var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timer = setTimeout(function () { try { if (ctrl) ctrl.abort(); } catch (e) {} }, 5000);
+      var opts = { headers: { Accept: 'application/json' }, credentials: 'omit' };
+      if (ctrl) opts.signal = ctrl.signal;
+      fetch(url, opts).then(function (res) {
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('http ' + res.status);
+        return res.json();
+      }).then(function (data) { cb(null, data); }).catch(function (err) {
+        clearTimeout(timer);
+        if (tries < 2) setTimeout(once, 280 * tries);
+        else cb(err || new Error('fetch failed'));
+      });
+    }
+    once();
+  }
+  function wikiSummary(lang, title, cb) {
+    var url = 'https://' + lang + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title);
+    fetchJson(url, function (err, data) {
+      if (err || !data) return cb(err || new Error('empty'));
+      var thumb = data.thumbnail && data.thumbnail.source;
+      var original = data.originalimage && data.originalimage.source;
+      var image = thumb || original;
+      if (!isUsableWikiUrl(image)) return cb(new Error('no thumbnail'));
+      var page = (data.content_urls && data.content_urls.desktop && data.content_urls.desktop.page)
+        || ('https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(String(data.title || title).replace(/ /g, '_')));
+      cb(null, {
+        url: cleanWikiUrl(image),
+        artist: String(data.title || title),
+        license: 'Wikipedia / Wikimedia',
+        credit: page
+      });
+    });
+  }
+  function commonsSearch(place, cb) {
+    var q = String(place || '').trim();
+    if (!q) return cb(new Error('empty'));
+    var url = 'https://commons.wikimedia.org/w/api.php?' + new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      origin: '*',
+      generator: 'search',
+      gsrsearch: q,
+      gsrnamespace: '6',
+      gsrlimit: '5',
+      prop: 'imageinfo',
+      iiprop: 'url',
+      iiurlwidth: '480'
+    }).toString();
+    fetchJson(url, function (err, data) {
+      if (err || !data || !data.query || !data.query.pages) return cb(err || new Error('no commons'));
+      var pages = Object.keys(data.query.pages).map(function (id) { return data.query.pages[id]; });
+      for (var i = 0; i < pages.length; i++) {
+        var info = pages[i].imageinfo && pages[i].imageinfo[0];
+        if (!info) continue;
+        var thumb = info.thumburl || info.url;
+        if (!isUsableWikiUrl(thumb)) continue;
+        return cb(null, {
+          url: cleanWikiUrl(thumb),
+          artist: String(pages[i].title || q).replace(/^File:/i, ''),
+          license: 'Wikimedia Commons',
+          credit: 'https://commons.wikimedia.org/wiki/' + encodeURIComponent(String(pages[i].title || '').replace(/ /g, '_'))
+        });
+      }
+      cb(new Error('no commons hit'));
+    });
+  }
+  function resolveNetwork(place, cb) {
+    var key = norm(place);
+    if (!key) return cb(null);
+    if (CACHE[key]) return cb(CACHE[key]);
+    if (INFLIGHT[key]) { INFLIGHT[key].push(cb); return; }
+    INFLIGHT[key] = [cb];
+    var langs = hasCjk(place) ? ['zh', 'en'] : ['en', 'zh'];
+    var titles = titleVariants(place);
+    var steps = [];
+    for (var li = 0; li < langs.length; li++) {
+      for (var ti = 0; ti < titles.length; ti++) steps.push({ lang: langs[li], title: titles[ti] });
+    }
+    var idx = 0;
+    function done(info) {
+      if (info) CACHE[key] = info;
+      var waiters = INFLIGHT[key] || [];
+      delete INFLIGHT[key];
+      for (var i = 0; i < waiters.length; i++) {
+        try { waiters[i](info || null); } catch (e) {}
+      }
+    }
+    function next() {
+      if (idx >= steps.length) {
+        commonsSearch(place, function (err, info) { done(info || null); });
+        return;
+      }
+      var step = steps[idx++];
+      wikiSummary(step.lang, step.title, function (err, info) {
+        if (info) done(info);
+        else next();
+      });
+    }
+    next();
+  }
   function ensureCredit(card, info) {
-    if (card.querySelector('.iui-photo-credit')) return;
+    if (!info) return;
+    var existing = card.querySelector('.iui-photo-credit');
+    if (existing && existing.getAttribute('data-iui-host-credit') === '1') return;
+    if (existing) {
+      // Model often emits a dead "Main_Page" credit — replace with host credit when we filled.
+      try { existing.remove(); } catch (e) {}
+    }
     var c = document.createElement('div');
     c.className = 'iui-photo-credit';
+    c.setAttribute('data-iui-host-credit', '1');
     var a = document.createElement('a');
-    a.href = info.credit;
+    a.href = info.credit || '#';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.textContent = info.artist;
+    a.textContent = info.artist || 'Wikimedia';
     c.appendChild(a);
-    c.appendChild(document.createTextNode(' · ' + info.license + ' · Wikimedia'));
+    c.appendChild(document.createTextNode(' · ' + (info.license || 'Wikimedia') + ' · Wikimedia'));
     card.appendChild(c);
   }
+  function wireImage(img, photo, card, info, placeLabel, allowNetworkFallback) {
+    if (!img || !info || !info.url) return;
+    img.setAttribute('data-iui-photo-host', '1');
+    img.loading = 'eager';
+    try { img.decoding = 'async'; } catch (e) {}
+    img.alt = String(placeLabel || img.alt || 'destination').trim() || 'destination';
+    if (photo) photo.style.backgroundImage = '';
+    var attempt = 0;
+    function apply(url) {
+      attempt++;
+      img.setAttribute('data-iui-photo-attempt', String(attempt));
+      img.src = url;
+    }
+    function onBroken() {
+      if (img.getAttribute('data-iui-photo-recovering') === '1') return;
+      img.setAttribute('data-iui-photo-recovering', '1');
+      // 1) retry same URL once (transient)
+      if (attempt < 2) {
+        setTimeout(function () {
+          img.removeAttribute('data-iui-photo-recovering');
+          apply(info.url + (info.url.indexOf('?') >= 0 ? '&' : '?') + 'iui_retry=' + attempt);
+        }, 200);
+        return;
+      }
+      if (!allowNetworkFallback) {
+        img.removeAttribute('data-iui-photo-recovering');
+        return;
+      }
+      resolveNetwork(placeLabel, function (net) {
+        img.removeAttribute('data-iui-photo-recovering');
+        if (!net || !net.url) return;
+        info = net;
+        ensureCredit(card, net);
+        apply(net.url);
+      });
+    }
+    img.addEventListener('error', onBroken);
+    apply(info.url);
+    // Late decode / lazy leftover: force check
+    setTimeout(function () {
+      if (img.naturalWidth === 0) onBroken();
+    }, 900);
+    setTimeout(function () {
+      if (img.naturalWidth === 0) onBroken();
+    }, 2200);
+    ensureCredit(card, info);
+  }
   function fillCard(card) {
-    var nameEl = card.querySelector('.name') || card.querySelector('[data-place]') || card.querySelector('[data-iui-place]') || card.querySelector('b') || card.querySelector('h3,h4');
-    var place = (nameEl && (nameEl.getAttribute('data-place') || nameEl.getAttribute('data-iui-place') || nameEl.textContent)) || card.getAttribute('data-place') || card.getAttribute('data-iui-place') || '';
-    var info = lookup(place);
-    if (!info) return false;
+    if (!card || card.nodeType !== 1) return false;
+    // Avoid treating the whole strip / nested hosts as a card when querying [data-iui-place]
+    if (card.matches && card.matches('img')) {
+      card = card.closest('.iui-stop-card, .iui-hotel-card, .iui-product-card, .iui-place-card, .iui-cover-card, [data-iui-place]') || card.parentElement;
+      if (!card) return false;
+    }
+    var candidates = placeCandidates(card);
+    if (!candidates.length) return false;
     var photo = card.querySelector('.photo') || card.querySelector('.cover');
     if (!photo) {
       photo = document.createElement('div');
@@ -552,43 +853,59 @@ export function buildTripPhotoFillScript(): string {
       card.insertBefore(photo, card.firstChild);
     }
     var img = photo.querySelector('img');
-    var src = img && img.getAttribute('src');
-    var hasWiki = src && /wikimedia|commons\.wikimedia/i.test(src);
     if (!img) {
       img = document.createElement('img');
-      img.loading = 'lazy';
       photo.appendChild(img);
     }
-    // Prefer host well-known URL whenever missing/non-wiki OR already-broken wiki src.
-    // Models often emit 404 Commons filenames; Special:FilePath then yields broken icons.
-    // Always prefer host well-known when we resolved a place — model Commons
-    // filenames are frequently 404 (spaces/%20, wrong title, etc.).
-    img.setAttribute('data-iui-photo-host', '1');
-    img.src = info.url;
-    img.alt = String(place).trim() || 'destination';
-    photo.style.backgroundImage = '';
-    (function (el, placeInfo) {
-      function swap() {
-        if (el.getAttribute('data-iui-photo-fallback') === '1' && el.getAttribute('src') === placeInfo.url) return;
-        el.setAttribute('data-iui-photo-fallback', '1');
-        el.setAttribute('data-iui-photo-host', '1');
-        el.src = placeInfo.url;
+    // Already healthy host fill — keep
+    if (img.getAttribute('data-iui-photo-host') === '1' && img.naturalWidth > 0 && img.complete) {
+      return true;
+    }
+    var known = null;
+    var knownPlace = '';
+    for (var i = 0; i < candidates.length; i++) {
+      known = lookupKnown(candidates[i]);
+      if (known) { knownPlace = candidates[i]; break; }
+    }
+    if (known) {
+      wireImage(img, photo, card, known, knownPlace, true);
+      return true;
+    }
+    // Generic network path for any place (not in soft cache)
+    if (card.getAttribute('data-iui-photo-net') === '1') return false;
+    card.setAttribute('data-iui-photo-net', '1');
+    var primary = candidates[0];
+    resolveNetwork(primary, function (net) {
+      if (!net) {
+        // try remaining candidates
+        var rest = candidates.slice(1);
+        var ri = 0;
+        function tryRest() {
+          if (ri >= rest.length) return;
+          resolveNetwork(rest[ri++], function (n2) {
+            if (n2) wireImage(img, photo, card, n2, rest[ri - 1], true);
+            else tryRest();
+          });
+        }
+        tryRest();
+        return;
       }
-      el.addEventListener('error', swap);
-      if (el.complete && el.naturalWidth === 0) swap();
-      // Late decode failure / cached broken icon
-      setTimeout(function () {
-        if (el.naturalWidth === 0) swap();
-      }, 1200);
-    })(img, info);
-    ensureCredit(card, info);
+      wireImage(img, photo, card, net, primary, true);
+    });
     return true;
   }
   function run() {
-    var cards = document.querySelectorAll('.iui-stop-card, .iui-hotel-card, .iui-product-card, .iui-place-card, .iui-cover-card, [data-iui-place]');
+    var cards = document.querySelectorAll('.iui-stop-card, .iui-hotel-card, .iui-product-card, .iui-place-card, .iui-cover-card');
     var filled = 0;
     for (var i = 0; i < cards.length; i++) {
       try { if (fillCard(cards[i])) filled++; } catch (e) {}
+    }
+    // Standalone [data-iui-place] nodes that are not already inside a card above
+    var loose = document.querySelectorAll('[data-iui-place]');
+    for (var j = 0; j < loose.length; j++) {
+      var el = loose[j];
+      if (el.closest && el.closest('.iui-stop-card, .iui-hotel-card, .iui-product-card, .iui-place-card, .iui-cover-card')) continue;
+      try { if (fillCard(el)) filled++; } catch (e) {}
     }
     if (filled > 0) {
       try {
@@ -601,18 +918,18 @@ export function buildTripPhotoFillScript(): string {
     var n = 0;
     var t = setInterval(function () {
       run();
-      if (++n > 40) clearInterval(t);
+      if (++n > 48) clearInterval(t);
     }, 250);
     try {
       var root = document.getElementById('iui-preview-root') || document.body;
       var obs = new MutationObserver(function () { run(); });
       obs.observe(root, { childList: true, subtree: true });
-      setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 12000);
+      setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 16000);
     } catch (e) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
   else watch();
-  window.addEventListener('load', function () { setTimeout(run, 80); setTimeout(run, 400); });
+  window.addEventListener('load', function () { setTimeout(run, 80); setTimeout(run, 400); setTimeout(run, 1200); });
 })();
 <\/script>`
 }

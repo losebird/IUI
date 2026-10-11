@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0-iui.20
+
+Trip photo + Replay tile stability (Ace — no city hardcoding):
+
+- **Photos**: runtime fill uses soft well-known cache + generic Wikipedia REST (zh/en) + Commons search with retries; `loading=eager`; recover model-invented 404 Commons filenames; CSP `connect-src` for wikipedia/commons.
+- **Node tool**: `fetchWikipediaTripImage` tries zh→en (or en→zh) title variants; soft attribution fallback.
+- **Replay tiles**: `createTripAnimator.replay` calls `invalidateSize` / `L.iuiRefreshMaps`; tile guard registers maps, hooks Replay clicks (`#replay`/`#bReplay`/label), recovers empty tiles after `moveend`/`zoomend`.
+- Tests: `tests/trip-photos-replay-20.spec.ts`.
+
+
 ## 0.13.0-iui.18
 
 Non-model production risks (Ace):
