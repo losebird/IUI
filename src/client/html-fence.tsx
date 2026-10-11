@@ -570,7 +570,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         key={reloadToken}
         title={parsed.title ?? 'IUI sandbox'}
         srcDoc={srcdoc}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-modals"
         referrerPolicy="no-referrer"
         style={{ ...FRAME_STYLE, height }}
         onLoad={() => {
