@@ -13,6 +13,8 @@ import {
 } from '../themes/oiu-design-system.ts'
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
+import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
+export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
 /** Allowed script/link host suffixes (exact host or subdomain). HTTPS only. */
 export const HTML_SANDBOX_CDN_ALLOWLIST = [
@@ -108,7 +110,11 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'action'; frameId: string; action: string; payload: Record<string, unknown> }
   | { source: 'iui-html'; type: 'sendPrompt'; frameId: string; text: string }
   | { source: 'iui-html'; type: 'openLink'; frameId: string; url: string }
+  /** @deprecated Prefer bridgeReady — kept as handshake alias. Does NOT mean libs/author ready. */
   | { source: 'iui-html'; type: 'ready'; frameId: string }
+  | { source: 'iui-html'; type: 'bridgeReady'; frameId: string }
+  | { source: 'iui-html'; type: 'libsReady'; frameId: string }
+  | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
 
@@ -121,7 +127,7 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'bindings'; frameId: string; values: Record<string, string> }
   | { source: 'iui-html-host'; type: 'appData'; frameId: string; data: Record<string, unknown> }
   | { source: 'iui-html-host'; type: 'previewHtml'; frameId: string; html: string }
-  | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[] }
+  | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[]; jsChunks?: string[] }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
 
 export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrameCommand {
@@ -150,6 +156,10 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
       if (!Array.isArray(record.jsExpressions) || record.jsExpressions.length > 64) return false
       if (!record.jsExpressions.every((x) => typeof x === 'string' && x.length <= 32_000)) return false
     }
+    if (record.jsChunks !== undefined) {
+      if (!Array.isArray(record.jsChunks) || record.jsChunks.length > 256) return false
+      if (!record.jsChunks.every((x) => typeof x === 'string' && x.length <= 200_064)) return false
+    }
     return true
   }
   if (record.type === 'restoreLocalState') {
@@ -177,7 +187,10 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   if (record.type === 'openLink') {
     return typeof record.url === 'string' && record.url.length > 0 && record.url.length <= 2000
   }
-  if (record.type === 'ready') return true
+  if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady') return true
+  if (record.type === 'authorSettled') {
+    return typeof record.ok === 'boolean'
+  }
   if (record.type === 'error') {
     return typeof record.message === 'string'
   }
@@ -930,6 +943,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
   return `<script>
 (function () {
   var FRAME_ID = ${idLiteral};
+  window.__iuiFrameId = FRAME_ID;
+` + buildAuthorJsRuntimeSource() + `
   function post(msg) {
     try { parent.postMessage(Object.assign({ source: 'iui-html', frameId: FRAME_ID }, msg), '*'); } catch (e) {}
   }
@@ -1219,165 +1234,26 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (data.type === 'restoreLocalState' && data.state && typeof data.state === 'object') {
       try { window.iuiSandbox.restoreLocalState(data.state); measure(); } catch (e) {}
     }
-    // P1-STATE: run author JS in-place on the frozen preview shell (no srcdoc rebuild → keep photos/DOM).
-    // CRITICAL: preview-shell posts ready BEFORE CDN <script src> tags finish (tags follow this
-    // bridge in body, or may be missing if shell froze before map html/js arrived). Wait for
-    // globals and inject allowlisted UMD builds if needed — otherwise L/Chart are undefined.
+    // P0: single readiness gate — libs → DOM → chunked author JS (shared pipeline).
+    // ready/bridgeReady above only mean the bridge is listening — NOT author-runnable.
     if (data.type === 'runAuthorJs' && typeof data.js === 'string' && !window.__iuiAuthorJsRan) {
-      window.__iuiAuthorJsRan = true;
-      function softHarden(src) {
-        if (typeof src !== 'string') return '';
-        var q = String.fromCharCode;
-        var out = src
-          .split(q(0x2018)).join("'").split(q(0x2019)).join("'").split(q(0x2032)).join("'")
-          .split(q(0x201C)).join('"').split(q(0x201D)).join('"').split(q(0x2033)).join('"');
-        var needle = 'import(';
-        var idx = 0;
-        while ((idx = out.indexOf(needle, idx)) !== -1) {
-          var end = out.indexOf(')', idx);
-          if (end === -1) break;
-          var chunk = out.slice(idx, end + 1);
-          if (chunk.indexOf('chart.js') !== -1) {
-            out = out.slice(0, idx) + 'Promise.resolve(window.__iuiChartMod||{Chart:window.Chart,default:window.Chart,registerables:[]})' + out.slice(end + 1);
-            idx += 80;
-          } else idx = end + 1;
-        }
-        return out;
+      var pipe = window.__iuiAuthorPipeline;
+      if (!pipe || typeof pipe.ensureLibsThenRun !== 'function') {
+        post({ type: 'error', message: 'author pipeline missing' });
+        return;
       }
-      function wantsLeaflet(src) {
-        return src.indexOf('L.map') !== -1
-          || src.indexOf('L.tileLayer') !== -1
-          || src.indexOf('L.marker') !== -1
-          || src.indexOf('L.polyline') !== -1
-          || src.indexOf('L.divIcon') !== -1
-          || src.indexOf('L.circleMarker') !== -1
-          || src.indexOf('createTripAnimator') !== -1
-          || src.indexOf('iui-map-wrap') !== -1
-          || !!(document.querySelector && document.querySelector('.iui-map-wrap, #map'));
-      }
-      function wantsChart(src) {
-        var hasCanvas = !!(document.querySelector && document.querySelector('canvas'));
-        return src.indexOf('new Chart') !== -1
-          || src.indexOf('iuiCreateChart') !== -1
-          || src.indexOf('iui-weather-chart') !== -1
-          || src.indexOf('wxChart') !== -1
-          || src.indexOf('__iuiChartMod') !== -1
-          || src.indexOf('Chart.getChart') !== -1
-          || src.indexOf('chart.js') !== -1
-          || (src.indexOf('Chart') !== -1 && /line|bar|doughnut|pie|radar|polarArea/i.test(src))
-          || (hasCanvas && /Chart|chart\.js|doughnut|pie|radar/i.test(src));
-      }
-function ensureCss(href) {
-        if (document.querySelector('link[href="' + href + '"]')) return;
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        (document.head || document.documentElement).appendChild(link);
-      }
-      function ensureScript(src, done) {
-        if (document.querySelector('script[src="' + src + '"]')) { done(); return; }
-        var s = document.createElement('script');
-        s.src = src;
-        s.async = false;
-        s.onload = function () { done(); };
-        s.onerror = function () { done(); };
-        (document.head || document.documentElement).appendChild(s);
-      }
-      function waitGlobal(check, done) {
-        if (check()) { done(true); return; }
-        var n = 0;
-        var t = setInterval(function () {
-          if (check()) { clearInterval(t); done(true); }
-          else if (++n > 125) { clearInterval(t); done(false); }
-        }, 40);
-      }
-      function runAuthor() {
-        try {
-          var fnSrc = softHarden(typeof data.jsFunctions === 'string' ? data.jsFunctions : '');
-          var body = softHarden(data.js);
-          var exprs = Array.isArray(data.jsExpressions) ? data.jsExpressions.slice(0, 64) : [];
-          // Preview-shell injects after DOMContentLoaded/load already fired — same race as final embed.
-          var origDocAdd = document.addEventListener.bind(document);
-          var origWinAdd = window.addEventListener.bind(window);
-          document.addEventListener = function (type, listener, opts) {
-            if ((type === 'DOMContentLoaded' || type === 'readystatechange') && document.readyState !== 'loading') {
-              try { listener.call(document, new Event(type)); } catch (e) {}
-              return;
-            }
-            return origDocAdd(type, listener, opts);
-          };
-          window.addEventListener = function (type, listener, opts) {
-            if (type === 'load' && document.readyState === 'complete') {
-              try { listener.call(window, new Event(type)); } catch (e) {}
-              return;
-            }
-            return origWinAdd(type, listener, opts);
-          };
-          try {
-            try {
-              (0, eval)(fnSrc + '\\n' + body);
-            } catch (err1) {
-              if (!(err1 && err1.name === 'SyntaxError')) throw err1;
-              console.warn('[iui-html] author JS SyntaxError, soft retry', err1);
-              (0, eval)(fnSrc + '\\n' + body);
-            }
-            exprs.forEach(function (src, i) {
-              try { (0, eval)(softHarden(src)); } catch (err) {
-                console.error('[iui-html] expr', i, err);
-                try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-              }
-            });
-          } finally {
-            document.addEventListener = origDocAdd;
-            window.addEventListener = origWinAdd;
-          }
-        } catch (err) {
-          console.error('[iui-html]', err);
-          try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-          var banner = document.createElement('pre');
-          banner.className = 'iui-sandbox-muted';
-          banner.setAttribute('data-iui-error', '1');
-          banner.textContent = String(err && err.message ? err.message : err);
-          document.body.appendChild(banner);
-        }
-        measure();
-      }
-      var probe = softHarden((typeof data.jsFunctions === 'string' ? data.jsFunctions : '') + '\\n' + data.js);
-      var chain = [];
-      if (wantsLeaflet(probe) && typeof L === 'undefined') {
-        chain.push(function (next) {
-          ensureCss('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css');
-          ensureScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js', function () {
-            waitGlobal(function () { return typeof L !== 'undefined'; }, function () { next(); });
-          });
-        });
-      } else if (wantsLeaflet(probe)) {
-        chain.push(function (next) {
-          waitGlobal(function () { return typeof L !== 'undefined'; }, function () { next(); });
-        });
-      }
-      if (wantsChart(probe) && typeof Chart === 'undefined') {
-        chain.push(function (next) {
-          ensureScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', function () {
-            waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
-          });
-        });
-      } else if (wantsChart(probe)) {
-        chain.push(function (next) {
-          waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
-        });
-      }
-      var i = 0;
-      function step() {
-        if (i >= chain.length) { runAuthor(); return; }
-        var fn = chain[i++];
-        fn(step);
-      }
-      step();
+      pipe.ensureLibsThenRun({
+        js: data.js,
+        jsFunctions: data.jsFunctions,
+        jsExpressions: data.jsExpressions,
+        jsChunks: data.jsChunks
+      });
     }
   });
   setTimeout(measure, 0);
   setTimeout(measure, 120);
+  // Handshake only — host may push previewHtml/theme. Author JS waits for libsReady inside pipeline.
+  post({ type: 'bridgeReady' });
   post({ type: 'ready' });
 })();
 <\/script>`
@@ -1875,47 +1751,28 @@ export function buildHtmlSandboxSrcdoc(
   // P1-5: defer author JS only when host asks OR parser marked js incomplete.
   // Legacy/complete specs without jsComplete keep running author JS.
   const deferJs = options.deferAuthorJs === true || spec.jsComplete === false
-  const exprRunner = exprList.length === 0 ? '' : `
-var __iuiExprs = ${JSON.stringify(exprList.slice(0, 64))};
-__iuiExprs.forEach(function (src, i) {
-  try { (0, eval)(src); } catch (err) {
-    console.error('[iui-html] expr', i, err);
-    try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-  }
-});`
+  // P0: host-side chunking so final path matches preview-shell isolation.
+  const authorChunks = splitAuthorJsChunks(authorJs)
   const jsBlock = deferJs
     ? ''
     : `<script>
-(function (__run) {
-  // Run author JS after every CDN <script src> in the page has loaded.
-  // Models often listen for DOMContentLoaded; that already fired by then — replay it.
+(function () {
   function go() {
-    var orig = document.addEventListener.bind(document);
-    document.addEventListener = function (type, listener, opts) {
-      if ((type === 'DOMContentLoaded' || type === 'readystatechange') && document.readyState !== 'loading') {
-        try { listener.call(document, new Event(type)); } catch (e) {}
-        return;
-      }
-      return orig(type, listener, opts);
-    };
-    try { __run(); } finally { document.addEventListener = orig; }
+    var pipe = window.__iuiAuthorPipeline;
+    if (!pipe || typeof pipe.ensureLibsThenRun !== 'function') {
+      console.error('[iui-html] author pipeline missing on final path');
+      return;
+    }
+    pipe.ensureLibsThenRun({
+      js: '',
+      jsFunctions: ${jsonEmbed(fnSrc)},
+      jsExpressions: ${JSON.stringify(exprList.slice(0, 64).map((x) => prepareAuthorJs(x)))},
+      jsChunks: ${JSON.stringify(authorChunks)}
+    });
   }
+  // window.load waits for head CDN <script src>; pipeline still re-checks globals.
   if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
-})(function () {
-try {
-${fnSrc}
-${authorJs}
-${exprRunner}
-} catch (err) {
-  console.error('[iui-html]', err);
-  try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
-  var banner = document.createElement('pre');
-  banner.className = 'iui-sandbox-muted';
-  banner.setAttribute('data-iui-error', '1');
-  banner.textContent = String(err && err.message ? err.message : err);
-  document.body.appendChild(banner);
-}
-});
+})();
 <\/script>`
   const cdnTags = autoCdnTags(html, authorJs + fnSrc)
   const bridge = buildSandboxBridgeScript(frameId)
