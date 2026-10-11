@@ -1,12 +1,9 @@
 /**
- * OpenIntelligentUI design-system port for IUI ```iui-html sandbox.
+ * IUI sandbox design-system (theme CSS + SVG/form helpers + importmap + trip animator).
+ * Legal attribution for adapted MIT material: see NOTICE.
  *
- * Source: CopilotKit/OpenIntelligentUI packages/design-system (MIT)
- *   + trip-animator from apps/app/.../trip-animator.ts
- * Ported into @losebird/iui — no Next/CopilotKit/AG-UI runtime.
- *
- * What makes their free HTML look polished:
- * 1. Shared THEME + SVG + FORM CSS injected into every sandbox
+ * Injected into every ```iui-html sandbox:
+ * 1. Shared THEME + SVG + FORM CSS
  * 2. CDN importmap (three / gsap / d3 / chart.js; Leaflet = UMD auto-inject)
  * 3. Agent design skill teaching token usage + patterns
  * 4. createTripAnimator for map+pin-drop+carousel itineraries
@@ -53,7 +50,7 @@ export const OIU_THEME_CSS = `
   --bg2: var(--color-background-secondary);
   --b: var(--color-border-tertiary);
 
-  /* Bridge: keep existing .iui-sandbox-* kit working on OIU tokens */
+  /* Bridge: keep existing .iui-sandbox-* kit working on design tokens */
   --iui-pack-surface: var(--color-background-primary);
   --iui-pack-surface-muted: var(--color-background-secondary);
   --iui-pack-fg: var(--color-text-primary);
@@ -224,7 +221,7 @@ svg .c-red text.ts { fill: #A32D2D; }
 }
 `.trim()
 
-/** Form controls + entrance stagger (OIU look: thin borders, soft focus, fadeSlideIn). */
+/** Form controls + entrance stagger (thin borders, soft focus, fadeSlideIn). */
 export const OIU_FORM_STYLES_CSS = `
 * { box-sizing: border-box; margin: 0; }
 html { background: transparent; }
@@ -526,7 +523,7 @@ export function buildOiuDesignSystemCss(): string {
   return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}`
 }
 
-/** CDN import map — mirrors OpenIntelligentUI (plus leaflet for maps). */
+/** CDN import map for common libs (plus leaflet for maps). */
 export const OIU_IMPORTMAP = {
   imports: {
     three: 'https://esm.sh/three',
@@ -547,7 +544,7 @@ export function buildOiuImportmapScriptTag(): string {
 }
 
 /**
- * Self-contained trip pin-drop animator (OpenIntelligentUI trip-animator.ts).
+ * Self-contained trip pin-drop animator for itinerary sandboxes.
  * Installed as window.createTripAnimator inside the sandbox.
  */
 export function createTripAnimatorSource(): string {
@@ -667,11 +664,10 @@ export function buildTripAnimatorScriptTag(): string {
 }
 
 /**
- * Agent-facing design skill (condensed from OIU OPEN_GEN_UI_DESIGN_SKILL
- * + advanced-visualization trip/pricing patterns). Injected via system prompt.
+ * Agent-facing design skill (trip/pricing/weather patterns). Injected via system prompt.
  */
 export const OIU_DESIGN_SKILL = `
-The sandbox already includes the OpenIntelligentUI-style design system. Build on it — do NOT restyle from scratch.
+The sandbox already includes a shared design system. Build on it — do NOT restyle from scratch.
 
 Colors (ALWAYS use CSS variables — never hardcode hex for text/backgrounds):
 - Surfaces: --color-background-primary / secondary / tertiary
@@ -726,7 +722,7 @@ Wrap tiers in <div class="iui-compare-3"> with three .iui-tier (one .featured). 
 ## Pattern — kanban board (3 columns)
 Use <div class="iui-kanban-3"> with three .iui-kanban-col (each .iui-kanban-col-title + .iui-kanban-card items). Move cards via buttons (local JS only). NEVER stack columns vertically in the chat bubble.
 
-## Pattern — weather (ChatGPT / OIU density)
+## Pattern — weather (dense dashboard)
 NEVER ship a thin 3-KPI strip. Required density:
 1) Hero band (.iui-weather-hero): city+date, LARGE temp (≥48px), condition icon, high/low.
 2) Detail chips (.iui-weather-chip): feels-like, humidity, wind, AQI (or UV).

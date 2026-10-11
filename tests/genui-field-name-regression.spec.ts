@@ -1,5 +1,5 @@
 // Regression corpus for the fence-killing field-name defects observed in two
-// real sessions (2026-09-15, dsh-genui 0.10.0 / upstream main 0.11.1-preview.1):
+// real sessions (2026-09-15 field-name corpus):
 // 62 emitted ```dsh-ui fences, 17 of which never rendered. Every one of the 17
 // was a single component dropped by repair — `callout.text`, `table` without
 // `columns`, `keyvalue.items` — which fails `isRenderableProcess` and sends the

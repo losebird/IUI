@@ -22,7 +22,7 @@
  *
  * 检查会复用 renderer 在回合结束后的流程，包括 JSON 修复和坏节点清理；
  * 已经可以渲染的最终回复不会收到修正请求。
- * @module @changfenhuang/dsh-genui/plugin/fence-feedback
+ * @module @losebird/iui/plugin/fence-feedback
  */
 
 import type { Context } from '@deepseek-ai/cordis'

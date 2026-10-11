@@ -1,5 +1,5 @@
 /**
- * get_trip_stop_images — OpenIntelligentUI-compatible photo tool for itineraries.
+ * get_trip_stop_images — Wikimedia photo tool for itineraries.
  * Fetches Wikimedia Commons photos + attribution; falls back to IUI well-known table.
  */
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'

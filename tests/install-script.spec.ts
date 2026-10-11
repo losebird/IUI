@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // install.sh file-safety boundaries, driven through a REAL shell with a
 // temp DSH_HOME and stubbed dsh/pnpm. The script's idempotent branch
-// (profile already lists dsh-genui) runs only the skill sync, so every
+// (profile already lists @losebird/iui) runs only the skill sync, so every
 // target state is exercised without touching any real profile. The key
 // property: a symlink pointing at another file is never written through —
 // the sentinel bytes stay identical.
@@ -24,7 +24,7 @@ interface Env {
 }
 
 function makeEnv(): Env {
-  const root = mkdtempSync(join(tmpdir(), 'genui-install-'))
+  const root = mkdtempSync(join(tmpdir(), 'iui-install-'))
   const home = join(root, 'dshhome')
   const agentsHome = join(root, 'agentshome')
   const profile = join(home, 'profiles', 'web')
@@ -37,15 +37,15 @@ function makeEnv(): Env {
     execFileSync('chmod', ['+x', join(bin, name)])
   }
   // simulated installed package (no exports map → legacy subpath resolve)
-  const pkg = join(profile, 'node_modules', '@changfenhuang', 'dsh-genui')
+  const pkg = join(profile, 'node_modules', '@losebird', 'iui')
   mkdirSync(pkg, { recursive: true })
-  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@changfenhuang/dsh-genui', version: '0.0.0-test' }))
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@losebird/iui', version: '0.0.0-test' }))
   writeFileSync(join(pkg, 'SKILL.md'), PACKAGE_SKILL)
   // profile already lists the plugin → idempotent branch → sync_skill only
   mkdirSync(profile, { recursive: true })
-  writeFileSync(join(profile, 'package.json'), '{"name":"web","dependencies":{"@changfenhuang/dsh-genui":"link:whatever"}}\n')
-  const dest = join(home, 'skills', 'genui', 'SKILL.md')
-  const agentsDest = join(agentsHome, 'skills', 'genui', 'SKILL.md')
+  writeFileSync(join(profile, 'package.json'), '{"name":"web","dependencies":{"@losebird/iui":"link:whatever"}}\n')
+  const dest = join(home, 'skills', 'iui', 'SKILL.md')
+  const agentsDest = join(agentsHome, 'skills', 'iui', 'SKILL.md')
   const run: Env['run'] = (profileArg = 'web') => {
     try {
       const stdout = execFileSync('sh', [INSTALL, profileArg], {
@@ -92,8 +92,8 @@ describe('install.sh skill sync safety', { timeout: 30_000 }, () => {
     expect(status).toBe(0)
     expect(readFileSync(e.dest, 'utf8')).toBe(PACKAGE_SKILL)
     expect(readFileSync(e.agentsDest, 'utf8')).toBe(PACKAGE_SKILL)
-    expect(stdout).toContain('DSH_HOME/skills/genui')
-    expect(stdout).toContain('AGENTS_HOME/skills/genui')
+    expect(stdout).toContain('DSH_HOME/skills/iui')
+    expect(stdout).toContain('AGENTS_HOME/skills/iui')
   })
 
   it('fails safely when the AGENTS root target is a symlink to another file', () => {
@@ -120,7 +120,7 @@ describe('install.sh skill sync safety', { timeout: 30_000 }, () => {
 
   it('skips a symlink that resolves to the same package file (dev ln -s case)', () => {
     const e = env()
-    const pkgSkill = join(e.profile, 'node_modules', '@changfenhuang', 'dsh-genui', 'SKILL.md')
+    const pkgSkill = join(e.profile, 'node_modules', '@losebird', 'iui', 'SKILL.md')
     mkdirSync(dirname(e.dest), { recursive: true })
     symlinkSync(pkgSkill, e.dest)
     const { status, stdout } = e.run()
@@ -163,7 +163,7 @@ describe('install.sh skill sync safety', { timeout: 30_000 }, () => {
 
   it('fails loudly when the installed package lacks SKILL.md (incomplete install)', () => {
     const e = env()
-    rmSync(join(e.profile, 'node_modules', '@changfenhuang', 'dsh-genui', 'SKILL.md'))
+    rmSync(join(e.profile, 'node_modules', '@losebird', 'iui', 'SKILL.md'))
     const { status, stdout } = e.run()
     expect(status).not.toBe(0)
     expect(stdout).toContain('无法定位已安装包内的 SKILL.md')

@@ -6,10 +6,10 @@
 
 | | |
 |---|---|
-| **版本** | `0.13.0-iui.20`（沙箱优先） |
+| **版本** | `0.13.0-iui.26`（沙箱优先） |
 | **形态** | 仅 dsh 插件 — **不是** MCP 产品 |
 | **围栏** | `` ```iui-html ``（流式：css → html → js） |
-| **许可** | MIT（fork 自 [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)） |
+| **许可** | MIT — 见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE) |
 
 > **仓库说明。** 本 GitHub 项目（[losebird/IUI](https://github.com/losebird/IUI)）曾托管 MCP / 目录栈；现已清空并替换为 IUI 插件。包名仍是 `@losebird/iui`；产品路径是**插件沙箱渲染**，不是「装个 MCP 就能看见页」。
 
@@ -21,7 +21,7 @@
 
 - **自由 HTML/CSS/JS**，无同源沙箱 iframe（CSP + 体积上限）
 - **流式挂载**：占位 → CSS 预览 → HTML → JS 终态
-- **共享设计系统**注入每个沙箱（主题 token、排版、行程/定价/地图套路，借鉴 OpenIntelligentUI）
+- **共享设计系统**注入每个沙箱（主题 token、排版、行程/定价/地图套路）
 - **CDN 白名单**（jsDelivr、cdnjs、esm.sh、unpkg，HTTPS）+ 常用库 import map（Chart.js、D3、Three、Leaflet 等）
 - **宿主桥**：`sendPrompt`、`openLink`，以及 resize / ready / error
 - **行程与地点配图**：Wikimedia 工具 / 补图，服务景点卡与封面
@@ -33,7 +33,7 @@
 
 ## 真机样张
 
-以下均为 **dsh 真机截图**：`` ```iui-html `` 围栏在沙箱 iframe 里挂载后的页面（不是假 HD 拼图，也不是上游 GenUI 目录组件样张）。页面内容与版式来自当次模型输出——图中的城市、价格与主题只是**某次会话长什么样**，不是写死的产品功能。
+以下均为 **dsh 真机截图**：`` ```iui-html `` 围栏在沙箱 iframe 里挂载后的页面（不是假 HD 拼图）。页面内容与版式来自当次模型输出——图中的城市、价格与主题只是**某次会话长什么样**，不是写死的产品功能。
 
 | 行程页（地图 + 站点卡） | 天气图表页 |
 |---|---|
@@ -135,7 +135,7 @@ dsh plugin --profile <profile> add .
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui
 ```
 
-**不要**与 `@changfenhuang/dsh-genui`（或其他 GenUI fork）双开抢同一围栏面。
+**不要**再装第二个也抢同一围栏语言的插件——会抢同一表面。
 
 更多： [docs/INSTALL.md](./docs/INSTALL.md) · [docs/SETTINGS.md](./docs/SETTINGS.md) · [docs/PILOT.zh-CN.md](./docs/PILOT.zh-CN.md)
 
@@ -202,10 +202,6 @@ dsh plugin --profile <profile> add .
 
 ---
 
-## 谱系与许可
+## 许可
 
-MIT。挂载与围栏管线源自 [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)。主题、沙箱合同、桥、行程工具，以及 0.13 产品裁剪，属于 IUI 自身。
-
-上游 GenUI 演示与目录组件文档描述的是**另一条**产品路径（JSON 组件树 / pack）。请勿把那些截图当成本插件的样张。
-
-见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。
+MIT。第三方许可要求的归因见 [NOTICE](./NOTICE)。详见 [LICENSE](./LICENSE)。

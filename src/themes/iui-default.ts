@@ -1,11 +1,11 @@
 import type { ThemePack } from '../config/types.ts'
 
 /**
- * IUI Default — aligned to public OpenAI Intelligent UI / CopilotKit Open Intelligent UI.
+ * IUI Default theme for sandbox chrome.
  *
- * Observed from OpenAI launch demos (workshop form, CLT, GDP) + CopilotKit cards:
+ * Visual intents:
  * - One soft outer shell; sections breathe with gap/hairlines, not nested bordered boxes
- * - Near-monochrome (ink / muted / wash); ChatGPT green for progress & success
+ * - Near-monochrome (ink / muted / wash); green accent for progress & success
  * - Primary CTA = solid ink pill; secondary = outlined pill
  * - Radius ~16px surfaces, pill controls; calm 4/8/12/16/20 spacing
  */
@@ -13,7 +13,7 @@ export const iuiDefaultTheme: ThemePack = {
   id: 'iui-default',
   label: 'IUI 柔和',
   description:
-    '对齐 OpenAI Intelligent UI：柔和外壳、单色墨、ChatGPT 绿强调、胶囊控件。',
+    '柔和外壳、单色墨、绿色强调、胶囊控件。',
   tokens: {
     /* Radius — soft product, not bubbly toy */
     '--dsl-g-radius-surface': '16px',

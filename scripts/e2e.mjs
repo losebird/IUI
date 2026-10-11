@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-genui 真机 e2e：真实 dsh web + 插件 → 模型输出 dsh-ui fence → 浏览器渲染
+ * IUI 真机 e2e：真实 dsh web + 插件 → 模型输出 dsh-ui fence → 浏览器渲染
  * → 点击 action 按钮 → 模型收到 [genui-action] 并响应更新。全程走真实链路，
  * 不 mock 任何环节。
  *
@@ -81,7 +81,7 @@ log(`DSH_BIN: ${DSH_BIN}`)
 log(`pnpm: ${spawnSync('pnpm', ['--version'], { encoding: 'utf8' }).stdout.trim()}`)
 
 // ── 临时环境 ──────────────────────────────────────────────────────────────
-const DSH_HOME = await mkdtemp(join(tmpdir(), 'dsh-genui-e2e-host-'))
+const DSH_HOME = await mkdtemp(join(tmpdir(), 'iui-e2e-host-'))
 const env = { ...process.env, DSH_HOME }
 const webLog = join(DSH_HOME, 'dsh-web.log')
 const artifactsDir = process.cwd()
@@ -120,7 +120,7 @@ try {
   // ── 安装插件 ────────────────────────────────────────────────────────────
   if (INSTALL === 'npm') {
     log('安装插件（npm 公开包）...')
-    const r = spawnSync(DSH_BIN, ['plugin', '--profile', 'web', 'add', '@changfenhuang/dsh-genui'], { env, stdio: 'inherit' })
+    const r = spawnSync(DSH_BIN, ['plugin', '--profile', 'web', 'add', '@losebird/iui'], { env, stdio: 'inherit' })
     if (r.status !== 0) fail('npm 安装失败（见上方输出）')
   } else if (INSTALL === 'tarball') {
     log(`安装插件（tarball ${TARBALL}）...`)
@@ -140,7 +140,7 @@ try {
     unit: { name: 'workspace', version: 2 },
     global: { initialized: true, workspaceIds: [workspaceId], archivedSessionIds: [] },
     tables: { workspaces: { [workspaceId]: {
-      path: REPO_ROOT, title: 'dsh-genui-e2e', sessionIds: [], createdAt: now, updatedAt: now,
+      path: REPO_ROOT, title: 'iui-e2e', sessionIds: [], createdAt: now, updatedAt: now,
     } } },
   }
   await mkdir(join(DSH_HOME, 'storages'), { recursive: true })
@@ -194,13 +194,13 @@ try {
   const boot = await page.evaluate(() => {
     const boot = window.__DSH_BOOT__
     if (boot === null || typeof boot !== 'object' || !Array.isArray(boot.entries)) return undefined
-    return { entries: boot.entries.length, clientUrl: boot.entries.find(entry => entry.id === '@changfenhuang/dsh-genui')?.url }
+    return { entries: boot.entries.length, clientUrl: boot.entries.find(entry => entry.id === '@losebird/iui')?.url }
   })
   if (boot?.entries === 0) {
     await page.screenshot({ path: join(artifactsDir, 'e2e-fail-empty-host-boot.png') })
     fail('dsh 宿主启动图为空（连内置浏览器插件都未注册）')
   }
-  const clientUrl = boot?.clientUrl ?? '/plugins/@changfenhuang/dsh-genui/client.js'
+  const clientUrl = boot?.clientUrl ?? '/plugins/@losebird/iui/client.js'
   const clientRes = await fetch(new URL(clientUrl, readyUrl))
   if (!clientRes.ok) {
     await page.screenshot({ path: join(artifactsDir, 'e2e-fail-client404.png') })
@@ -514,7 +514,7 @@ try {
     await logTail()
     fail('未找到可点击的「新会话」入口')
   }
-  await page.getByText('dsh-genui-e2e', { exact: true }).first().click()
+  await page.getByText('iui-e2e', { exact: true }).first().click()
 
   // 使用宿主公开标记定位可编辑输入区，等待会话初始化完成。
   await page.waitForFunction(() => {

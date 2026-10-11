@@ -9,7 +9,7 @@
  * custom shaders — everything is geometry + material colors constructed
  * locally. The renderer mounts into a caller-owned container and returns a
  * disposer that tears down the WebGL context.
- * @module @changfenhuang/dsh-genui/client/scene3d-core
+ * @module @losebird/iui/client/scene3d-core
  */
 import type { GenuiScene3D } from './spec.ts'
 

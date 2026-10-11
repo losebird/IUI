@@ -1,5 +1,5 @@
 /**
- * OpenIntelligentUI-pattern starters for ```iui-html.
+ * Sandbox pattern starters for ```iui-html.
  * Kept separate so long JS strings stay readable.
  */
 import type { HtmlSandboxStarter } from './html-sandbox.ts'
@@ -80,7 +80,7 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   {
     id: 'itinerary-coast',
     title: '海岸行程（地图+播放+横滑）',
-    summary: 'OpenIntelligentUI 密度：灰阶 Leaflet、pin 逐站落下、Pause/Replay、横滑景点卡+Wikimedia 实景图',
+    summary: '灰阶 Leaflet、pin 逐站落下、Pause/Replay、横滑景点卡+Wikimedia 实景图',
     spec: {
       title: '加州海岸三日',
       height: 560,

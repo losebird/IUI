@@ -3,7 +3,7 @@
 ## 本机 file: 依赖
 
 ```bash
-cd /path/to/dsh-genui-fork
+cd /path/to/IUI
 git pull   # 或同步你的工作树
 pnpm install
 pnpm run build
@@ -17,13 +17,12 @@ pnpm run build
 - `themeId` / `componentPackId`：未知 id 会回落到默认 `shadcn`
 - `userTemplatesJson`：校验失败的条目会被丢弃并在设置里提示错误，不会抹掉整份配置
 - `fenceFeedback` / `formatReferee`：布尔开关；升级后默认保持开启
-- 已移除的 `genui-stock` 主题不再出现在选项中
 
 ## 破坏性变更（IUI 线）
 
 - 产品路径 **不做 MCP**；旧 `intelligent-ui-mcp` / `dsh-intelligent-ui` 不应再与 IUI 同开
 - 围栏主语言：`iui`（兼容 `dsh-ui`）；开放沙箱：`iui-html`
-- 默认组件包：`shadcn`（不再默认 `iui-default` / GenUI 原皮）
+- 默认主题：`iui-default`（沙箱中性主题）
 
 ## 升级后自检
 

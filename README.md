@@ -6,10 +6,10 @@
 
 | | |
 |---|---|
-| **Version** | `0.13.0-iui.20` (sandbox-first) |
+| **Version** | `0.13.0-iui.26` (sandbox-first) |
 | **Shape** | dsh plugin only — **not** an MCP product |
 | **Fence** | `` ```iui-html `` (stream: css → html → js) |
-| **License** | MIT (fork lineage from [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)) |
+| **License** | MIT — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) |
 
 > **Repo note.** This GitHub project ([losebird/IUI](https://github.com/losebird/IUI)) previously hosted an MCP / catalog stack. That content was cleared and replaced with the IUI plugin. The package name stays `@losebird/iui`; the product path is the plugin sandbox, not “install an MCP and you’re done.”
 
@@ -21,7 +21,7 @@ Ask something visual — *“plan a three-day coastal trip”*, *“compare thes
 
 - **Free HTML/CSS/JS** in a sandboxed iframe (no same-origin; CSP + size caps)
 - **Streaming mount** — placeholder → CSS preview → HTML → JS final
-- **Shared design system** injected into every sandbox (theme tokens, typography, trip/pricing/map helpers inspired by OpenIntelligentUI patterns)
+- **Shared design system** injected into every sandbox (theme tokens, typography, trip/pricing/map helpers)
 - **CDN allowlist** (jsDelivr, cdnjs, esm.sh, unpkg over HTTPS) + import map for common libs (Chart.js, D3, Three, Leaflet, …)
 - **Host bridges** — `sendPrompt`, `openLink`, resize / ready / error
 - **Trip & place images** — Wikimedia-backed tools / enrich for stop cards and covers
@@ -33,7 +33,7 @@ Ask something visual — *“plan a three-day coastal trip”*, *“compare thes
 
 ## Live examples
 
-These are **real live dsh screenshots** of pages rendered from `` ```iui-html `` fences inside the sandbox iframe (not mocked HD composites, not upstream GenUI catalog shots). Content and layout come from the model for that session — cities, prices, and themes below are **examples of what a page can look like**, not built-in product features.
+These are **real live dsh screenshots** of pages rendered from `` ```iui-html `` fences inside the sandbox iframe (not mocked HD composites). Content and layout come from the model for that session — cities, prices, and themes below are **examples of what a page can look like**, not built-in product features.
 
 | Itinerary (map + stop cards) | Weather chart |
 |---|---|
@@ -135,7 +135,7 @@ dsh plugin --profile <profile> add .
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui
 ```
 
-Do **not** run `@changfenhuang/dsh-genui` (or another GenUI fork) alongside IUI — they fight over the same fence surface.
+Do **not** install a second plugin that also claims the same fence languages alongside IUI — they fight over the same surface.
 
 More detail: [docs/INSTALL.md](./docs/INSTALL.md) · [docs/SETTINGS.md](./docs/SETTINGS.md) · [docs/PILOT.zh-CN.md](./docs/PILOT.zh-CN.md)
 
@@ -202,10 +202,6 @@ There is **no** pack picker, Gateway sidecar, or DIL endpoint in 0.13. See [docs
 
 ---
 
-## Lineage & license
+## License
 
-MIT. Mounting and fence plumbing descend from [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui). Themes, sandbox contract, bridges, trip tools, and the 0.13 product cut are IUI’s own.
-
-Upstream GenUI demos and catalog-component docs describe a **different** product path (JSON component trees / packs). Do not treat those as screenshots of this plugin.
-
-See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+MIT. Third-party attributions required by license are in [NOTICE](./NOTICE). See [LICENSE](./LICENSE).

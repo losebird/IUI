@@ -1,13 +1,13 @@
 /**
  * Editorial diagram theme: the diagram-design semantic-token system ported
- * into the dsh-genui renderer. Every diagram draws from these roles — never
+ * into the IUI renderer. Every diagram draws from these roles — never
  * from inline hex in the layout code — and a spec-level `theme` override
  * merges over the defaults, mirroring diagram-design's style-guide.md.
  *
  * Two skins ship: light and dark (the dark palette is the jet-black
  * inversion, same roles). The `editorial` variant is the full skin and
  * defaults to light unless the host theme is dark.
- * @module @changfenhuang/dsh-genui/client/blocks/diagram/theme
+ * @module @losebird/iui/client/blocks/diagram/theme
  */
 import type { GenuiDiagramTheme, GenuiDiagramVariant } from '../../spec.ts'
 

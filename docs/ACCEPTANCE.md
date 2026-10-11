@@ -13,7 +13,7 @@ Check items with `[x]` only after evidence (log line, screenshot, or CI green).
 
 ## A. Install & mount (hard gate)
 
-- [ ] Profile depends on `@losebird/iui` only for Intelligent UI (no MCP IUI Host, no second GenUI fighting the fence).
+- [ ] Profile depends on `@losebird/iui` only for Intelligent UI (no MCP IUI Host, no second fence-claiming plugin).
 - [ ] `pnpm install && pnpm run build` produces `lib/index.js` + `lib/client.js`.
 - [ ] Web console shows `[iui] client active; fence-channel=registry|dom` (or theme line).
 - [ ] ```iui-html fence in an assistant bubble mounts sandbox iframe (not a raw code block).
@@ -67,7 +67,7 @@ Check items with `[x]` only after evidence (log line, screenshot, or CI green).
 - **Not** logits / grammar constrained decoding — soft prompt/steer ≠ sampling constraint.
 - Weak free models may still Markdown first; referee/rescue mitigate, do not guarantee first-token fence.
 - MCP alone has no renderer — cannot be the product path.
-- Sandbox is CSP/CDN-limited, not a full IDE / CopilotKit twin.
+- Sandbox is CSP/CDN-limited, not a full IDE.
 - No catalog packs / DIL / Gateway / instance-store / frames (hard-deleted in 0.13).
 - Full model→fence→action host e2e with live credentials is ambient QA when quota allows.
 

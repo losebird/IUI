@@ -13,7 +13,7 @@
  *
  * The output is a plain layout object consumed by the SVG renderer — no
  * React, no DOM, fully unit-testable.
- * @module @changfenhuang/dsh-genui/client/blocks/diagram/layout
+ * @module @losebird/iui/client/blocks/diagram/layout
  */
 import type { GenuiDiagram, GenuiDiagramEdge, GenuiDiagramKind, GenuiDiagramNode } from '../../spec.ts'
 import { Box } from './geometry.ts'

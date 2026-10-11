@@ -1,7 +1,7 @@
 /**
  * Form family: radio aggregation + submit grading, switch, slider, IME-safe
  * input/select/textarea. All state flows through the shared AnswersState.
- * @module @changfenhuang/dsh-genui/client/blocks/forms
+ * @module @losebird/iui/client/blocks/forms
  */
 import { renderInline } from '../inline.ts'
 import { useEffect, useId, useRef, useState } from 'react'

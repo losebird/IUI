@@ -2,7 +2,7 @@
  * Advanced family: callout/steps/keyvalue, plot/diff/json/code, tabs and
  * accordion containers (recursing through renderNode), copy, mermaid,
  * scene3d, timeline, file-tree, quiz, breadcrumb.
- * @module @changfenhuang/dsh-genui/client/blocks/advanced
+ * @module @losebird/iui/client/blocks/advanced
  */
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CodeBlock, DiffBlock, JsonTree, writeClipboard } from '../primitive-adapter.ts'

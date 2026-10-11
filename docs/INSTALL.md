@@ -83,10 +83,6 @@ dsh plugin --profile <profile> add .
 | 设置无 IUI | 确认包自带 `cordis.patch.yml` 的 insert 已生效，且 client inject 含 settings |
 | 只有 Markdown | 开格式裁判；换更强模型；看是否被 bash/搜网抢答 |
 | token 换了旧页挂住 | 重启 web 会换 `?token=`，只用新链接 |
-| 与 GenUI 双开 | 不要同时装 `@changfenhuang/dsh-genui` 抢围栏 |
-
-## 与 GenUI 上游
-
-本包 fork 自 `omdsh-dev/dsh-genui`（MIT），挂载层同源；皮肤 / 裁判 / 沙箱 / 设置为 IUI 自有。
+| 围栏被抢 | 不要同时装另一个也注册同一围栏语言的插件 |
 
 验收清单见 [ACCEPTANCE.md](./ACCEPTANCE.md)。npm 发版见 [PUBLISH.md](./PUBLISH.md)。

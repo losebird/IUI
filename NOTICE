@@ -1,24 +1,20 @@
-IUI
-====
+IUI (@losebird/iui)
+===================
 
-This package is a branded fork of dsh-genui (https://github.com/omdsh-dev/dsh-genui),
-originally published as @changfenhuang/dsh-genui under the MIT License.
+Copyright notices for third-party code incorporated under the MIT License.
 
-Upstream copyright: Copyright (c) 2026 dsh-external / omdsh-dev contributors.
-See LICENSE for the MIT terms that continue to apply to this fork.
+1) Mounting / fence plumbing (MIT)
+   Copyright (c) 2026 dsh-external / omdsh-dev contributors
+   Source project: https://github.com/omdsh-dev/dsh-genui
+   Originally published as @changfenhuang/dsh-genui
 
-Product/brand name in this fork: IUI.
-Package name: @losebird/iui
-Fence languages: iui (primary), dsh-ui (compatibility alias).
+2) Design-system CSS, CDN import map patterns, trip animator, and related
+   agent design guidance adapted under MIT
+   Copyright (c) Atai Barkai and contributors
+   Source project: https://github.com/CopilotKit/OpenIntelligentUI
+   Adapted material lives under src/themes/ (and is injected by the sandbox).
+   The Next.js / CopilotKit / AG-UI runtime is not included.
 
-
-OpenIntelligentUI design-system (ported)
----------------------------------------
-Portions of the sandbox design-system CSS, CDN import map, trip animator, and
-agent design-skill guidance are adapted from CopilotKit/OpenIntelligentUI
-(https://github.com/CopilotKit/OpenIntelligentUI), MIT License,
-Copyright (c) Atai Barkai and contributors.
-
-Adapted files live under src/themes/oiu-design-system.ts and are injected by
-src/shared/html-sandbox.ts. The Next.js / CopilotKit / AG-UI runtime is NOT
-ported — only the free-HTML beauty stack (theme CSS, importmap, patterns).
+See LICENSE for the MIT terms that apply to this package and the above
+incorporated material. This NOTICE is attribution only; it is not product
+marketing for any upstream project.

@@ -1,6 +1,6 @@
 ---
 name: iui
-description: "Render free, polished HTML/CSS/JS pages inline through the iui-html sandbox fence. Preserve conversation language. Design system + patterns ported from OpenIntelligentUI. Use for charts, maps, itineraries, comparisons, tools, games, simulations."
+description: "Render free, polished HTML/CSS/JS pages inline through the iui-html sandbox fence. Preserve conversation language. Includes a shared design system and patterns. Use for charts, maps, itineraries, comparisons, tools, games, simulations."
 ---
 
 # IUI — 沙箱自由页（```iui-html）
@@ -15,7 +15,7 @@ description: "Render free, polished HTML/CSS/JS pages inline through the iui-htm
 ```
 
 - 字段顺序：title → height → placeholder(可选) → css → html → js；字符串内引号转义，换行写 `\\n`。
-- **宿主已注入** OpenIntelligentUI 设计系统：`--color-*` 主题、SVG `.c-*`、表单样式、importmap（three/gsap/d3/chart.js/leaflet）、`window.createTripAnimator`。
+- **宿主已注入** 设计系统：`--color-*` 主题、SVG `.c-*`、表单样式、importmap（three/gsap/d3/chart.js/leaflet）、`window.createTripAnimator`。
 - css 只写**本页特有**样式；颜色一律用 CSS 变量，禁止硬编码正文/背景色。
 - CDN 仅 HTTPS：cdn.jsdelivr.net / cdnjs.cloudflare.com / esm.sh / unpkg.com。
 - 交互本地完成；跟宿主通信用 `window.iuiSandbox.sendPrompt / openLink / action`。

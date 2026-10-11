@@ -1,5 +1,5 @@
 /**
- * dsh-genui browser half: the ```dsh-ui fence renderer, the keyed toolview
+ * IUI browser half: the ```dsh-ui fence renderer, the keyed toolview
  * for the `render_ui` tool, and the session panel dock.
  *
  * Fence rendering is dual-mode, chosen at boot:
@@ -18,7 +18,7 @@
  * streams, every FINISHED component appears the moment its JSON object
  * closes, so the UI assembles top-down before the fence (or reply) completes.
  * A body with no finished component yet falls back to a plain code block.
- * @module @changfenhuang/dsh-genui/client
+ * @module @losebird/iui/client
  */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -4,7 +4,7 @@
  * Registers on `window.__GenuiAssets__.echartsFull`. Built as a standalone IIFE into
  * `lib/assets/echarts.js` and served by the plugin's node-half route; loaded
  * on demand by echarts-lazy when a spec contains an `echart` node.
- * @module @changfenhuang/dsh-genui/client/asset-echarts
+ * @module @losebird/iui/client/asset-echarts
  */
 import { init as echartsInit, type EChartsType, type EChartsCoreOption } from 'echarts'
 import 'echarts-wordcloud'
