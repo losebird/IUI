@@ -4,12 +4,6 @@
 
 **IUI**（`@losebird/iui`）是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（**dsh**）插件。当回答更适合做成页面时——图表、地图、行程、比价板、小工具——模型可以输出自由 HTML/CSS/JS，IUI 在聊天气泡内的隔离 iframe 中挂载。
 
-| | |
-|---|---|
-| **包名** | `@losebird/iui` |
-| **围栏** | `` ```iui-html `` |
-| **许可** | MIT · [LICENSE](./LICENSE) · [NOTICE](./NOTICE) |
-
 ---
 
 ## 示例
