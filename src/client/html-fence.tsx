@@ -162,12 +162,51 @@ function reaskPrompt(t: (key: string) => string): string {
   return REASK_PROMPT_FALLBACK
 }
 
-function friendlyError(message: string, t: (key: string) => string): string {
+type SandboxFailKind = 'author' | 'host' | 'unknown'
+
+function classifySandboxError(
+  message: string,
+  kind?: string,
+): SandboxFailKind {
+  if (kind === 'author' || kind === 'host') return kind
+  if (/^\[author\]/i.test(message) || /chunk \d+\//i.test(message)) return 'author'
+  if (/^\[host\]/i.test(message) || /author pipeline missing|CDN failed|global L not ready|Chart global not ready/i.test(message)) {
+    return 'host'
+  }
+  if (/tiles? failed|tileerror|Map tiles/i.test(message)) return 'host'
+  return 'unknown'
+}
+
+function friendlyError(
+  message: string,
+  t: (key: string, params?: Record<string, unknown>) => string,
+  kind?: SandboxFailKind,
+  chunkIndex?: number,
+  chunkTotal?: number,
+): string {
   if (/tiles? failed|tileerror|Map tiles/i.test(message)) {
     const tip = t('sandbox.tileError')
     return tip && tip !== 'sandbox.tileError' ? tip : message
   }
-  return message
+  const cleaned = message.replace(/^\[(author|host)\]\s*/i, '')
+  const failKind = kind ?? classifySandboxError(message)
+  if (failKind === 'author') {
+    const hint = t('sandbox.authorFailHint')
+    if (typeof chunkIndex === 'number' && typeof chunkTotal === 'number' && chunkTotal > 0) {
+      const head = t('sandbox.authorChunkFail', {
+        n: chunkIndex + 1,
+        total: chunkTotal,
+        message: cleaned,
+      })
+      return `${head}\n${hint}`
+    }
+    return `${t('sandbox.authorFail', { message: cleaned })}\n${hint}`
+  }
+  if (failKind === 'host') {
+    const hint = t('sandbox.hostFailHint')
+    return `${t('sandbox.hostFail', { message: cleaned })}\n${hint}`
+  }
+  return cleaned
 }
 
 function stageLabel(stage: string, t: (key: string) => string): string {
@@ -201,6 +240,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
   const [autoHeight, setAutoHeight] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<SandboxFailKind | null>(null)
   const [copied, setCopied] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [starterOverride, setStarterOverride] = useState<string | null>(null)
@@ -257,6 +297,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
     setAutoHeight(null)
     setReady(false)
     setError(null)
+    setErrorKind(null)
     setCopied(false)
   }, [srcdoc])
 
@@ -395,11 +436,27 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         return
       }
       if (event.data.type === 'error') {
-        setError(friendlyError(event.data.message, t))
+        const kind = classifySandboxError(event.data.message, event.data.kind)
+        setErrorKind(kind)
+        setError(friendlyError(
+          event.data.message,
+          t,
+          kind,
+          event.data.chunkIndex,
+          event.data.chunkTotal,
+        ))
         return
       }
       if (event.data.type === 'authorSettled') {
-        // Chunk failures already posted as error; settled means pipeline finished.
+        // Chunk failures already posted as error; if settled with failures and no strip yet, surface a host chrome tip.
+        if (event.data.ok === false && event.data.failedChunks && event.data.failedChunks > 0) {
+          setErrorKind((prev) => prev ?? 'author')
+          setError((prev) => prev ?? friendlyError(
+            `chunk failures: ${event.data.failedChunks}`,
+            t,
+            'author',
+          ))
+        }
         return
       }
       if (event.data.type === 'action') {
@@ -472,6 +529,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
               onClick={() => {
                 setStarterOverride(starterToFenceBody(starter))
                 setError(null)
+                setErrorKind(null)
                 setReloadToken((n) => n + 1)
               }}
             >
@@ -492,6 +550,32 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         '*',
       )
     } catch { /* ignore */ }
+  }
+
+  /** Re-run author JS only — no srcdoc rebuild / full iframe reload. */
+  const rerunAuthorJsOnly = (): void => {
+    const win = iframeRef.current?.contentWindow
+    if (!win || !parsed) return
+    setError(null)
+    setErrorKind(null)
+    try {
+      const preparedJs = prepareAuthorJs(parsed.js)
+      win.postMessage({
+        source: 'iui-html-host',
+        type: 'runAuthorJs',
+        frameId,
+        force: true,
+        js: preparedJs,
+        jsFunctions: prepareAuthorJs(parsed.jsFunctions ?? ''),
+        jsExpressions: (parsed.jsExpressions ?? []).map((x) => prepareAuthorJs(x)),
+        jsChunks: splitAuthorJsChunks(preparedJs),
+      }, '*')
+      authorJsRanRef.current = true
+      onAction?.('sandbox_rerun_author_js', {})
+    } catch {
+      setErrorKind('host')
+      setError(friendlyError('failed to post runAuthorJs(force)', t, 'host'))
+    }
   }
 
   const shellStyle: CSSProperties = fullscreen
@@ -521,10 +605,21 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
           onClick={() => {
             setReloadToken((n) => n + 1)
             setError(null)
+            setErrorKind(null)
           }}
         >
           {t('sandbox.reload')}
         </button>
+        {jsComplete && (
+          <button
+            type="button"
+            style={TOOLBAR_BTN}
+            title={t('sandbox.authorFailHint')}
+            onClick={() => rerunAuthorJsOnly()}
+          >
+            {t('sandbox.rerunAuthorJs')}
+          </button>
+        )}
         <button
           type="button"
           style={TOOLBAR_BTN}
@@ -557,10 +652,13 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
       </div>
       {error !== null && (
         <ErrorState
-          kind="sandbox-error"
+          kind={errorKind === 'host' ? 'sandbox-host-error' : 'sandbox-author-error'}
           detail={error}
           actions={[
-            { label: t('sandbox.reload'), onClick: () => { setReloadToken((n) => n + 1); setError(null) } },
+            ...(jsComplete
+              ? [{ label: t('sandbox.rerunAuthorJs'), onClick: () => rerunAuthorJsOnly() }]
+              : []),
+            { label: t('sandbox.reload'), onClick: () => { setReloadToken((n) => n + 1); setError(null); setErrorKind(null) } },
             {
               label: t('sandbox.reask'),
               onClick: () => {
@@ -569,7 +667,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
                 })
               },
             },
-            { label: t('sandbox.dismissError'), onClick: () => setError(null) },
+            { label: t('sandbox.dismissError'), onClick: () => { setError(null); setErrorKind(null) } },
           ]}
         />
       )}

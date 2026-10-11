@@ -204,7 +204,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   var LEAFLET_JS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
   var LEAFLET_CSS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
   var CHART_JS = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-  var state = { phase: 'boot', ran: false };
+  var state = { phase: 'boot', ran: false, lastOpts: null };
 
   function post(msg) {
     try {
@@ -320,17 +320,123 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }, 20);
   }
 
-  function showChunkError(index, total, err) {
+  function isZh() {
     try {
-      var banner = document.createElement('pre');
-      banner.className = 'iui-sandbox-muted';
-      banner.setAttribute('data-iui-error', '1');
-      banner.setAttribute('data-iui-chunk', String(index));
-      banner.textContent = '脚本第 ' + (index + 1) + '/' + total + ' 片失败：' + String(err && err.message ? err.message : err);
-      document.body.appendChild(banner);
+      var lang = (document.documentElement && document.documentElement.lang) || (navigator.language || '');
+      return /^zh\\b/i.test(String(lang));
+    } catch (e) { return true; }
+  }
+
+  function clearFailureStrips() {
+    try {
+      document.querySelectorAll('[data-iui-author-fail], [data-iui-host-fail]').forEach(function (el) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
     } catch (e) {}
+  }
+
+  function ensureFailStyles() {
+    if (document.getElementById('iui-fail-visible-css')) return;
+    var style = document.createElement('style');
+    style.id = 'iui-fail-visible-css';
+    style.textContent = ''
+      + '.iui-fail-strip{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;'
+      + 'margin:8px 0;padding:10px 12px;border-radius:10px;font:12px/1.45 system-ui,sans-serif;'
+      + 'white-space:pre-wrap;word-break:break-word;box-sizing:border-box;width:100%}'
+      + '.iui-fail-strip[data-iui-author-fail]{color:#991b1b;background:rgba(239,68,68,.08);'
+      + 'border:1px solid rgba(239,68,68,.35)}'
+      + '.iui-fail-strip[data-iui-host-fail]{color:#9a3412;background:rgba(249,115,22,.10);'
+      + 'border:1px solid rgba(249,115,22,.40)}'
+      + '.iui-fail-strip .iui-fail-body{flex:1;min-width:160px}'
+      + '.iui-fail-strip .iui-fail-title{font-weight:700;margin-bottom:4px}'
+      + '.iui-fail-strip .iui-fail-meta{opacity:.85;font-size:11px;margin-top:4px}'
+      + '.iui-fail-strip button{flex:0 0 auto;font:12px/1 system-ui,sans-serif;padding:6px 10px;'
+      + 'border-radius:8px;border:1px solid rgba(0,0,0,.15);background:#fff;cursor:pointer;font-weight:600}'
+      + '.iui-fail-strip button:hover{filter:brightness(.97)}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function showFailureStrip(opts) {
+    opts = opts || {};
+    var kind = opts.kind === 'host' ? 'host' : 'author';
+    var index = typeof opts.index === 'number' ? opts.index : -1;
+    var total = typeof opts.total === 'number' ? opts.total : 0;
+    var err = opts.err;
+    var msg = String(err && err.message ? err.message : (err || 'unknown'));
+    var name = err && err.name ? String(err.name) : '';
+    ensureFailStyles();
+    var zh = isZh();
+    var strip = document.createElement('div');
+    strip.className = 'iui-fail-strip';
+    strip.setAttribute(kind === 'host' ? 'data-iui-host-fail' : 'data-iui-author-fail', '1');
+    strip.setAttribute('role', 'alert');
+    if (index >= 0) strip.setAttribute('data-iui-chunk', String(index));
+    strip.setAttribute('data-iui-fail-kind', kind);
+
+    var body = document.createElement('div');
+    body.className = 'iui-fail-body';
+    var title = document.createElement('div');
+    title.className = 'iui-fail-title';
+    if (kind === 'host') {
+      title.textContent = zh
+        ? '宿主 / 插件失败（不是模型作者 JS）'
+        : 'Host / plugin failure (not model author JS)';
+    } else if (index >= 0 && total > 0) {
+      title.textContent = zh
+        ? ('模型作者 JS 第 ' + (index + 1) + '/' + total + ' 片失败')
+        : ('Model author JS chunk ' + (index + 1) + '/' + total + ' failed');
+    } else {
+      title.textContent = zh ? '模型作者 JS 失败' : 'Model author JS failed';
+    }
+    var detail = document.createElement('div');
+    detail.textContent = (name ? name + ': ' : '') + msg;
+    var meta = document.createElement('div');
+    meta.className = 'iui-fail-meta';
+    meta.textContent = zh
+      ? (kind === 'host'
+        ? '这是 IUI 沙箱宿主问题。可点「重新加载」整页，或「重跑作者 JS」再试。'
+        : '这是模型写出的脚本问题。其它分片仍可能已执行；可只重跑作者 JS，无需整页刷新。')
+      : (kind === 'host'
+        ? 'This is an IUI host/plugin issue. Reload the page, or re-run author JS.'
+        : 'This is model-authored script. Other chunks may still have run; re-run author JS without a full reload.');
+    body.appendChild(title);
+    body.appendChild(detail);
+    body.appendChild(meta);
+    strip.appendChild(body);
+
+    if (kind === 'author') {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('data-iui-rerun-author', '1');
+      btn.textContent = zh ? '重跑作者 JS' : 'Re-run author JS';
+      btn.addEventListener('click', function (ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+        try { api.rerunAuthorJs(); } catch (e2) {
+          try { post({ type: 'error', message: String(e2 && e2.message ? e2.message : e2), kind: 'host' }); } catch (e3) {}
+        }
+      });
+      strip.appendChild(btn);
+    }
+
     try {
-      post({ type: 'error', message: 'chunk ' + (index + 1) + '/' + total + ': ' + String(err && err.message ? err.message : err) });
+      var root = document.getElementById('iui-preview-root');
+      if (root && root.parentNode) root.parentNode.insertBefore(strip, root);
+      else (document.body || document.documentElement).appendChild(strip);
+    } catch (e) {
+      try { document.body.appendChild(strip); } catch (e2) {}
+    }
+
+    try {
+      var payload = {
+        type: 'error',
+        message: (kind === 'host' ? '[host] ' : '[author] ')
+          + (index >= 0 && total > 0 ? ('chunk ' + (index + 1) + '/' + total + ': ') : '')
+          + msg,
+        kind: kind
+      };
+      if (index >= 0) payload.chunkIndex = index;
+      if (total > 0) payload.chunkTotal = total;
+      post(payload);
     } catch (e2) {}
   }
 
@@ -366,8 +472,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         try { (0, eval)(parts[p]); }
         catch (err) {
           failed++;
-          console.error('[iui-html] chunk', p, err);
-          showChunkError(p, total, err);
+          console.error('[iui-html] author chunk', p, err);
+          showFailureStrip({ kind: 'author', index: p, total: total, err: err });
         }
       }
       var list = Array.isArray(exprs) ? exprs.slice(0, 64) : [];
@@ -375,13 +481,15 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         try { (0, eval)(softHarden(list[e])); }
         catch (err2) {
           failed++;
-          console.error('[iui-html] expr', e, err2);
-          showChunkError(total + e, total + list.length, err2);
+          console.error('[iui-html] author expr', e, err2);
+          showFailureStrip({ kind: 'author', index: total + e, total: total + list.length, err: err2 });
         }
       }
     });
     setPhase('authorSettled');
-    try { post({ type: 'authorSettled', ok: failed === 0, failedChunks: failed }); } catch (e) {}
+    try {
+      post({ type: 'authorSettled', ok: failed === 0, failedChunks: failed });
+    } catch (e) {}
     try {
       if (window.iuiSandbox && typeof window.iuiSandbox.resize === 'function') window.iuiSandbox.resize();
     } catch (e2) {}
@@ -394,8 +502,16 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     if (wantsLeaflet(probe) && typeof L === 'undefined') {
       chain.push(function (next) {
         ensureCss(LEAFLET_CSS);
-        ensureScript(LEAFLET_JS, function () {
-          waitGlobal(function () { return typeof L !== 'undefined'; }, function () { next(); });
+        ensureScript(LEAFLET_JS, function (ok) {
+          if (!ok) {
+            showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Leaflet CDN failed to load' } });
+          }
+          waitGlobal(function () { return typeof L !== 'undefined'; }, function (ready) {
+            if (!ready) {
+              showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Leaflet global L not ready' } });
+            }
+            next();
+          });
         });
       });
     } else if (wantsLeaflet(probe)) {
@@ -405,8 +521,16 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }
     if (wantsChart(probe) && typeof Chart === 'undefined') {
       chain.push(function (next) {
-        ensureScript(CHART_JS, function () {
-          waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
+        ensureScript(CHART_JS, function (ok) {
+          if (!ok) {
+            showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Chart.js CDN failed to load' } });
+          }
+          waitGlobal(function () { return typeof Chart !== 'undefined'; }, function (ready) {
+            if (!ready) {
+              showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Chart global not ready' } });
+            }
+            next();
+          });
         });
       });
     } else if (wantsChart(probe)) {
@@ -429,13 +553,21 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
 
   function ensureLibsThenRun(opts) {
     opts = opts || {};
-    if (state.ran) return;
+    var force = !!opts.force;
+    if (state.ran && !force) return;
     state.ran = true;
     window.__iuiAuthorJsRan = true;
-    var fnSrc = softHarden(typeof opts.jsFunctions === 'string' ? opts.jsFunctions : '');
-    var body = softHarden(typeof opts.js === 'string' ? opts.js : '');
-    var exprs = Array.isArray(opts.jsExpressions) ? opts.jsExpressions : [];
-    var preChunks = Array.isArray(opts.jsChunks) ? opts.jsChunks : null;
+    state.lastOpts = {
+      jsFunctions: typeof opts.jsFunctions === 'string' ? opts.jsFunctions : '',
+      js: typeof opts.js === 'string' ? opts.js : '',
+      jsExpressions: Array.isArray(opts.jsExpressions) ? opts.jsExpressions.slice(0, 64) : [],
+      jsChunks: Array.isArray(opts.jsChunks) ? opts.jsChunks.slice(0, 256) : null
+    };
+    if (force) clearFailureStrips();
+    var fnSrc = softHarden(state.lastOpts.jsFunctions);
+    var body = softHarden(state.lastOpts.js);
+    var exprs = state.lastOpts.jsExpressions;
+    var preChunks = state.lastOpts.jsChunks;
     var parts = [];
     if (fnSrc && String(fnSrc).trim()) parts.push(String(fnSrc));
     if (preChunks && preChunks.length) {
@@ -457,13 +589,40 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     });
   }
 
-  return {
+  function rerunAuthorJs() {
+    var prev = state.lastOpts;
+    if (!prev) {
+      showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'No author JS payload to re-run yet' } });
+      return false;
+    }
+    clearFailureStrips();
+    state.ran = false;
+    window.__iuiAuthorJsRan = false;
+    ensureLibsThenRun({
+      force: true,
+      js: prev.js,
+      jsFunctions: prev.jsFunctions,
+      jsExpressions: prev.jsExpressions,
+      jsChunks: prev.jsChunks
+    });
+    return true;
+  }
+
+  function reportHostFailure(err) {
+    showFailureStrip({ kind: 'host', err: err });
+  }
+
+  var api = {
     get phase() { return state.phase; },
     ensureLibsThenRun: ensureLibsThenRun,
+    rerunAuthorJs: rerunAuthorJs,
+    clearFailureStrips: clearFailureStrips,
+    reportHostFailure: reportHostFailure,
     softHarden: softHarden,
     wantsLeaflet: wantsLeaflet,
     wantsChart: wantsChart
   };
+  return api;
 })();
 `
 }

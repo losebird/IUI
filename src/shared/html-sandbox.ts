@@ -115,7 +115,7 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'bridgeReady'; frameId: string }
   | { source: 'iui-html'; type: 'libsReady'; frameId: string }
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
-  | { source: 'iui-html'; type: 'error'; frameId: string; message: string }
+  | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
 
 
@@ -127,7 +127,8 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'bindings'; frameId: string; values: Record<string, string> }
   | { source: 'iui-html-host'; type: 'appData'; frameId: string; data: Record<string, unknown> }
   | { source: 'iui-html-host'; type: 'previewHtml'; frameId: string; html: string }
-  | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[]; jsChunks?: string[] }
+  | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[]; jsChunks?: string[]; force?: boolean }
+  | { source: 'iui-html-host'; type: 'rerunAuthorJs'; frameId: string }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
 
 export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrameCommand {
@@ -160,8 +161,10 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
       if (!Array.isArray(record.jsChunks) || record.jsChunks.length > 256) return false
       if (!record.jsChunks.every((x) => typeof x === 'string' && x.length <= 200_064)) return false
     }
+    if (record.force !== undefined && typeof record.force !== 'boolean') return false
     return true
   }
+  if (record.type === 'rerunAuthorJs') return true
   if (record.type === 'restoreLocalState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
   }
@@ -192,7 +195,11 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
     return typeof record.ok === 'boolean'
   }
   if (record.type === 'error') {
-    return typeof record.message === 'string'
+    if (typeof record.message !== 'string') return false
+    if (record.kind !== undefined && record.kind !== 'author' && record.kind !== 'host') return false
+    if (record.chunkIndex !== undefined && typeof record.chunkIndex !== 'number') return false
+    if (record.chunkTotal !== undefined && typeof record.chunkTotal !== 'number') return false
+    return true
   }
   if (record.type === 'localState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
@@ -1003,8 +1010,14 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (!u) return;
       post({ type: 'openLink', url: u.slice(0, 2000) });
     },
-    reportError: function (err) {
-      post({ type: 'error', message: String(err && err.message ? err.message : err) });
+    reportError: function (err, kind) {
+      post({ type: 'error', message: String(err && err.message ? err.message : err), kind: kind === 'host' ? 'host' : 'author' });
+    },
+    rerunAuthorJs: function () {
+      var pipe = window.__iuiAuthorPipeline;
+      if (pipe && typeof pipe.rerunAuthorJs === 'function') return pipe.rerunAuthorJs();
+      post({ type: 'error', message: 'author pipeline missing', kind: 'host' });
+      return false;
     },
     /** Serialize [data-iui-form] fields and post as action. */
     submitForm: function (formEl, actionName) {
@@ -1236,13 +1249,25 @@ export function buildSandboxBridgeScript(frameId: string): string {
     }
     // P0: single readiness gate — libs → DOM → chunked author JS (shared pipeline).
     // ready/bridgeReady above only mean the bridge is listening — NOT author-runnable.
-    if (data.type === 'runAuthorJs' && typeof data.js === 'string' && !window.__iuiAuthorJsRan) {
+    if (data.type === 'rerunAuthorJs') {
+      var pipeR = window.__iuiAuthorPipeline;
+      if (!pipeR || typeof pipeR.rerunAuthorJs !== 'function') {
+        post({ type: 'error', message: 'author pipeline missing', kind: 'host' });
+        return;
+      }
+      try { pipeR.rerunAuthorJs(); } catch (eR) {
+        post({ type: 'error', message: String(eR && eR.message ? eR.message : eR), kind: 'host' });
+      }
+      return;
+    }
+    if (data.type === 'runAuthorJs' && typeof data.js === 'string' && (data.force === true || !window.__iuiAuthorJsRan)) {
       var pipe = window.__iuiAuthorPipeline;
       if (!pipe || typeof pipe.ensureLibsThenRun !== 'function') {
-        post({ type: 'error', message: 'author pipeline missing' });
+        post({ type: 'error', message: 'author pipeline missing', kind: 'host' });
         return;
       }
       pipe.ensureLibsThenRun({
+        force: data.force === true,
         js: data.js,
         jsFunctions: data.jsFunctions,
         jsExpressions: data.jsExpressions,
@@ -1761,6 +1786,9 @@ export function buildHtmlSandboxSrcdoc(
     var pipe = window.__iuiAuthorPipeline;
     if (!pipe || typeof pipe.ensureLibsThenRun !== 'function') {
       console.error('[iui-html] author pipeline missing on final path');
+      try {
+        parent.postMessage({ source: 'iui-html', frameId: window.__iuiFrameId || 'iui-html', type: 'error', message: 'author pipeline missing', kind: 'host' }, '*');
+      } catch (e) {}
       return;
     }
     pipe.ensureLibsThenRun({
