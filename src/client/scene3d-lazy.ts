@@ -4,7 +4,7 @@
  * own HTTP route) and is fetched ONLY when a spec contains a `scene3d` node.
  * On a host that does not serve the asset the load rejects and the
  * Scene3DNode shows its error hint.
- * @module @changfenhuang/dsh-genui/client/scene3d-lazy
+ * @module @losebird/iui/client/scene3d-lazy
  */
 import { loadGenuiAsset } from './asset-loader.ts'
 import type { GenuiScene3D } from './spec.ts'

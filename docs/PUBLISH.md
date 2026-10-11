@@ -18,7 +18,7 @@ Current readiness (iui.46): smoke:fence **192** green; pack:dry OK (`losebird-iu
    - `name`: `@losebird/iui`  
    - `publishConfig.access`: `public`  
    - `files`: `lib/`、`src/`、`SKILL.md`、`cordis.patch.yml`、README、LICENSE、`docs/INSTALL.md`、`docs/UPGRADE.md`、`docs/PUBLISH.md`、`docs/ACCEPTANCE.md`、`docs/HARD-WALLS.md`、`docs/DIL-SCHEMA.md`、`docs/SETTINGS.md`  
-   - `repository`：在公开独立仓就绪前可暂指向上游 GenUI（MIT fork）；独立仓就绪后改成你们的 `losebird/iui`
+   - `repository`：应指向 `https://github.com/losebird/IUI`
 
 3. **构建与自动化**  
    ```bash

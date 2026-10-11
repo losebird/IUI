@@ -2,7 +2,7 @@
 # Sync built @losebird/iui into a dsh profile node_modules (pnpm file: is not a live link).
 # Hardened: require build artifacts, print client.js hash, copy package surface only (no tests/).
 set -euo pipefail
-SRC="${1:-/workspace/dsh-genui-fork}"
+SRC="${1:-/workspace/IUI}"
 DST="${2:-/home/box/.dsh/profiles/web/node_modules/@losebird/iui}"
 
 test -f "$SRC/package.json" || { echo "missing package.json in $SRC"; exit 1; }

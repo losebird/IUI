@@ -1,7 +1,7 @@
 # IUI 改造方案：沙箱优先（自由好看页）
 
-基准：`@losebird/iui` **0.12.0-iui.46**（`/workspace/dsh-genui-fork`）  
-对标：CopilotKit OpenIntelligentUI / Open Generative UI（自由 HTML/CSS/JS 沙箱流式）  
+基准：`@losebird/iui` **0.12.0-iui.46**（仓库根目录）  
+目标形态：自由 HTML/CSS/JS 沙箱流式好看页  
 约束：仍是 **dsh 插件**；不 fork dsh 核心；不把 MCP 当主产品；未获 Ace 明示前不 merge main、本方案不要求 npm 发版。  
 **硬规则（Ace）**：不需要的能力 **直接删除**，不「降权留尸」——避免越做越乱。
 
@@ -77,7 +77,7 @@
 
 **流式合同（围栏 body，兼容两种写法）**
 
-1. **推荐 JSON（对齐 OpenIntelligentUI 字段序）**  
+1. **推荐 JSON（字段序便于流式）**  
    `placeholder`（或 `placeholderMessages`）→ `css` → `html` → `js`  
    扩展（可选、向后兼容）：`height` / `title` / `jsFunctions` / `jsExpressions[]`  
    解析器：**按字段完成度推进 stage**（css 未齐不预览；html 流式可 partial；js 齐后再跑脚本）。
@@ -158,7 +158,7 @@ MCP 最多当「跨 harness 装配 HTML」旁路；**dsh 能看见页的唯一�
 **验收**
 
 - [ ] ≥8 张 HD 真机挂载样张（全部沙箱）。  
-- [ ] 主观过线：明显接近 OpenIntelligentUI 示范的「自由页好看」，而非表格堆砌。  
+- [ ] 主观过线：自由页好看、像产品界面，而非表格堆砌。  
 - [ ] e2e:session 或手工脚本：3 个常用意图端到端出沙箱。
 
 ### P4 — 收口文档（约 0.5 天）→ `0.13.0-iui.4`（可合并进 .3）
@@ -204,7 +204,7 @@ MCP 最多当「跨 harness 装配 HTML」旁路；**dsh 能看见页的唯一�
 - **降权留尸**：pack / DIL / Gateway / 白名单门槛 / 弱模型硬保证 以 optional、legacy、flag 形式残留  
 - 本阶段 npm 发版、merge main  
 - 把白名单 intent 重新做成「不出围栏」的门闸  
-- 复刻 CopilotKit 运行时 / AG-UI activity（除非 dsh 将来原生支持，另开方案）
+- 复刻外部完整 Agent UI 运行时（除非 dsh 将来原生支持，另开方案）
 
 ---
 

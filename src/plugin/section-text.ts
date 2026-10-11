@@ -1,6 +1,6 @@
 /**
  * Always-on system-prompt section for ```iui-html sandbox pages.
- * Design bar + patterns ported from OpenIntelligentUI (design-system + skills).
+ * Design bar + sandbox patterns for free HTML pages.
  */
 import { FENCE_LANG_HTML, FENCE_LANG_PRIMARY } from '../config/defaults.ts'
 import { OIU_DESIGN_SKILL } from '../themes/oiu-design-system.ts'
@@ -21,7 +21,7 @@ export function buildGenuiSectionText(): string {
 Field order (stream-friendly): placeholder → css → html → js.
 Section markers \`css\` / \`html\` / \`js\` also work.
 HTTPS CDN only: cdn.jsdelivr.net, cdnjs.cloudflare.com, esm.sh, unpkg.com.
-Host injects OpenIntelligentUI design-system CSS (--color-* tokens, SVG .c-* classes, form styles), importmap (three/gsap/d3/chart.js), UMD Leaflet (global L), and window.createTripAnimator.
+Host injects design-system CSS (--color-* tokens, SVG .c-* classes, form styles), importmap (three/gsap/d3/chart.js), UMD Leaflet (global L), and window.createTripAnimator.
 Prefer design tokens + pattern classes (\`iui-itinerary\`, \`iui-compare-3\`, \`iui-sandbox-card\`…).
 Bridge: \`window.iuiSandbox.sendPrompt(text)\`, \`openLink(url)\`, \`action(name, payload)\`, \`data-iui-*\`.
 
@@ -43,7 +43,7 @@ ${referee}
 - Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").
 - Keep JS syntactically valid (balanced braces). One broken statement can blank charts even when buttons survive chunk isolation.
 
-**DESIGN BAR (HARD — OpenIntelligentUI-grade free HTML):**
+**DESIGN BAR (HARD — polished free HTML):**
 ${OIU_DESIGN_SKILL}
 
 **Default to sandbox UI** (user need NOT name IUI):

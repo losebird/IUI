@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-genui 视觉 E2E（无需模型 key）：真实 dsh web + link 安装当前插件 →
+ * IUI 视觉 E2E（无需模型 key）：真实 dsh web + link 安装当前插件 →
  * 通过 DOM 通道注入组件画廊围栏 → 真实浏览器渲染 → 截图 + 交互验证。
  * 与 e2e.mjs 互补：e2e.mjs 验证「模型 → fence → action 闭环」的完整链路
  * （需要 DEEPSEEK_API_KEY）；本脚本只验证渲染层（CSS、组件、本地交互），
@@ -107,7 +107,7 @@ try {
   await mkdir(OUT_DIR, { recursive: true })
 
   // ── 安装插件（link 当前工作区 = 测的就是当前代码）───────────────────────
-  // E2E_PLUGIN_SPEC 可以指向已发布版本（如 @changfenhuang/dsh-genui@0.10.0），
+  // E2E_PLUGIN_SPEC 可以指向已发布版本（如 @losebird/iui@0.10.0），
   // 用来在同一个画廊、同一台宿主上出一份"改动前"的真机截图做对比。
   log(`安装插件（${PLUGIN_SPEC}）...`)
   const add = spawnSync(DSH_BIN, ['plugin', '--profile', 'web', 'add', PLUGIN_SPEC], { env, stdio: 'inherit' })
@@ -161,7 +161,7 @@ try {
   const indexRes = await fetch(`${BASE}/`, { headers: sessionCookie === undefined ? {} : { cookie: sessionCookie } })
   if (!indexRes.ok) throw new Error(`index 返回 ${indexRes.status}`)
   const indexHtml = await indexRes.text()
-  if (!indexHtml.includes('@changfenhuang/dsh-genui/client.js')) {
+  if (!indexHtml.includes('@losebird/iui/client.js')) {
     throw new Error('genui 客户端 bundle 未出现在 boot graph 中（插件未注册 client 半边？）')
   }
   log('✓ 客户端 bundle 已在 boot graph 中')

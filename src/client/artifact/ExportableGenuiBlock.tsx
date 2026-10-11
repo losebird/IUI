@@ -48,14 +48,14 @@ function ArtifactExportMenu({ getArtifact }: ArtifactExportMenuProps) {
     } catch (error) {
       if (error instanceof GenuiExportError) {
         if (error.code === 'unsupported-custom-component') {
-          console.warn('[dsh-genui] standalone export rejected:', error.message)
+          console.warn('[iui] standalone export rejected:', error.message)
           setErrorMessage(t('artifact.unsupportedCustom', { types: report.customTypes.join(', ') }))
         } else {
-          console.warn('[dsh-genui] artifact export failed:', error.code, error.message)
+          console.warn('[iui] artifact export failed:', error.code, error.message)
           setErrorMessage(t('artifact.exportFailed'))
         }
       } else {
-        console.warn('[dsh-genui] artifact export failed:', error instanceof Error ? error.message : 'unknown error')
+        console.warn('[iui] artifact export failed:', error instanceof Error ? error.message : 'unknown error')
         setErrorMessage(t('artifact.exportFailed'))
       }
     }

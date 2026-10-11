@@ -1,5 +1,5 @@
 /**
- * Real map surfaces for GenuiMap — config-driven OSM embed + Leaflet srcdoc.
+ * Real map surfaces for map embeds — config-driven OSM embed + Leaflet srcdoc.
  * No hard-coded city/poi coordinate tables: coords come from the fence, or
  * Leaflet geocodes the free-text query via Nominatim at render time.
  */

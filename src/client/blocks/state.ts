@@ -3,7 +3,7 @@
  * registry (grouped radios / checkboxes → submit aggregation). Lives OUTSIDE
  * GenuiBlock.tsx so the per-family block modules can import the types without
  * a cycle back into the block shell.
- * @module @changfenhuang/dsh-genui/client/blocks/state
+ * @module @losebird/iui/client/blocks/state
  */
 import type { GenuiSpec } from '../spec.ts'
 import type { BlockInteractionState } from '../interaction-store.ts'

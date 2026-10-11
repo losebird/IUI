@@ -11,7 +11,7 @@ assert.match(hostRef ?? '', /^dsh-v\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?$/, 
 const version = hostRef.slice('dsh-v'.length)
 const pkg = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'))
 const dshPackages = Object.keys(pkg.peerDependencies).filter(name => name.startsWith('@deepseek-ai/dsh-'))
-const checkRoot = await mkdtemp(join(tmpdir(), 'dsh-genui-host-api-'))
+const checkRoot = await mkdtemp(join(tmpdir(), 'iui-host-api-'))
 
 try {
   for (const name of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'tsconfig.json', 'tsdown.config.ts', 'vitest.config.ts', 'SKILL.md']) {

@@ -304,7 +304,7 @@ export function genuiTemplates(): readonly GenuiTemplate[] {
       demo: {
         title: t('tpl.breadcrumb.demo.title'),
         items: [
-          { type: 'breadcrumb', items: [t('tpl.breadcrumb.demo.workspace'), 'dsh-genui', 'src', 'client'] },
+          { type: 'breadcrumb', items: [t('tpl.breadcrumb.demo.workspace'), 'iui', 'src', 'client'] },
           { type: 'file-tree', items: [
             { name: 'src', type: 'dir', children: [
               { name: 'client', type: 'dir', children: [

@@ -4,7 +4,7 @@
  * crashed the entire conversation tree on a missing API). Every fence,
  * toolview card and panel body renders under this boundary; on error the
  * block degrades to a compact inline alert instead of unmounting the tree.
- * @module @changfenhuang/dsh-genui/client
+ * @module @losebird/iui/client
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'

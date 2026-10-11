@@ -1,12 +1,12 @@
 #!/bin/sh
-# dsh-genui 一键安装脚本（通过 npm 公开包安装，无需 npm 账号）
+# IUI 一键安装脚本（通过 npm 公开包安装，无需 npm 账号）
 #
 # 用法:
 #   ./scripts/install.sh            # 装进默认 web profile
 #   ./scripts/install.sh tui        # 装进自定义 profile
 #
 # 做什么: 检查两个前置（dsh / pnpm）→ 从 npm 安装插件
-# → 同步 genui skill（带文件安全边界）→ 提示重启验证。
+# → 同步 iui skill（带文件安全边界）→ 提示重启验证。
 # 与手装唯一区别是多了前置自检，安装命令本身和 README 一致。
 
 set -eu
@@ -23,11 +23,11 @@ if [ "$fail_early" = 1 ]; then
   exit 1
 fi
 
-PACKAGE_SPEC="@changfenhuang/dsh-genui"
+PACKAGE_SPEC="@losebird/iui"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 # Web 会话的 skill 服务从 agentsHome（默认 ~/.agents）发现技能，dshHome 的
 # ~/.dsh/skills 在部分宿主演进中不再进入会话目录 —— 两个根都同步，模型从哪
-# 个根读都能拿到 genui skill。
+# 个根读都能拿到 iui skill。
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
 RED='\033[31m'; GREEN='\033[32m'; YELLOW='\033[33m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -84,7 +84,7 @@ sync_skill_to() {
 }
 
 sync_skill() {
-  echo "同步 genui skill ..."
+  echo "同步 iui skill ..."
   # 用户可控路径经环境变量传给 node，绝不插进 -e 字符串（防注入）。
   # 先 cd 到中性目录再解析：在插件 checkout 里跑脚本时，node 的
   # self-reference 会把包名解析回当前仓库，必须避开。
@@ -92,7 +92,7 @@ sync_skill() {
   SKILL_FILE=$(cd "$DSH_HOME" && DSH_HOME="$DSH_HOME" PROFILE="$PROFILE" node -e "
 const path = require('path')
 try {
-  const pkg = require.resolve('@changfenhuang/dsh-genui/package.json', { paths: [process.env.DSH_HOME + '/profiles/' + process.env.PROFILE] })
+  const pkg = require.resolve('@losebird/iui/package.json', { paths: [process.env.DSH_HOME + '/profiles/' + process.env.PROFILE] })
   console.log(path.join(path.dirname(pkg), 'SKILL.md'))
 } catch { process.exit(1) }
 " 2>/dev/null || true)
@@ -100,11 +100,11 @@ try {
     fail "无法定位已安装包内的 SKILL.md —— 安装不完整，请先修复插件安装再重试。"
   fi
 
-  sync_skill_to "$SKILL_FILE" "$DSH_HOME/skills/genui/SKILL.md" "DSH_HOME/skills/genui"
-  sync_skill_to "$SKILL_FILE" "$AGENTS_HOME/skills/genui/SKILL.md" "AGENTS_HOME/skills/genui"
+  sync_skill_to "$SKILL_FILE" "$DSH_HOME/skills/iui/SKILL.md" "DSH_HOME/skills/iui"
+  sync_skill_to "$SKILL_FILE" "$AGENTS_HOME/skills/iui/SKILL.md" "AGENTS_HOME/skills/iui"
 }
 
-echo "${BOLD}== dsh-genui 安装（profile: ${PROFILE}）==${NC}"
+echo "${BOLD}== IUI 安装（profile: ${PROFILE}）==${NC}"
 
 # ── 前置 1: dsh ────────────────────────────────────────────────────────────
 if ! command -v dsh >/dev/null 2>&1; then
@@ -120,10 +120,10 @@ ok "pnpm: $(pnpm --version)"
 
 # ── 已装检测（幂等）────────────────────────────────────────────────────────
 PROFILE_PKG="$DSH_HOME/profiles/$PROFILE/package.json"
-if [ -f "$PROFILE_PKG" ] && grep -q "dsh-genui" "$PROFILE_PKG" 2>/dev/null; then
+if [ -f "$PROFILE_PKG" ] && grep -q "@losebird/iui\|dsh-genui" "$PROFILE_PKG" 2>/dev/null; then
   warn "插件已在 profile '$PROFILE' 中。"
   sync_skill
-  printf "  想重装就手动执行: dsh plugin --profile %s remove @changfenhuang/dsh-genui，再跑本脚本。\n" "$PROFILE"
+  printf "  想重装就手动执行: dsh plugin --profile %s remove @losebird/iui，再跑本脚本。\n" "$PROFILE"
   printf "  否则直接: 重启 dsh web + 硬刷新 即可验证。\n"
   exit 0
 fi

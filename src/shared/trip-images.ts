@@ -1,5 +1,5 @@
 /**
- * Trip / destination photos — OpenIntelligentUI get_trip_stop_images parity.
+ * Trip / destination photos via Wikipedia / Wikimedia Commons.
  *
  * Layers:
  * 1. WELL_KNOWN_STOPS — baked Commons URLs (host fill + tool fallback)
@@ -47,7 +47,7 @@ export function commonsFilePageUrl(file: string): string {
  * Keys are lowercase; lookup normalizes whitespace and full-width punctuation.
  */
 export const WELL_KNOWN_STOPS: Readonly<Record<string, KnownStop>> = {
-  // —— California coast (OIU reference) ——
+  // —— California coast ——
   'san francisco': { file: 'GoldenGateBridge-001.jpg', artist: 'Rich Niewiroski Jr.', license: 'CC BY 2.5', wiki: 'San Francisco' },
   '旧金山': { file: 'GoldenGateBridge-001.jpg', artist: 'Rich Niewiroski Jr.', license: 'CC BY 2.5', wiki: 'San Francisco' },
   '金门': { file: 'GoldenGateBridge-001.jpg', artist: 'Rich Niewiroski Jr.', license: 'CC BY 2.5', wiki: 'Golden Gate Bridge' },

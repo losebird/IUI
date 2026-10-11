@@ -35,7 +35,7 @@
 ```bash
 # 构建并同步到 3081 profile（示例）
 pnpm run build
-bash scripts/sync-to-dsh-profile.sh /workspace/dsh-genui-fork \
+bash scripts/sync-to-dsh-profile.sh /workspace/IUI \
   /home/box/.dsh/profiles/web-iui3081/node_modules/@losebird/iui
 # 用 dsh 启动该 profile 的 web（端口/token 以启动日志为准）
 ```

@@ -2,7 +2,7 @@
  * Pure mermaid source utilities — no mermaid import, so this module can ship
  * in the main client bundle while the heavy mermaid engine lives in a lazy
  * asset bundle (`lib/assets/mermaid.js`, loaded on demand by mermaid-lazy).
- * @module @changfenhuang/dsh-genui/client/mermaid-safe
+ * @module @losebird/iui/client/mermaid-safe
  */
 
 /** Reject any rendered SVG that carries script, event-handler attributes, or

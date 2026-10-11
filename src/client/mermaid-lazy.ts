@@ -8,7 +8,7 @@
  *
  * The pure source utilities stay statically exported from mermaid-safe so
  * tests (and any consumer) can use them without the engine.
- * @module @changfenhuang/dsh-genui/client/mermaid-lazy
+ * @module @losebird/iui/client/mermaid-lazy
  */
 import { loadGenuiAsset } from './asset-loader.ts'
 export { assertSafeSvg, ensureFlowchartKind, repairMermaidSource } from './mermaid-safe.ts'

@@ -13,7 +13,7 @@
  * before it is injected (see `assertSafeSvg` in mermaid-safe): the injection
  * point is the only place in GenUI that uses `dangerouslySetInnerHTML`, so
  * the last line of defense lives here, not inside mermaid.
- * @module @changfenhuang/dsh-genui/client/mermaid-core
+ * @module @losebird/iui/client/mermaid-core
  */
 import { assertSafeSvg, ensureFlowchartKind, repairMermaidSource } from './mermaid-safe.ts'
 

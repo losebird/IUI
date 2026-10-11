@@ -8,7 +8,7 @@
  * screens got oversized labels, narrow ones got unreadable ones). Every chart
  * gets a y-axis with nice 1/2/5 ticks, and single-series bars render against a
  * true zero line so negative values are drawn, not clamped away.
- * @module @changfenhuang/dsh-genui/client/blocks/charts
+ * @module @losebird/iui/client/blocks/charts
  */
 import { Fragment, memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react'

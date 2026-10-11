@@ -5,7 +5,7 @@
  * main client bundle stays small and most conversations never download
  * echarts at all. On a host that does not serve the asset the load rejects
  * and the EChartNode shows its fallback.
- * @module @changfenhuang/dsh-genui/client/echarts-lazy
+ * @module @losebird/iui/client/echarts-lazy
  */
 import { loadGenuiAsset } from './asset-loader.ts'
 export { CORE_PRESETS } from './echarts-engine.ts'

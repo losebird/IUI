@@ -2,11 +2,11 @@
  * Editorial diagram renderer: `diagram` node → inline SVG. The browser-side
  * port of the diagram-design editorial design system — semantic tokens,
  * dotted-paper ground, orthogonal connectors, 4px grid, complexity budget,
- * zone grouping, legend strip — as a white-listed dsh-genui component.
+ * zone grouping, legend strip — as a white-listed IUI component.
  *
  * Layout is resolved by `resolveLayout`, routing by `routeEdge`, and every
  * value is sanitized by the guard before this component ever sees it.
- * @module @changfenhuang/dsh-genui/client/blocks/diagram
+ * @module @losebird/iui/client/blocks/diagram
  */
 import { renderInline } from '../../inline.ts'
 import { useMemo } from 'react'

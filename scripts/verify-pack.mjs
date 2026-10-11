@@ -48,7 +48,7 @@ const required = [
   ...exportTargets,
 ]
 
-const dir = mkdtempSync(join(tmpdir(), 'dsh-genui-pack-'))
+const dir = mkdtempSync(join(tmpdir(), 'iui-pack-'))
 let keepTarball = false
 try {
   const out = execFileSync('npm', ['pack', '--pack-destination', dir, '--json'], {

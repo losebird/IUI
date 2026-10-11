@@ -8,7 +8,7 @@
  * presets touch, so a basic chart downloads a fraction of the payload; the
  * full engine (`echarts-full.js`) is fetched only when a spec needs a type
  * outside this set or ships a raw `option`.
- * @module @changfenhuang/dsh-genui/client/asset-echarts-core
+ * @module @losebird/iui/client/asset-echarts-core
  */
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'

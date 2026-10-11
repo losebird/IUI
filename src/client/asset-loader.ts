@@ -15,7 +15,7 @@
  * `window.__DSH_BOOT__` carries the client bundle rev, so a plugin rebuild
  * busts the asset cache together with the main bundle. Absent graph = no
  * query; the route serves no-cache anyway.
- * @module @changfenhuang/dsh-genui/client/asset-loader
+ * @module @losebird/iui/client/asset-loader
  */
 
 /** The plugin's entry id — mirrors the loader entry name (package name). */

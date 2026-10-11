@@ -4,7 +4,7 @@
  * `"types": []` and ships no @types/node devDependency, so these shims are
  * the typecheck surface; tsdown bundles the real node modules at build time
  * (platform: node). Declarations cover exactly the members in use.
- * @module @changfenhuang/dsh-genui/plugin/node-shims
+ * @module @losebird/iui/plugin/node-shims
  */
 
 declare module 'node:http' {

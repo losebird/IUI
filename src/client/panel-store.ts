@@ -15,7 +15,7 @@
  * message seq seen so far — old history can never resurrect the panel.
  *
  * Scale limits live in `PANEL_LIMITS` (adjustable defaults, not law — see
- * docs/plans/2026-08-12-dsh-genui-design-optimization.md). Budget
+ * docs/plans (historical)). Budget
  * rejections are DETERMINISTIC (no LRU eviction: eviction would make the
  * fold depend on arrival order).
  *

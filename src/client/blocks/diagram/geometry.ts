@@ -11,7 +11,7 @@
  *  5. A connector never passes behind a non-endpoint box (dashed-transit
  *     exception only when geometrically unavoidable).
  *  6. Label masks never overlap nodes (nodes paint after labels).
- * @module @changfenhuang/dsh-genui/client/blocks/diagram/geometry
+ * @module @losebird/iui/client/blocks/diagram/geometry
  */
 
 /** Axis-aligned box. */

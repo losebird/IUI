@@ -2,7 +2,7 @@
  * The recursive render dispatcher: maps the white-listed GenuiNode union to
  * concrete components. Leaf cases render inline; compound families live in
  * the sibling block modules. Depth-guarded against pathological specs.
- * @module @changfenhuang/dsh-genui/client/blocks/render-node
+ * @module @losebird/iui/client/blocks/render-node
  */
 import { type ComponentType, type ReactNode, useEffect, useState, type CSSProperties } from 'react'
 import * as primitives from '../primitive-adapter.ts'
