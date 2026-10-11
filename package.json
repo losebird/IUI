@@ -53,11 +53,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/losebird/intelligent-ui-mcp.git"
+    "url": "https://github.com/losebird/IUI.git"
   },
-  "homepage": "https://github.com/losebird/intelligent-ui-mcp",
+  "homepage": "https://github.com/losebird/IUI",
   "bugs": {
-    "url": "https://github.com/losebird/intelligent-ui-mcp/issues"
+    "url": "https://github.com/losebird/IUI/issues"
   },
   "keywords": [
     "dsh",

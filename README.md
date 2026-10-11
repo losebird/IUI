@@ -11,7 +11,7 @@
 | **Fence** | `` ```iui-html `` (stream: css → html → js) |
 | **License** | MIT (fork lineage from [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)) |
 
-> **Repo note.** This GitHub project ([losebird/intelligent-ui-mcp](https://github.com/losebird/intelligent-ui-mcp)) previously hosted an MCP / catalog stack. That content was cleared and replaced with the IUI plugin. The package name stays `@losebird/iui`; the product path is the plugin sandbox, not “install an MCP and you’re done.”
+> **Repo note.** This GitHub project ([losebird/IUI](https://github.com/losebird/IUI)) previously hosted an MCP / catalog stack. That content was cleared and replaced with the IUI plugin. The package name stays `@losebird/iui`; the product path is the plugin sandbox, not “install an MCP and you’re done.”
 
 ---
 
@@ -56,34 +56,44 @@ Mount works on stock dsh builds: **fence-registry** when the host exposes it, ot
 
 ## Install
 
-`@losebird/iui` is **not on npm yet**. Install from this GitHub repo (or a local clone).
-
 **Requirements:** Node `^22.19 || >=24`, pnpm `>=11.7 <12`, a working dsh web profile.
 
-### From Git (recommended until publish)
+### From npm (recommended)
 
 In your dsh web profile `package.json`:
 
 ```json
 {
   "dependencies": {
-    "@losebird/iui": "github:losebird/intelligent-ui-mcp#main"
+    "@losebird/iui": "0.13.0-iui.18"
   }
 }
 ```
 
-Then install, ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` ships an `insert` for `@losebird/iui`), start the web profile, and hard-refresh the browser.
+Or: `pnpm add @losebird/iui@0.13.0-iui.18`
+
+Then ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` ships an `insert` for `@losebird/iui`), start the web profile, and hard-refresh the browser.
+
+### From Git
+
+```json
+{
+  "dependencies": {
+    "@losebird/iui": "github:losebird/IUI#main"
+  }
+}
+```
 
 ### From a local clone (dev)
 
 ```bash
-git clone https://github.com/losebird/intelligent-ui-mcp.git
-cd intelligent-ui-mcp
+git clone https://github.com/losebird/IUI.git
+cd IUI
 pnpm install
 pnpm run build
 
 # Point the profile at the built tree, e.g.
-# "@losebird/iui": "file:/absolute/path/to/intelligent-ui-mcp"
+# "@losebird/iui": "file:/absolute/path/to/IUI"
 #
 # Or sync into an existing profile:
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui

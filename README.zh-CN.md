@@ -11,7 +11,7 @@
 | **围栏** | `` ```iui-html ``（流式：css → html → js） |
 | **许可** | MIT（fork 自 [`omdsh-dev/dsh-genui`](https://github.com/omdsh-dev/dsh-genui)） |
 
-> **仓库说明。** 本 GitHub 项目（[losebird/intelligent-ui-mcp](https://github.com/losebird/intelligent-ui-mcp)）曾托管 MCP / 目录栈；现已清空并替换为 IUI 插件。包名仍是 `@losebird/iui`；产品路径是**插件沙箱渲染**，不是「装个 MCP 就能看见页」。
+> **仓库说明。** 本 GitHub 项目（[losebird/IUI](https://github.com/losebird/IUI)）曾托管 MCP / 目录栈；现已清空并替换为 IUI 插件。包名仍是 `@losebird/iui`；产品路径是**插件沙箱渲染**，不是「装个 MCP 就能看见页」。
 
 ---
 
@@ -56,34 +56,44 @@
 
 ## 安装
 
-`@losebird/iui` **尚未发布到 npm**。请从本 GitHub 仓库（或本地克隆）安装。
-
 **前置：** Node `^22.19 || >=24`，pnpm `>=11.7 <12`，可用的 dsh web profile。
 
-### 从 Git 安装（发版前推荐）
+### 从 npm 安装（推荐）
 
 在 dsh web profile 的 `package.json` 中：
 
 ```json
 {
   "dependencies": {
-    "@losebird/iui": "github:losebird/intelligent-ui-mcp#main"
+    "@losebird/iui": "0.13.0-iui.18"
   }
 }
 ```
 
-安装后确认 Cordis / 插件组合里包含 IUI（仓库自带 `cordis.patch.yml` 的 `@losebird/iui` insert），启动 web profile，浏览器硬刷新。
+或：`pnpm add @losebird/iui@0.13.0-iui.18`
+
+然后确认 Cordis / 插件组合里包含 IUI（仓库自带 `cordis.patch.yml` 的 `@losebird/iui` insert），启动 web profile，浏览器硬刷新。
+
+### 从 Git 安装
+
+```json
+{
+  "dependencies": {
+    "@losebird/iui": "github:losebird/IUI#main"
+  }
+}
+```
 
 ### 本地克隆（开发）
 
 ```bash
-git clone https://github.com/losebird/intelligent-ui-mcp.git
-cd intelligent-ui-mcp
+git clone https://github.com/losebird/IUI.git
+cd IUI
 pnpm install
 pnpm run build
 
 # 在 profile 里指向构建产物，例如：
-# "@losebird/iui": "file:/absolute/path/to/intelligent-ui-mcp"
+# "@losebird/iui": "file:/absolute/path/to/IUI"
 #
 # 或同步进已有 profile：
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui
