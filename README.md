@@ -58,23 +58,11 @@ Mount works on stock dsh builds: **fence-registry** when the host exposes it, ot
 
 **Requirements:** Node `^22.19 || >=24`, pnpm `>=11.7 <12`, a working dsh web profile.
 
-### From npm (recommended)
+> **npm status.** First publish of `@losebird/iui` is blocked until the `@losebird` npm org exists (registry returns *Scope not found*). Until then, install from Git.
+
+### From Git (current)
 
 In your dsh web profile `package.json`:
-
-```json
-{
-  "dependencies": {
-    "@losebird/iui": "0.13.0-iui.18"
-  }
-}
-```
-
-Or: `pnpm add @losebird/iui@0.13.0-iui.18`
-
-Then ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` ships an `insert` for `@losebird/iui`), start the web profile, and hard-refresh the browser.
-
-### From Git
 
 ```json
 {
@@ -82,6 +70,14 @@ Then ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` shi
     "@losebird/iui": "github:losebird/IUI#main"
   }
 }
+```
+
+Then install, ensure the Cordis / plugin composition includes IUI (`cordis.patch.yml` ships an `insert` for `@losebird/iui`), start the web profile, and hard-refresh the browser.
+
+### From npm (after org + publish)
+
+```bash
+pnpm add @losebird/iui@0.13.0-iui.18
 ```
 
 ### From a local clone (dev)

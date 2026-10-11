@@ -58,23 +58,11 @@
 
 **前置：** Node `^22.19 || >=24`，pnpm `>=11.7 <12`，可用的 dsh web profile。
 
-### 从 npm 安装（推荐）
+> **npm 状态。** `@losebird/iui` 首次发布被挡住：npm 上尚无 `@losebird` 组织（registry 返回 *Scope not found*）。在组织建好并成功 publish 之前，请从 Git 安装。
+
+### 从 Git 安装（当前）
 
 在 dsh web profile 的 `package.json` 中：
-
-```json
-{
-  "dependencies": {
-    "@losebird/iui": "0.13.0-iui.18"
-  }
-}
-```
-
-或：`pnpm add @losebird/iui@0.13.0-iui.18`
-
-然后确认 Cordis / 插件组合里包含 IUI（仓库自带 `cordis.patch.yml` 的 `@losebird/iui` insert），启动 web profile，浏览器硬刷新。
-
-### 从 Git 安装
 
 ```json
 {
@@ -82,6 +70,14 @@
     "@losebird/iui": "github:losebird/IUI#main"
   }
 }
+```
+
+安装后确认 Cordis / 插件组合里包含 IUI（仓库自带 `cordis.patch.yml` 的 `@losebird/iui` insert），启动 web profile，浏览器硬刷新。
+
+### 从 npm 安装（组织就绪并 publish 后）
+
+```bash
+pnpm add @losebird/iui@0.13.0-iui.18
 ```
 
 ### 本地克隆（开发）
