@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0-iui.21
+
+Chart.js + button handlers on preview-shell (Ace — no hardcoding):
+
+- **runAuthorJs**: wait/inject Chart UMD like Leaflet; replay `DOMContentLoaded` / `load` / `readystatechange` so author init + click binders actually run after stream freeze.
+- **Handlers**: convert safe `onclick="fn()"` / `onchange` / `oninput` / `onsubmit` to `data-iui-on-*` + bridge delegation (still strips `alert(1)` and other inline XSS).
+- **CDN detect**: early preview shell with chart-ish `<canvas id/class>` pulls Chart.js before JS arrives.
+- Tests: `tests/chart-handlers-21.spec.ts`.
+
+
 ## 0.13.0-iui.20
 
 Trip photo + Replay tile stability (Ace — no city hardcoding):
