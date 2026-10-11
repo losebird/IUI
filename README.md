@@ -33,15 +33,25 @@ Ask something visual — *“plan a three-day coastal trip”*, *“compare thes
 
 ## Live examples
 
-These are **real live dsh screenshots** of pages rendered from `` ```iui-html `` fences inside the sandbox iframe (not mocked HD composites, not upstream GenUI catalog shots). Content and layout come from the model for that session — cities and themes below are **examples of what a page can look like**, not built-in product features.
+These are **real live dsh screenshots** of pages rendered from `` ```iui-html `` fences inside the sandbox iframe (not mocked HD composites, not upstream GenUI catalog shots). Content and layout come from the model for that session — cities, prices, and themes below are **examples of what a page can look like**, not built-in product features.
 
-| Itinerary page (map + stop cards) | Weather chart page |
+| Itinerary (map + stop cards) | Weather chart |
 |---|---|
 | ![Live dsh — itinerary in iui-html sandbox](./assets/examples/live-itinerary.jpg) | ![Live dsh — weather in iui-html sandbox](./assets/examples/live-weather.jpg) |
 
-![Live dsh — same weather page mounted in the chat bubble](./assets/examples/live-weather-in-chat.jpg)
+| Pricing board (3 tiers) | Hotel / place cards |
+|---|---|
+| ![Live dsh — pricing board in iui-html sandbox](./assets/examples/live-pricing.jpg) | ![Live dsh — hotel cards in iui-html sandbox](./assets/examples/live-hotels.jpg) |
 
-*Caption: weather page in the assistant bubble (dsh web + IUI + Muse Spark 1.3).*
+| Pomodoro timer tool | Kanban board |
+|---|---|
+| ![Live dsh — pomodoro timer in iui-html sandbox](./assets/examples/live-pomodoro.jpg) | ![Live dsh — kanban board in iui-html sandbox](./assets/examples/live-kanban.jpg) |
+
+| Mortgage calculator |
+|---|
+| ![Live dsh — mortgage calculator in iui-html sandbox](./assets/examples/live-mortgage.jpg) |
+
+*Sessions shot with dsh web + IUI + Muse Spark 1.3 (and similar). Each image is a different page type — itinerary, weather, pricing, lodging cards, timer, kanban, calculator.*
 
 
 ---
