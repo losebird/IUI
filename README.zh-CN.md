@@ -9,7 +9,6 @@
 | **版本** | `0.13.0-iui.26`（沙箱优先） |
 | **形态** | 仅 dsh 插件 — **不是** MCP 产品 |
 | **围栏** | `` ```iui-html ``（流式：css → html → js） |
-| **许可** | MIT — 见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE) |
 
 > **仓库说明。** 本 GitHub 项目（[losebird/IUI](https://github.com/losebird/IUI)）曾托管 MCP / 目录栈；现已清空并替换为 IUI 插件。包名仍是 `@losebird/iui`；产品路径是**插件沙箱渲染**，不是「装个 MCP 就能看见页」。
 
