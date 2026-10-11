@@ -266,6 +266,7 @@ export function hardenAuthorJs(source: string): string {
   out = softFixArrayCallbackParens(out)
   // Soft-close truncated objects/arrays/parens (common when model cuts mid-fence).
   const opens = { '{': 0, '[': 0, '(': 0 }
+  const excess = { '{': 0, '[': 0, '(': 0 }
   let inStr: '"' | "'" | '`' | null = null
   let escape = false
   for (let i = 0; i < out.length; i++) {
@@ -278,17 +279,104 @@ export function hardenAuthorJs(source: string): string {
     }
     if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue }
     if (ch === '{') opens['{']++
-    else if (ch === '}') opens['{'] = Math.max(0, opens['{'] - 1)
-    else if (ch === '[') opens['[']++
-    else if (ch === ']') opens['['] = Math.max(0, opens['['] - 1)
-    else if (ch === '(') opens['(']++
-    else if (ch === ')') opens['('] = Math.max(0, opens['('] - 1)
+    else if (ch === '}') {
+      if (opens['{'] > 0) opens['{']--
+      else excess['{']++
+    } else if (ch === '[') opens['[']++
+    else if (ch === ']') {
+      if (opens['['] > 0) opens['[']--
+      else excess['[']++
+    } else if (ch === '(') opens['(']++
+    else if (ch === ')') {
+      if (opens['('] > 0) opens['(']--
+      else excess['(']++
+    }
   }
   if (opens['('] > 0 && opens['('] <= 4) out += ')'.repeat(opens['('])
   if (opens['['] > 0 && opens['['] <= 4) out += ']'.repeat(opens['['])
   if (opens['{'] > 0 && opens['{'] <= 4) out += '}'.repeat(opens['{'])
+  // Peel extra Chart `}` first, then drop any remaining depth-0 closers.
+  out = softRepairSyntax(out)
+  out = softTrimExcessClosers(out, excess)
   // Soft-strip invalid RegExp flags (common model typo → "Invalid regular expression flags").
   out = sanitizeAuthorRegexFlags(out)
+  return out
+}
+
+/** Peel `}` immediately before `)` until `new Function` accepts (extra Chart-options brace). */
+export function softRepairSyntax(source: string): string {
+  if (!source) return source
+  const ok = (src: string): boolean => {
+    try {
+      // Host-side prepareAuthorJs only.
+      // eslint-disable-next-line no-new-func
+      new Function(src)
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (ok(source)) return source
+  // Prefer peeling later runs first (first Chart block is often correctly braced).
+  const re = /\}\}\}\}+(?=\s*\))/g
+  const sites: number[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(source)) !== null) sites.push(m.index)
+  for (let n = 0; n < sites.length; n++) {
+    const at = sites[sites.length - 1 - n]!
+    let end = at
+    while (end < source.length && source[end] === '}') end++
+    const candidate = source.slice(0, end - 1) + source.slice(end)
+    if (ok(candidate)) return candidate
+  }
+  return source
+}
+
+/** Drop closers that fire while depth is already 0 (cap so we don't erase whole files). */
+export function softTrimExcessClosers(
+  source: string,
+  _excess?: { '{': number; '[': number; '(': number },
+): string {
+  if (!source) return source
+  // Drop closers that fire while depth is already 0 (cap so we don't erase whole files).
+  let skipBrace = 4, skipBracket = 4, skipParen = 4
+  let out = ''
+  let depthB = 0, depthK = 0, depthP = 0
+  let inStr: '"' | "'" | '`' | null = null
+  let escape = false
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i]!
+    if (inStr) {
+      out += ch
+      if (escape) { escape = false; continue }
+      if (ch === '\\') { escape = true; continue }
+      if (ch === inStr) inStr = null
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; out += ch; continue }
+    if (ch === '{') { depthB++; out += ch; continue }
+    if (ch === '}') {
+      if (depthB === 0) { if (skipBrace > 0) skipBrace--; continue }
+      depthB--
+      out += ch
+      continue
+    }
+    if (ch === '[') { depthK++; out += ch; continue }
+    if (ch === ']') {
+      if (depthK === 0) { if (skipBracket > 0) skipBracket--; continue }
+      depthK--
+      out += ch
+      continue
+    }
+    if (ch === '(') { depthP++; out += ch; continue }
+    if (ch === ')') {
+      if (depthP === 0) { if (skipParen > 0) skipParen--; continue }
+      depthP--
+      out += ch
+      continue
+    }
+    out += ch
+  }
   return out
 }
 

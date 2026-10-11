@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0-iui.23
+
+Soft-repair excess Chart `}` (Ace billing follow-up):
+
+- Models often add one extra `}` in Chart `options` → `SyntaxError: missing ) after argument list` → blank charts + dead binders.
+- `softRepairSyntax` peels later 4+ `}` runs before `)` until `new Function` accepts; then depth-0 closer trim.
+- Builds on `.22` allow-modals + forEach/var typo soft-fix.
+
+
 ## 0.13.0-iui.22
 
 Subscription billing buttons + model JS typos (Ace):
