@@ -1,0 +1,7 @@
+# IUI bundle for DeepSeek Harness (dsh).
+# Inserted into the profile composition when this bundle is installed.
+# Node half: systemPrompt + skill + Config schema.
+# Client half: ```iui fence renderer + Settings → IUI.
+- insert:
+    - id: iui
+      name: '@losebird/iui'
