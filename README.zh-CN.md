@@ -56,52 +56,63 @@
 
 ## 安装
 
-**前置：** Node `^22.19 || >=24`，pnpm `>=11.7 <12`，可用的 dsh web profile。
+**前置：** PATH 上有 DeepSeek Harness 的 `dsh`（或用 `npx @deepseek-ai/dsh` / 源码目录里的 `pnpm dsh`），Node `^22.19 || >=24`，可用的 web profile。
 
-> **npm 状态。** `@losebird/iui` 首次发布被挡住：npm 上尚无 `@losebird` 组织（registry 返回 *Scope not found*）。在组织建好并成功 publish 之前，请从 Git 安装。
+**不必先 clone。** `dsh plugin add` 会自己下载并装进 profile。
 
-### 从 Git 安装（当前）
-
-在 dsh web profile 的 `package.json` 中：
-
-```json
-{
-  "dependencies": {
-    "@losebird/iui": "github:losebird/IUI#main"
-  }
-}
-```
-
-安装后确认 Cordis / 插件组合里包含 IUI（仓库自带 `cordis.patch.yml` 的 `@losebird/iui` insert），启动 web profile，浏览器硬刷新。
-
-### 从 npm 安装（组织就绪并 publish 后）
+### 推荐：从 GitHub 装进 profile
 
 ```bash
-pnpm add @losebird/iui@0.13.0-iui.18
+dsh plugin --profile <profile> add github:losebird/IUI
+dsh web   # 或：dsh --profile <profile>
 ```
 
-### 本地克隆（开发）
+把 `<profile>` 换成你实际用的（常见是 `web`）。若你平时用 `npx` 起 UI、PATH 上没有 `dsh`：
+
+```bash
+npx @deepseek-ai/dsh plugin --profile <profile> add github:losebird/IUI
+npx @deepseek-ai/dsh web
+```
+
+从 DeepSeek Harness 源码检出启动时，前面加 `pnpm`：
+
+```bash
+pnpm dsh plugin --profile <profile> add github:losebird/IUI
+```
+
+本仓库已带构建好的 `lib/`，git 安装一般不必本地再 build。不要用 `npm dsh`，也不要从家目录跑 `pnpm dsh`。`npx` **不会**装出全局 `dsh` 命令。
+
+打开启动日志里**带 `?token=` 的完整 URL**。控制台应有 `[iui] client active…`；设置侧栏应出现 **IUI**。
+
+### npm 发布之后
+
+`@losebird/iui` 上架后：
+
+```bash
+dsh plugin --profile <profile> add @losebird/iui
+```
+
+> **npm 状态。** 首次发布仍被挡住：npm 上还没有 `@losebird` 组织（registry 返回 *Scope not found*）。建组织只能在 [npmjs.com](https://www.npmjs.com/) 做一次，CLI 建不了。在此之前请用上面的 GitHub 安装。
+
+### 桌面端 / Electron profile
+
+部分桌面宿主（DeepSeek Harness 桌面端、DSHEAC AIO 等）独占管理 profile，命令行 `dsh plugin add` 写不进去（常见报错：`profile "desktop" is managed exclusively by the Electron application`，或 profile 升级闸门拒绝意外的符号链接 / `link:` 依赖）。这时请用**应用内插件管理器**（设置 → 插件），或把真实目录拷进 profile 的 `node_modules`——不要用 `link:` / junction。同类约束见 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) 安装说明。
+
+### 只有开发时才 clone
 
 ```bash
 git clone https://github.com/losebird/IUI.git
 cd IUI
 pnpm install
 pnpm run build
-
-# 在 profile 里指向构建产物，例如：
-# "@losebird/iui": "file:/absolute/path/to/IUI"
-#
-# 或同步进已有 profile：
+dsh plugin --profile <profile> add .
+# 或同步进已有安装：
 # bash scripts/sync-to-dsh-profile.sh . /path/to/profile/node_modules/@losebird/iui
 ```
-
-打开启动日志里的 **带 `?token=` 的完整 URL**（dsh web 默认鉴权）。控制台应有 `[iui] client active…`；设置侧栏应出现 **IUI**。
 
 **不要**与 `@changfenhuang/dsh-genui`（或其他 GenUI fork）双开抢同一围栏面。
 
 更多： [docs/INSTALL.md](./docs/INSTALL.md) · [docs/SETTINGS.md](./docs/SETTINGS.md) · [docs/PILOT.zh-CN.md](./docs/PILOT.zh-CN.md)
-
----
 
 ## 试一下
 
