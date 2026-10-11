@@ -4,12 +4,6 @@
 
 **IUI** (`@losebird/iui`) is a [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (**dsh**) plugin. When a reply should look like a page — charts, maps, itineraries, pricing boards, small tools — the model can emit a free-form HTML/CSS/JS document and IUI mounts it inside the chat bubble in an isolated iframe.
 
-| | |
-|---|---|
-| **Package** | `@losebird/iui` |
-| **Fence** | `` ```iui-html `` |
-| **License** | MIT · [LICENSE](./LICENSE) · [NOTICE](./NOTICE) |
-
 ---
 
 ## Examples
