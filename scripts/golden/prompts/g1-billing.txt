@@ -1,0 +1,1 @@
+可视化我的订阅账单：Netflix、Spotify、iCloud、Claude 等月费，环形图占比，可勾选「下月取消」并重算，支持添加/重置。

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0-iui.26
+
+Golden-prompt regression suite (first-principles after failure-visible .25):
+
+- `docs/GOLDEN-PROMPTS.zh-CN.md` — fixed G1–G5 live prompts + F1 author-fail fixture contract
+- `scripts/golden-regression.mts` + `scripts/golden/manifest.json` — shoot/verify: iframe ready, no raw fence, chart/map when expected, failure strip for intentional bad JS, pipeline live
+- Light system-prompt tighten: complete skeleton, global `Chart`/`L`, in-page controls over `prompt()`/`alert()` (no new soft-repair)
+- `pnpm run golden -- --url <dsh>` / `pnpm run golden:fixture`
+
+
 ## 0.13.0-iui.25
 
 Failure-visible sandbox UX (first-principles follow-up to .24):
