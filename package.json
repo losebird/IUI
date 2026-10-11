@@ -1,7 +1,7 @@
 {
   "name": "@losebird/iui",
   "description": "IUI for DeepSeek Harness: bubble-native free HTML/CSS/JS sandbox via ```iui-html. Plugin-only (no MCP). Fork of omdsh-dev/dsh-genui (MIT).",
-  "version": "0.13.0-iui.22",
+  "version": "0.13.0-iui.23",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/plugin/index.d.ts",

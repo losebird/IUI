@@ -27,3 +27,13 @@ describe('0.13.0-iui.22 prompt modals + syntax soft-fix', () => {
     expect(src).toContain('sandbox="allow-scripts allow-modals"')
   })
 })
+
+describe('0.13.0-iui.23 excess Chart brace peel', () => {
+  it('soft-repairs extra } before ) in Chart options', async () => {
+    const { prepareAuthorJs } = await import('../src/shared/html-sandbox.ts')
+    const bad = "new Chart(el,{type:'bar',options:{scales:{x:{grid:{display:false}}}}}});foo()"
+    // 6 closers — one too many for this nest; prepare should peel to parse
+    const out = prepareAuthorJs(bad)
+    expect(() => new Function(out)).not.toThrow()
+  })
+})
