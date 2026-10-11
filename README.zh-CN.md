@@ -33,15 +33,25 @@
 
 ## 真机样张
 
-以下均为 **dsh 真机截图**：`` ```iui-html `` 围栏在沙箱 iframe 里挂载后的页面（不是假 HD 拼图，也不是上游 GenUI 目录组件样张）。页面内容与版式来自当次模型输出——图中的城市与主题只是**某次会话长什么样**，不是写死的产品功能。
+以下均为 **dsh 真机截图**：`` ```iui-html `` 围栏在沙箱 iframe 里挂载后的页面（不是假 HD 拼图，也不是上游 GenUI 目录组件样张）。页面内容与版式来自当次模型输出——图中的城市、价格与主题只是**某次会话长什么样**，不是写死的产品功能。
 
 | 行程页（地图 + 站点卡） | 天气图表页 |
 |---|---|
 | ![真机 dsh — iui-html 沙箱行程页](./assets/examples/live-itinerary.jpg) | ![真机 dsh — iui-html 沙箱天气页](./assets/examples/live-weather.jpg) |
 
-![真机 dsh — 天气页在助手气泡内挂载](./assets/examples/live-weather-in-chat.jpg)
+| 定价板（三档） | 住宿 / 地点卡 |
+|---|---|
+| ![真机 dsh — iui-html 沙箱定价板](./assets/examples/live-pricing.jpg) | ![真机 dsh — iui-html 沙箱住宿卡](./assets/examples/live-hotels.jpg) |
 
-*说明：天气页在助手气泡内（dsh web + IUI + Muse Spark 1.3）。*
+| 番茄钟小工具 | 看板 |
+|---|---|
+| ![真机 dsh — iui-html 沙箱番茄钟](./assets/examples/live-pomodoro.jpg) | ![真机 dsh — iui-html 沙箱看板](./assets/examples/live-kanban.jpg) |
+
+| 房贷计算器 |
+|---|
+| ![真机 dsh — iui-html 沙箱房贷计算器](./assets/examples/live-mortgage.jpg) |
+
+*样张来自 dsh web + IUI + Muse Spark 1.3（及同类会话）。每张是不同页面类型——行程、天气、定价、住宿卡、计时器、看板、计算器。*
 
 
 ---
