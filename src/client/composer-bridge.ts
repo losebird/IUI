@@ -47,6 +47,40 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Host composer seat + plugin/legacy markers. Typing lives here, not in fences. */
+const COMPOSER_REGION = '[data-composer-seat], [data-composer], [data-chat-input], [data-testid="composer"]'
+/** Fence / IUI mounts that must keep streaming characterData observations. */
+const FENCE_REGION = '.md-code-block, .code-block, .code-block-small, .genui-dom-fence, .genui-dom-fence-diagnostic, [data-iui-html-sandbox], [data-iui-md-rescue]'
+
+function elementOf(node: Node): Element | null {
+  return node instanceof Element ? node : node.parentElement
+}
+
+/** True when a DOM node belongs to the live composer (Lexical / textarea). */
+export function nodeTouchesComposer(node: Node | null | undefined): boolean {
+  if (node == null || typeof Element === 'undefined') return false
+  const el = elementOf(node)
+  if (el == null) return false
+  if (typeof el.closest !== 'function') return false
+  if (el.closest(COMPOSER_REGION) !== null) return true
+  const editable = el.closest('[contenteditable="true"], textarea, [role="textbox"]')
+  if (editable == null) return false
+  if (editable.closest(FENCE_REGION) !== null) return false
+  return true
+}
+
+/** True when a MutationObserver record is composer typing / IME, not fence growth. */
+export function mutationTouchesComposer(record: Pick<MutationRecord, 'target' | 'addedNodes' | 'removedNodes'>): boolean {
+  if (nodeTouchesComposer(record.target)) return true
+  for (const node of record.addedNodes) {
+    if (nodeTouchesComposer(node)) return true
+  }
+  for (const node of record.removedNodes) {
+    if (nodeTouchesComposer(node)) return true
+  }
+  return false
+}
+
 const COMPOSER_SELECTORS = [
   'textarea[data-testid="composer"]',
   'textarea[data-composer]',

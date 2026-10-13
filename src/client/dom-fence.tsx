@@ -66,6 +66,7 @@ import { isJsonMasqueradingAsIui, looksLikeHtmlSandboxBody } from '../shared/gen
 import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
 import { resolveViewedSessionId } from './session-resolver.ts'
 import { sourceFencesOfAssistant, sourceLanguageAt } from './source-fence.ts'
+import { mutationTouchesComposer } from './composer-bridge.ts'
 
 /** Fence surfaces the channel can take over, newest host first: the shared
  * CodeBlock surface every rc.6+ markdown fence renders through
@@ -1146,9 +1147,11 @@ export function installDomFenceRenderer(
     : undefined
 
   const observer = new MutationObserver(records => {
+    const fenceRecords = records.filter((record) => !mutationTouchesComposer(record))
+    if (fenceRecords.length === 0) return
     // Restore detached roots before paint, retaining input and pending actions.
     // The latest removal owns the current tree if several commits were batched.
-    for (const record of [...records].reverse()) {
+    for (const record of [...fenceRecords].reverse()) {
       if (record.removedNodes.length === 0 || record.target.childNodes.length > 0) continue
       const target = record.target
       const mount = [...mounts.values()].find(candidate => candidate.container === target)

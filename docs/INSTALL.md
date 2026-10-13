@@ -78,6 +78,7 @@ dsh plugin --profile <profile> add .
 
 | 现象 | 处理 |
 |------|------|
+| `启用失败 … failed to import` | 本地 `link:` / 源码路径安装时 `lib/` 被 gitignore，必须先 `pnpm install && pnpm run build` 再启用 |
 | 无 `[iui] client active` | 确认 `dsh plugin add` 已写入该 profile；重启 web + 硬刷新 |
 | CLI 无法写入 desktop profile | 改用桌面端插件管理器 / 真实目录安装 |
 | 设置无 IUI | 确认包自带 `cordis.patch.yml` 的 insert 已生效，且 client inject 含 settings |

@@ -104,6 +104,37 @@ export type HtmlSandboxBuildOptions = {
   deferAuthorJs?: boolean
 }
 
+/** Inputs that decide whether the host iframe must rebuild `srcdoc`. */
+export type HtmlSandboxSrcdocRebuildInput = {
+  parsed: HtmlSandboxSpec | null
+  reloadToken: number
+  starterOverride: string | null
+  forceFinalSrcdoc: boolean
+  usedPreviewShell: boolean
+  lockedFinal: boolean
+}
+
+/**
+ * Stable iframe rebuild identity.
+ *
+ * Streaming growth of html/css/js must NOT change this key — the host
+ * patches `#iui-preview-root` / author CSS via postMessage instead of
+ * rewriting `srcdoc` (each rewrite flashes a blank document).
+ */
+export function htmlSandboxSrcdocRebuildKey(input: HtmlSandboxSrcdocRebuildInput): string {
+  const { parsed, reloadToken, starterOverride, forceFinalSrcdoc, usedPreviewShell, lockedFinal } = input
+  const starterBit = starterOverride ? 's' : ''
+  if (!parsed) return `empty|${reloadToken}`
+  if (forceFinalSrcdoc || starterOverride || lockedFinal) {
+    return `final|${reloadToken}|${starterBit}`
+  }
+  // Atomic first paint: fence already complete before any preview shell existed.
+  if (parsed.jsComplete === true && parsed.partial !== true && !usedPreviewShell) {
+    return `final|${reloadToken}|${starterBit}`
+  }
+  return `preview-shell|${reloadToken}|${starterBit}`
+}
+
 /** Host ← sandbox postMessage envelope (source must be `iui-html`). */
 export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'resize'; frameId: string; height: number }
@@ -127,6 +158,7 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'bindings'; frameId: string; values: Record<string, string> }
   | { source: 'iui-html-host'; type: 'appData'; frameId: string; data: Record<string, unknown> }
   | { source: 'iui-html-host'; type: 'previewHtml'; frameId: string; html: string }
+  | { source: 'iui-html-host'; type: 'previewCss'; frameId: string; css: string }
   | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[]; jsChunks?: string[]; force?: boolean }
   | { source: 'iui-html-host'; type: 'rerunAuthorJs'; frameId: string }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
@@ -149,6 +181,9 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
   if (record.type === 'previewHtml') {
     // Cap aligned with HTML_SANDBOX_MAX_HTML_BYTES (+ small truncation marker).
     return typeof record.html === 'string' && record.html.length <= 200_064
+  }
+  if (record.type === 'previewCss') {
+    return typeof record.css === 'string' && record.css.length <= 200_064
   }
   if (record.type === 'runAuthorJs') {
     if (typeof record.js !== 'string' || record.js.length > 200_064) return false
@@ -1244,6 +1279,16 @@ export function buildSandboxBridgeScript(frameId: string): string {
       root.innerHTML = data.html;
       measure();
     }
+    if (data.type === 'previewCss' && typeof data.css === 'string') {
+      var style = document.getElementById('iui-author-css');
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'iui-author-css';
+        document.head.appendChild(style);
+      }
+      style.textContent = data.css;
+      measure();
+    }
     if (data.type === 'restoreLocalState' && data.state && typeof data.state === 'object') {
       try { window.iuiSandbox.restoreLocalState(data.state); measure(); } catch (e) {}
     }
@@ -1816,11 +1861,10 @@ export function buildHtmlSandboxSrcdoc(
   let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}; style-src 'unsafe-inline' ${cdnCspOrigins()}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins()}; font-src https: data:; connect-src ${cdnCspOrigins()} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
-${authorCss}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important}
 .leaflet-container{min-height:280px;border-radius:var(--border-radius-lg,12px)}
 body{padding:4px!important}
-</style></head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
+</style><style id="iui-author-css">${authorCss}</style></head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
   if (doc.length > HTML_SANDBOX_MAX_SRCDOC_BYTES) {
     doc = doc.slice(0, HTML_SANDBOX_MAX_SRCDOC_BYTES) + '\n<!-- srcdoc truncated -->'
   }

@@ -24,7 +24,9 @@ import {
   listHtmlSandboxStarters,
   mergeSandboxDesignTokens,
   parseHtmlSandboxFence,
+  htmlSandboxSrcdocRebuildKey,
   sandboxStageLabels,
+  sanitizeSandboxCss,
   sanitizeSandboxMarkup,
   starterToFenceBody,
   prepareAuthorJs,
@@ -253,32 +255,18 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
   const parsed = useMemo(() => parseHtmlSandboxFence(effectiveRaw), [effectiveRaw])
   const cssComplete = parsed?.cssComplete === true
   const jsComplete = parsed?.jsComplete === true
-  // Fingerprint css so preview-shell freezes once css settles; html grows via postMessage.
-  const cssFingerprint = parsed
-    ? `${cssComplete ? '1' : '0'}:${parsed.css.length}:${parsed.css.slice(0, 48)}:${parsed.css.slice(-48)}`
-    : 'none'
-  // P1-N6 + P1-STATE:
-  // - css incomplete → rebuild (early stream)
-  // - css complete → freeze preview shell; patch html via previewHtml; inject JS via runAuthorJs
-  // - final srcdoc only when: first paint already complete (!ready && jsComplete), reload, starter, or inject fallback
-  const srcdocRebuildKey = (() => {
-    if (!parsed) return `empty|${reloadToken}`
-    const starterBit = starterOverride ? 's' : ''
-    if (!cssComplete) {
-      return `cssing|${cssFingerprint}|h:${parsed.html.length}|${reloadToken}|${starterBit}`
-    }
-    if (forceFinalSrcdoc || starterOverride || lockedFinalRef.current) {
-      lockedFinalRef.current = true
-      return `final|${cssFingerprint}|h:${parsed.html.length}|j:${parsed.js.length}|${reloadToken}|${starterBit}`
-    }
-    // Atomic first paint: fence already complete before any preview shell existed.
-    if (jsComplete && !usedPreviewShellRef.current) {
-      lockedFinalRef.current = true
-      return `final|${cssFingerprint}|h:${parsed.html.length}|j:${parsed.js.length}|${reloadToken}|${starterBit}`
-    }
-    usedPreviewShellRef.current = true
-    return `preview-shell|${cssFingerprint}|${reloadToken}|${starterBit}`
-  })()
+  // Freeze the iframe identity for the whole stream. Growing css/html/js
+  // patches via postMessage — rewriting srcdoc blanks the document (flicker).
+  const srcdocRebuildKey = htmlSandboxSrcdocRebuildKey({
+    parsed,
+    reloadToken,
+    starterOverride,
+    forceFinalSrcdoc,
+    usedPreviewShell: usedPreviewShellRef.current,
+    lockedFinal: lockedFinalRef.current,
+  })
+  if (srcdocRebuildKey.startsWith('final')) lockedFinalRef.current = true
+  else if (srcdocRebuildKey.startsWith('preview-shell')) usedPreviewShellRef.current = true
   const srcdoc = useMemo(
     () => (parsed ? buildHtmlSandboxSrcdoc(parsed, {
       designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
@@ -288,26 +276,27 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
     }) : null),
-    // keyed by srcdocRebuildKey (not every html chunk once css is complete)
-    [srcdocRebuildKey, designTokens, frameId, parsed],
+    // keyed by srcdocRebuildKey (not every html/css chunk)
+    [srcdocRebuildKey, designTokens, frameId],
   )
   const baseHeight = parsed?.height ?? (parsed?.partial ? 280 : 360)
 
   useEffect(() => {
+    // Only the iframe identity (rebuild key) may blank chrome. Growing
+    // html/css inside a frozen preview-shell must not flip ready→loading.
     setAutoHeight(null)
     setReady(false)
     setError(null)
     setErrorKind(null)
     setCopied(false)
-  }, [srcdoc])
+  }, [srcdocRebuildKey])
 
   useEffect(() => {
+    // Same React instance streams one fence (`raw` grows). Do NOT reset
+    // preview-shell / author-js locks here — that switches to a final
+    // srcdoc on the last token and flashes the iframe.
     setStarterOverride(null)
     setFullscreen(false)
-    authorJsRanRef.current = false
-    usedPreviewShellRef.current = false
-    lockedFinalRef.current = false
-    setForceFinalSrcdoc(false)
   }, [raw])
 
   useEffect(() => {
@@ -326,19 +315,23 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
     return () => window.clearTimeout(timer)
   }, [parsed, ready, srcdocRebuildKey])
 
-  // P1-N6 + P1-PREVIEW-PHOTO: push enriched+sanitized html into frozen preview iframe.
+  // P1-N6 + P1-PREVIEW-PHOTO: push enriched+sanitized html/css into frozen preview iframe.
   useEffect(() => {
-    if (!ready || !parsed || !cssComplete || jsComplete) return
+    if (!ready || !parsed) return
+    if (srcdocRebuildKey.startsWith('final')) return
+    if (authorJsRanRef.current) return
     const win = iframeRef.current?.contentWindow
     if (!win) return
     let html = sanitizeSandboxMarkup(enrichPlaceMediaHtml(parsed.html))
     if (html.length > HTML_SANDBOX_MAX_HTML_BYTES) {
       html = `${html.slice(0, HTML_SANDBOX_MAX_HTML_BYTES)}\n<!-- html truncated -->`
     }
+    const css = sanitizeSandboxCss(parsed.css)
     try {
+      win.postMessage({ source: 'iui-html-host', type: 'previewCss', frameId, css }, '*')
       win.postMessage({ source: 'iui-html-host', type: 'previewHtml', frameId, html }, '*')
     } catch { /* ignore */ }
-  }, [ready, parsed, cssComplete, jsComplete, frameId])
+  }, [ready, parsed, frameId, srcdocRebuildKey])
 
   // P1-STATE: when js completes on a live preview shell, inject author JS in-place.
   useEffect(() => {
@@ -673,7 +666,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
       )}
       <iframe
         ref={iframeRef}
-        key={reloadToken}
+        key={srcdocRebuildKey}
         title={parsed.title ?? 'IUI sandbox'}
         srcDoc={srcdoc}
         sandbox="allow-scripts allow-modals"

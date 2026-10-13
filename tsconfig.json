@@ -30,10 +30,18 @@
     "declarationDir": "lib/types",
     "paths": {
       "@deepseek-ai/dsh-client-ui-primitives": [
+        "/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/types/index.d.ts",
         "/home/box/.local/node/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/types/index.d.ts"
       ],
       "@deepseek-ai/dsh-client-ui-primitives/*": [
+        "/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/types/*",
         "/home/box/.local/node/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/types/*"
+      ],
+      "@deepseek-ai/dsh-llm": [
+        "./node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-llm/*": [
+        "./node_modules/@deepseek-ai/dsh-llm/lib/types/*"
       ]
     }
   },

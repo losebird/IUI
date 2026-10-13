@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Streaming flicker:** freeze one preview-shell iframe for the whole fence stream. Growing css/html patches via `previewCss` / `previewHtml`; author JS injects in place. No per-token `srcdoc` rewrite.
+- **Composer lag:** `dom-fence` / markdown-rescue MutationObservers ignore composer (`data-composer-seat`) characterData so Lexical keystrokes no longer schedule a full fence sweep.
+
 ## 0.13.0-iui.26
 
 Golden-prompt regression suite (first-principles after failure-visible .25):

@@ -37,8 +37,12 @@ describe('P1 remaining (.12)', () => {
     const sandbox = readFileSync(resolve(__dirname, '../src/shared/html-sandbox.ts'), 'utf8')
     expect(fence).toMatch(/preview-shell/)
     expect(fence).toMatch(/type: 'previewHtml'/)
+    expect(fence).toMatch(/type: 'previewCss'/)
+    expect(fence).toMatch(/htmlSandboxSrcdocRebuildKey/)
     expect(sandbox).toMatch(/type: 'previewHtml'/)
+    expect(sandbox).toMatch(/type: 'previewCss'/)
     expect(sandbox).toMatch(/iui-preview-root/)
+    expect(sandbox).toMatch(/iui-author-css/)
     expect(isIuiSandboxFrameCommand({
       source: 'iui-html-host',
       type: 'previewHtml',
@@ -50,6 +54,18 @@ describe('P1 remaining (.12)', () => {
       type: 'previewHtml',
       frameId: 'x',
       html: 'x'.repeat(200_065),
+    })).toBe(false)
+    expect(isIuiSandboxFrameCommand({
+      source: 'iui-html-host',
+      type: 'previewCss',
+      frameId: 'x',
+      css: '.w{display:grid}',
+    })).toBe(true)
+    expect(isIuiSandboxFrameCommand({
+      source: 'iui-html-host',
+      type: 'previewCss',
+      frameId: 'x',
+      css: 'x'.repeat(200_065),
     })).toBe(false)
   })
 

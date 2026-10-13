@@ -14,6 +14,7 @@ import { classifyIntentAsk, type IntentRule } from '../config/referee-rules.ts'
 import { safeRegExpTest } from '../shared/safe-regexp.ts'
 import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
 import { pushTipToast } from './tip-toast.tsx'
+import { mutationTouchesComposer } from './composer-bridge.ts'
 
 const MARKER = 'data-iui-md-rescue'
 const CONTAINER = 'iui-md-rescue'
@@ -196,7 +197,8 @@ export function installMarkdownRescue(ctx: Context): () => void {
     }
   }
 
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((records) => {
+    if (records.every((record) => mutationTouchesComposer(record))) return
     queueMicrotask(sweep)
   })
   observer.observe(document.body, { childList: true, subtree: true, characterData: true })

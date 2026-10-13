@@ -3,6 +3,7 @@ import {
   clearComposerDraftSetterForTests,
   findComposerEditable,
   insertIntoComposer,
+  mutationTouchesComposer,
   registerComposerDraftSetter,
   writeComposerEditable,
 } from '../src/client/composer-bridge.ts'
@@ -53,5 +54,39 @@ describe('composer-bridge', () => {
 
   it('returns failed for empty text', async () => {
     await expect(insertIntoComposer('   ')).resolves.toBe('failed')
+  })
+
+  it('treats Lexical composer keystrokes as composer-owned mutations', () => {
+    const seat = document.createElement('div')
+    seat.setAttribute('data-composer-seat', '')
+    const editor = document.createElement('div')
+    editor.setAttribute('contenteditable', 'true')
+    editor.setAttribute('role', 'textbox')
+    const text = document.createTextNode('你好')
+    editor.appendChild(text)
+    seat.appendChild(editor)
+    document.body.appendChild(seat)
+    expect(mutationTouchesComposer({
+      target: text,
+      addedNodes: [] as unknown as NodeList,
+      removedNodes: [] as unknown as NodeList,
+    })).toBe(true)
+  })
+
+  it('does not treat streaming fence code growth as composer-owned', () => {
+    const block = document.createElement('div')
+    block.className = 'md-code-block'
+    const pre = document.createElement('pre')
+    const code = document.createElement('code')
+    const text = document.createTextNode('{"html":"<div>"')
+    code.appendChild(text)
+    pre.appendChild(code)
+    block.appendChild(pre)
+    document.body.appendChild(block)
+    expect(mutationTouchesComposer({
+      target: text,
+      addedNodes: [] as unknown as NodeList,
+      removedNodes: [] as unknown as NodeList,
+    })).toBe(false)
   })
 })

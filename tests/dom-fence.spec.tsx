@@ -1521,6 +1521,35 @@ describe('final-answer blank-out hardening (issue #19)', () => {
     }
   })
 
+  it('does not schedule a fence sweep when the composer text node grows', async () => {
+    const row = assistantRow('s-composer-lag')
+    const block = stockCodeBlock(VALID_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const seat = document.createElement('div')
+    seat.setAttribute('data-composer-seat', '')
+    const editor = document.createElement('div')
+    editor.setAttribute('contenteditable', 'true')
+    editor.setAttribute('role', 'textbox')
+    const text = document.createTextNode('')
+    editor.appendChild(text)
+    seat.appendChild(editor)
+    document.body.appendChild(seat)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-composer-lag', send), send)
+    try {
+      await tick()
+      expect(row.querySelector('.genui-dom-fence')).not.toBeNull()
+      const raf = vi.spyOn(window, 'requestAnimationFrame')
+      raf.mockClear()
+      text.textContent = '慢半拍'
+      await Promise.resolve()
+      expect(raf).not.toHaveBeenCalled()
+    } finally {
+      dispose()
+    }
+  })
+
   it('keeps the stock block visible when the React root fails to mount (issue #19)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     setDomRootFactory(() => {
