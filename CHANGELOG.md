@@ -4,6 +4,9 @@
 
 - **Streaming flicker:** freeze one preview-shell iframe for the whole fence stream. Growing css/html patches via `previewCss` / `previewHtml`; author JS injects in place. No per-token `srcdoc` rewrite.
 - **Composer lag:** `dom-fence` / markdown-rescue MutationObservers ignore composer (`data-composer-seat`) characterData so Lexical keystrokes no longer schedule a full fence sweep.
+- **Session-switch flash:** settled ```iui-html mounts park off-document instead of unmounting; switching back restores the same iframe.
+- **After DOM change:** photo-fill observer stays for the iframe lifetime; `iuiSandbox.afterDomChange()` refills photos, rebinds `data-iui-lat/lng` map markers, and resizes charts/maps after filter/tab innerHTML.
+- **Place-map pins:** `.iui-pin-dot` is visible by default; only `.iui-itinerary` pins start hidden. Host rebinds numbered markers on `L.map` create and after DOM change, from card coordinates or previously seen `L.marker` positions.
 
 ## 0.13.0-iui.26
 

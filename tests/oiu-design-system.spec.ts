@@ -22,6 +22,8 @@ describe('OIU design-system port', () => {
     expect(css).toContain('.iui-itinerary')
     expect(css).toContain('.iui-compare-3')
     expect(css).toContain('fadeSlideIn')
+    expect(css).toContain('.iui-itinerary .iui-pin-dot { opacity: 0; }')
+    expect(css).toMatch(/\.iui-pin-dot \{[\s\S]*opacity: 1;/)
   })
 
   it('importmap includes three/gsap/d3/chart.js/leaflet', () => {

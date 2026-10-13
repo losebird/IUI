@@ -1501,6 +1501,38 @@ describe('final-answer blank-out hardening (issue #19)', () => {
     }
   })
 
+  it('parks a sandbox iframe across session-switch disconnect and restores the same node', async () => {
+    const sandbox = JSON.stringify({
+      title: 'park',
+      height: 200,
+      css: '.wrap{padding:8px}',
+      html: '<div class="wrap" data-proof="park">keep</div>',
+      js: '',
+    })
+    const row = assistantRow('park-a')
+    const block = stockCodeBlock(sandbox, 'iui-html')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const dispose = installDomFenceRenderer(makeModernCtx('park-session'), () => {})
+    try {
+      expect(await waitFor(() => row.querySelector('iframe') !== null)).toBe(true)
+      const iframe = row.querySelector('iframe') as HTMLIFrameElement
+      row.remove()
+      await tick()
+      expect(iframe.isConnected).toBe(true)
+      expect(document.getElementById('iui-fence-park')?.contains(iframe) === true).toBe(true)
+      const row2 = assistantRow('park-a')
+      const block2 = stockCodeBlock(sandbox, 'iui-html')
+      row2.appendChild(block2)
+      document.body.appendChild(row2)
+      expect(await waitFor(() => row2.querySelector('iframe') === iframe)).toBe(true)
+      expect(block2.style.display).toBe('none')
+      expect(row2.querySelector('[data-iui-html-sandbox]')).not.toBeNull()
+    } finally {
+      dispose()
+    }
+  })
+
   it('removes the orphaned replacement container when the host replaces the stock block', async () => {
     const row = assistantRow('s43')
     const block = stockCodeBlock(VALID_SPEC, 'dsh-ui')
@@ -1511,8 +1543,8 @@ describe('final-answer blank-out hardening (issue #19)', () => {
     try {
       await tick()
       expect(row.querySelector('.genui-dom-fence')).not.toBeNull()
-      // The host swaps the message node out from under us but our foreign
-      // container survives as an orphan: it must be removed immediately.
+      // The host swaps the message node out from under us. Catalog mounts are
+      // still dropped; sandbox mounts park off-document instead of leaking in-row.
       block.remove()
       await tick()
       expect(row.querySelector('.genui-dom-fence')).toBeNull()

@@ -1054,6 +1054,19 @@ export function buildSandboxBridgeScript(frameId: string): string {
       post({ type: 'error', message: 'author pipeline missing', kind: 'host' });
       return false;
     },
+    /** After author JS rebuilds DOM (filter/tab/innerHTML): refill photos, remap pins, resize charts/maps. */
+    afterDomChange: function (reason) {
+      try { if (typeof window.iuiSandbox.fillPhotos === 'function') window.iuiSandbox.fillPhotos(); } catch (e0) {}
+      try { if (typeof L !== 'undefined' && L.iuiRefreshMaps) L.iuiRefreshMaps(reason || 'after-dom'); } catch (e1) {}
+      try { if (typeof L !== 'undefined' && L.iuiRebindMarkers) L.iuiRebindMarkers(reason || 'after-dom'); } catch (e2) {}
+      try {
+        document.querySelectorAll('canvas').forEach(function (cv) {
+          var ch = window.Chart && window.Chart.getChart && window.Chart.getChart(cv);
+          if (ch && ch.resize) ch.resize();
+        });
+      } catch (e3) {}
+      measure();
+    },
     /** Serialize [data-iui-form] fields and post as action. */
     submitForm: function (formEl, actionName) {
       var root = formEl || document.querySelector('[data-iui-form]');
@@ -1278,6 +1291,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
       }
       root.innerHTML = data.html;
       measure();
+      try { if (window.iuiSandbox && window.iuiSandbox.afterDomChange) window.iuiSandbox.afterDomChange('previewHtml'); } catch (eH) {}
     }
     if (data.type === 'previewCss' && typeof data.css === 'string') {
       var style = document.getElementById('iui-author-css');
@@ -1535,6 +1549,106 @@ function buildLeafletTileGuardScript(): string {
       return origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
     };
     L.iuiRefreshMaps = function (reason) { refreshAll(reason || 'api'); };
+    L.iuiRebindMarkers = function (reason) {
+      if (typeof L === 'undefined' || !L.marker) return;
+      function readCoord(el, names) {
+        for (var ni = 0; ni < names.length; ni++) {
+          var raw = el.getAttribute(names[ni]);
+          if (raw == null || raw === '') continue;
+          var n = parseFloat(raw);
+          if (isFinite(n)) return n;
+        }
+        return NaN;
+      }
+      function isVisibleCard(el) {
+        if (!el || el.nodeType !== 1) return false;
+        if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') return false;
+        var st = el.style;
+        if (st && (st.display === 'none' || st.visibility === 'hidden')) return false;
+        return true;
+      }
+      var nodes = document.querySelectorAll(
+        '[data-iui-lat],[data-lat],[data-latitude],[data-iui-lng],[data-lng],[data-longitude]'
+      );
+      var points = [];
+      var seen = Object.create(null);
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (!isVisibleCard(el)) continue;
+        var lat = readCoord(el, ['data-iui-lat', 'data-lat', 'data-latitude']);
+        var lng = readCoord(el, ['data-iui-lng', 'data-lng', 'data-longitude']);
+        if (!isFinite(lat) || !isFinite(lng)) continue;
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+        var key = lat.toFixed(5) + ',' + lng.toFixed(5);
+        if (seen[key]) continue;
+        seen[key] = 1;
+        var label = el.getAttribute('data-iui-place') || el.getAttribute('data-name') || el.getAttribute('data-title') || '';
+        if (!label) {
+          var nameEl = el.querySelector && el.querySelector('.name, h3, h4, strong');
+          label = (nameEl && nameEl.textContent) || el.getAttribute('aria-label') || '';
+        }
+        points.push({ lat: lat, lng: lng, label: String(label || '').trim().slice(0, 160), n: points.length + 1 });
+      }
+      if (!points.length && window.__iuiKnownCoords && window.__iuiKnownCoords.length) {
+        for (var ki = 0; ki < window.__iuiKnownCoords.length; ki++) {
+          var kp = window.__iuiKnownCoords[ki];
+          if (!kp || seen[kp.key]) continue;
+          seen[kp.key] = 1;
+          points.push({ lat: kp.lat, lng: kp.lng, label: kp.label || '', n: points.length + 1 });
+        }
+      }
+      if (!points.length || !maps.length) return;
+      var itinerary = !!document.querySelector('.iui-itinerary');
+      maps.forEach(function (map) {
+        if (!map) return;
+        var layer = map.__iuiMarkerLayer;
+        if (layer && map.removeLayer) {
+          try { map.removeLayer(layer); } catch (e) {}
+        }
+        try { layer = L.layerGroup(); } catch (e2) { layer = null; }
+        if (!layer) return;
+        map.__iuiMarkerLayer = layer;
+        for (var pi = 0; pi < points.length; pi++) {
+          var p = points[pi];
+          try {
+            var icon = L.divIcon({
+              className: 'iui-host-pin',
+              html: '<span class="iui-pin-dot' + (itinerary ? '' : ' active') + '">' + p.n + '</span>',
+              iconSize: [26, 26],
+              iconAnchor: [13, 13]
+            });
+            var mk = L.marker([p.lat, p.lng], { icon: icon });
+            if (p.label) mk.bindPopup(p.label);
+            layer.addLayer(mk);
+          } catch (e3) {
+            try { layer.addLayer(L.marker([p.lat, p.lng])); } catch (e4) {}
+          }
+        }
+        try { layer.addTo(map); } catch (e5) {}
+        refreshOne(map, reason || 'rebind-markers');
+      });
+    };
+    var origMarker = L.marker && L.marker.bind(L);
+    if (origMarker && !L.marker.__iuiCoordTap) {
+      L.marker = function (latlng, options) {
+        var mk = origMarker.call(this, latlng, options);
+        try {
+          var ll = mk.getLatLng && mk.getLatLng();
+          if (ll && isFinite(ll.lat) && isFinite(ll.lng)) {
+            window.__iuiKnownCoords = window.__iuiKnownCoords || [];
+            var key = Number(ll.lat).toFixed(5) + ',' + Number(ll.lng).toFixed(5);
+            var exists = window.__iuiKnownCoords.some(function (p) { return p.key === key; });
+            if (!exists) {
+              var popup = '';
+              try { popup = (mk.getPopup && mk.getPopup() && mk.getPopup().getContent && mk.getPopup().getContent()) || ''; } catch (eP) {}
+              window.__iuiKnownCoords.push({ key: key, lat: ll.lat, lng: ll.lng, label: String(popup || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 160) });
+            }
+          }
+        } catch (e) {}
+        return mk;
+      };
+      L.marker.__iuiCoordTap = true;
+    }
     var origMap = L.map.bind(L);
     L.map = function () {
       var map = origMap.apply(this, arguments);
@@ -1611,6 +1725,12 @@ function buildLeafletTileGuardScript(): string {
         map.on('moveend', onViewChange);
         map.on('zoomend', onViewChange);
       } catch (e) {}
+      setTimeout(function () {
+        try { if (L.iuiRebindMarkers) L.iuiRebindMarkers('map-create'); } catch (eR) {}
+      }, 0);
+      setTimeout(function () {
+        try { if (L.iuiRebindMarkers) L.iuiRebindMarkers('map-create-late'); } catch (eR2) {}
+      }, 240);
       return map;
     };
     // Replay chrome: models use #replay, #bReplay, or button label "Replay"/"重播".
@@ -1635,6 +1755,16 @@ function buildLeafletTileGuardScript(): string {
         setTimeout(function () { refreshAll('replay-click'); }, 120);
         setTimeout(function () { refreshAll('replay-click'); }, 400);
         setTimeout(function () { refreshAll('replay-click'); }, 900);
+      }, true);
+    }
+    if (!window.__iuiAfterDomHook) {
+      window.__iuiAfterDomHook = true;
+      var afterTimer = null;
+      document.addEventListener('click', function () {
+        if (afterTimer) clearTimeout(afterTimer);
+        afterTimer = setTimeout(function () {
+          try { if (window.iuiSandbox && window.iuiSandbox.afterDomChange) window.iuiSandbox.afterDomChange('click'); } catch (e) {}
+        }, 40);
       }, true);
     }
     return true;

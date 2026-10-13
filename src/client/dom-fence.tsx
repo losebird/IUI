@@ -161,6 +161,29 @@ interface Mount {
   lastNode: ReactNode
   /** True while this mount is the streaming skeleton (no component yet). */
   skeleton: boolean
+  /** Stable identity for parking across host row teardown (session switch). */
+  parkKey: string
+}
+
+const PARK_LOT_ID = 'iui-fence-park'
+const PARK_LIMIT = 24
+
+function fenceParkFingerprint(raw: string): string {
+  const body = raw.trim()
+  if (body.length <= 160) return body
+  return `${body.slice(0, 80)}|${body.length}|${body.slice(-80)}`
+}
+
+function ensureParkLot(): HTMLElement {
+  const existing = document.getElementById(PARK_LOT_ID)
+  if (existing instanceof HTMLElement) return existing
+  const lot = document.createElement('div')
+  lot.id = PARK_LOT_ID
+  lot.setAttribute('data-iui-fence-park', '')
+  lot.setAttribute('aria-hidden', 'true')
+  lot.style.cssText = 'position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;visibility:hidden;pointer-events:none'
+  document.body.appendChild(lot)
+  return lot
 }
 
 function isTextNode(node: Node): node is Text {
@@ -701,6 +724,7 @@ export function installDomFenceRenderer(
   driftWarned = false
   plausibilityWarned = new WeakSet<Element>()
   const mounts = new Map<HTMLElement, Mount>()
+  const parked = new Map<string, Mount>()
   // Blocks we could not render: the stock code block stays visible AND a
   // visible diagnostic explains why (issue #158). Kept apart from `mounts`
   // because a diagnosed block is never hidden.
@@ -754,12 +778,54 @@ export function installDomFenceRenderer(
     return { key, context }
   }
 
-  function unmountBlock(block: HTMLElement): void {
+  function destroyMount(mount: Mount): void {
+    try {
+      mount.root.unmount()
+    } catch {
+      // Host may already have invalidated the tree.
+    }
+    mount.container.remove()
+  }
+
+  function parkMount(mount: Mount): void {
+    if (mount.skeleton || mount.language !== 'iui-html' || !mount.lastSettled) {
+      destroyMount(mount)
+      return
+    }
+    const lot = ensureParkLot()
+    while (parked.size >= PARK_LIMIT) {
+      const oldest = parked.keys().next().value
+      if (oldest === undefined) break
+      const evicted = parked.get(oldest)
+      parked.delete(oldest)
+      if (evicted) destroyMount(evicted)
+    }
+    const previous = parked.get(mount.parkKey)
+    if (previous !== undefined && previous !== mount) destroyMount(previous)
+    lot.appendChild(mount.container)
+    parked.set(mount.parkKey, mount)
+  }
+
+  function adoptParked(block: HTMLElement, parkKey: string, raw: string, settled: boolean): boolean {
+    const mount = parked.get(parkKey)
+    if (mount === undefined) return false
+    parked.delete(parkKey)
+    block.after(mount.container)
+    block.style.display = 'none'
+    block.setAttribute(PROCESSED, '')
+    mount.block = block
+    mount.lastRaw = raw
+    mount.lastSettled = settled
+    mounts.set(block, mount)
+    return true
+  }
+
+  function unmountBlock(block: HTMLElement, opts: { park?: boolean } = {}): void {
     const mount = mounts.get(block)
     if (mount === undefined) return
     mounts.delete(block)
-    mount.root.unmount()
-    mount.container.remove()
+    if (opts.park === true) parkMount(mount)
+    else destroyMount(mount)
     block.style.display = ''
     block.removeAttribute(PROCESSED)
     clearDiagnostic(block)
@@ -898,6 +964,8 @@ export function installDomFenceRenderer(
       : language === 'iui-html' || sandboxShaped
         ? 'iui-html'
         : (language === 'dsh-ui' ? 'dsh-ui' : 'iui')
+    const parkKey = `${String(key)}:${acceptedLanguage}:${fenceParkFingerprint(raw)}`
+    if (acceptedLanguage === 'iui-html' && settled && adoptParked(block, parkKey, raw, settled)) return
     const node: ReactNode | null = acceptedLanguage === 'svg'
       ? renderSvgFence(raw, key)
       : acceptedLanguage === 'iui-html'
@@ -951,7 +1019,7 @@ export function installDomFenceRenderer(
     }
     block.style.display = 'none'
     block.setAttribute(PROCESSED, '')
-    mounts.set(block, { root, container, block, lastRaw: raw, lastSettled: settled, language: acceptedLanguage, lastNode: payload, skeleton: node === null })
+    mounts.set(block, { root, container, block, lastRaw: raw, lastSettled: settled, language: acceptedLanguage, lastNode: payload, skeleton: node === null, parkKey })
   }
 
   /** Pre-paint repair: the host's React re-renders during streaming can wipe
@@ -1015,7 +1083,7 @@ export function installDomFenceRenderer(
     syncChatSubscription(sessionId)
     for (const [block, mount] of mounts) {
       if (!block.isConnected) {
-        unmountBlock(block)
+        unmountBlock(block, { park: true })
         continue
       }
       const raw = rawOf(block)
@@ -1194,6 +1262,9 @@ export function installDomFenceRenderer(
       rafId = null
     }
     for (const block of Array.from(mounts.keys())) unmountBlock(block)
+    for (const leftover of parked.values()) destroyMount(leftover)
+    parked.clear()
+    document.getElementById(PARK_LOT_ID)?.remove()
     for (const block of Array.from(diagnostics.keys())) clearDiagnostic(block)
   }
 }

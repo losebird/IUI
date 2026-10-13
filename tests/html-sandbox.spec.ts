@@ -99,6 +99,17 @@ describe('html-sandbox', () => {
     // allowlist hosts (incl. unpkg) must appear in CSP
   })
 
+  it('exposes afterDomChange and rebinds map markers from data attributes', () => {
+    const spec = parseHtmlSandboxFence(JSON.stringify({ html: '<div class="iui-map-wrap"></div>', css: '', js: '' }))!
+    const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'after-dom' })
+    expect(doc).toContain('afterDomChange')
+    expect(doc).toContain('iuiRebindMarkers')
+    expect(doc).toContain('data-iui-lat')
+    expect(doc).toContain('fillPhotos')
+    expect(doc).toContain('map-create')
+    expect(doc).toContain('__iuiKnownCoords')
+  })
+
   it('injects resize/action bridge with frameId', () => {
     const spec = parseHtmlSandboxFence(JSON.stringify({ html: '<button data-iui-action="ping">Go</button>', css: '', js: '' }))!
     const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'frame-42' })

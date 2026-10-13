@@ -398,9 +398,10 @@ a:hover { text-decoration: underline; }
   width: 26px; height: 26px; border-radius: 50%;
   background: #fff; color: #111; font: 600 12px var(--font-sans);
   border: 2px solid #111; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  opacity: 0;
+  opacity: 1;
 }
-.iui-pin-dot.active { background: #111; color: #fff; }
+.iui-itinerary .iui-pin-dot { opacity: 0; }
+.iui-pin-dot.active, .iui-itinerary .iui-pin-dot.active { opacity: 1; background: #111; color: #fff; }
 
 .iui-weather { display: flex; flex-direction: column; gap: 14px; }
 .iui-weather-hero {
@@ -694,7 +695,7 @@ Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat).
 
 ## Pattern — trip itinerary (California-coast density)
 Editorial card: short title+subtitle, day/stop chips, REAL Leaflet map (height 300px, grayscale via .iui-map-wrap), Pause/Replay chrome, then horizontally scrollable destination cards (photo 110px + number + name + day + one-line desc).
-- Numbered L.divIcon pins with inner .iui-pin-dot (start opacity:0). Thin connecting polyline revealed as pins drop.
+- Numbered L.divIcon pins with inner .iui-pin-dot. Itinerary pins start opacity:0 and drop in; place-map pins stay visible. Thin connecting polyline revealed as itinerary pins drop.
 - Host installs window.createTripAnimator — USE IT (do not invent timers):
   createTripAnimator({ stopCount, durationMs:6000, pinElements, map, onFrame, onState })
   → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles. onFrame gives {pinIndex, pinProgress, activeStop}.

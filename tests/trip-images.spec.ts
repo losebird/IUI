@@ -49,6 +49,8 @@ describe('enrichItineraryHtml + photo fill script', () => {
     expect(script).toContain('paris')
     expect(script).toContain('Special:FilePath')
     expect(script).toContain('iui-photo-credit')
+    expect(script).toContain('iuiSandbox.fillPhotos')
+    expect(script).not.toMatch(/obs.disconnect\(\).*16000/)
   })
 
   it('srcdoc includes photo fill for itinerary HTML', () => {

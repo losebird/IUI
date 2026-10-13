@@ -857,6 +857,14 @@ export function buildTripPhotoFillScript(): string {
       img = document.createElement('img');
       photo.appendChild(img);
     }
+    // Rebuilt cards clone the host-fill flag onto a new img with empty src.
+    // Drop stale markers so fill can run again after filter/tab innerHTML.
+    if (img.getAttribute('data-iui-photo-host') === '1' && (!img.getAttribute('src') || (img.complete && img.naturalWidth === 0))) {
+      img.removeAttribute('data-iui-photo-host');
+      img.removeAttribute('data-iui-photo-recovering');
+      img.removeAttribute('data-iui-photo-attempt');
+      card.removeAttribute('data-iui-photo-net');
+    }
     // Already healthy host fill — keep
     if (img.getAttribute('data-iui-photo-host') === '1' && img.naturalWidth > 0 && img.complete) {
       return true;
@@ -915,17 +923,18 @@ export function buildTripPhotoFillScript(): string {
   }
   function watch() {
     run();
-    var n = 0;
-    var t = setInterval(function () {
-      run();
-      if (++n > 48) clearInterval(t);
-    }, 250);
     try {
       var root = document.getElementById('iui-preview-root') || document.body;
-      var obs = new MutationObserver(function () { run(); });
-      obs.observe(root, { childList: true, subtree: true });
-      setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 16000);
+      if (root && !root.__iuiPhotoObs) {
+        var obs = new MutationObserver(function () { run(); });
+        obs.observe(root, { childList: true, subtree: true });
+        root.__iuiPhotoObs = obs;
+      }
     } catch (e) {}
+    try {
+      window.iuiSandbox = window.iuiSandbox || {};
+      window.iuiSandbox.fillPhotos = run;
+    } catch (e2) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
   else watch();
