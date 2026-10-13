@@ -89,6 +89,15 @@ export type HtmlSandboxBuildOptions = {
   /** Extra base CSS after design tokens, before author css. */
   baseCss?: string
   /**
+   * Live `#iui-preview-root` innerHTML from the running iframe (share snapshot).
+   * When set, download/srcdoc uses this instead of the fence html.
+   */
+  liveHtml?: string
+  /** Live `#iui-author-css` text from the running iframe. */
+  liveCss?: string
+  /** Captured localState to restore after author JS in a downloaded snapshot. */
+  liveState?: Record<string, unknown>
+  /**
    * Opaque id echoed in postMessage so the host can filter frames.
    * Required for resize/action bridging.
    */
@@ -148,6 +157,7 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
+  | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown> }
 
 
 /** Host → sandbox postMessage (optional; sandbox listens when bridge present). */
@@ -162,6 +172,7 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'runAuthorJs'; frameId: string; js: string; jsFunctions?: string; jsExpressions?: string[]; jsChunks?: string[]; force?: boolean }
   | { source: 'iui-html-host'; type: 'rerunAuthorJs'; frameId: string }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
+  | { source: 'iui-html-host'; type: 'requestSnapshot'; frameId: string }
 
 export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrameCommand {
   if (data === null || typeof data !== 'object') return false
@@ -203,6 +214,7 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
   if (record.type === 'restoreLocalState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
   }
+  if (record.type === 'requestSnapshot') return true
   return false
 }
 
@@ -238,6 +250,11 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   }
   if (record.type === 'localState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
+  }
+  if (record.type === 'snapshot') {
+    return typeof record.html === 'string' && record.html.length <= 200_064
+      && typeof record.css === 'string' && record.css.length <= 200_064
+      && typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
   }
   return false
 }
@@ -299,6 +316,125 @@ export function rewriteBlockedMapTileUrls(source: string): string {
 
 const SINGLE_SMART = new Set(['\u2018', '\u2019', '\u2032'])
 const DOUBLE_SMART = new Set(['\u201C', '\u201D', '\u2033'])
+
+/** Keywords after which `/` starts a regex, not division. */
+const REGEX_PREFIX_KW = new Set([
+  'return', 'throw', 'case', 'typeof', 'void', 'delete', 'new', 'await', 'yield',
+  'in', 'of', 'instanceof', 'else', 'do',
+])
+
+function skipJsString(source: string, start: number): number {
+  const q = source[start]!
+  let escape = false
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i]!
+    if (escape) { escape = false; continue }
+    if (ch === '\\') { escape = true; continue }
+    if (ch === q) return i + 1
+    if (q !== '`' && ch === '\n') return i
+  }
+  return source.length
+}
+
+/** Skip a regex literal starting at `start` (`/`). Handles `[...]` so quotes in a class stay in the regex. */
+function skipJsRegex(source: string, start: number): number {
+  let inClass = false
+  let escape = false
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i]!
+    if (escape) { escape = false; continue }
+    if (ch === '\\') { escape = true; continue }
+    if (inClass) {
+      if (ch === ']') inClass = false
+      continue
+    }
+    if (ch === '[') { inClass = true; continue }
+    if (ch === '\n') return i
+    if (ch === '/') {
+      i++
+      while (i < source.length && /[gimsuy]/.test(source[i]!)) i++
+      return i
+    }
+  }
+  return source.length
+}
+
+/**
+ * Call `fn` for each character that participates in brace/paren matching.
+ * Strings, comments, and regex literals (including `/\"/g` and `/['\"]/g`) are skipped.
+ */
+export function forEachJsCodeChar(source: string, fn: (i: number, ch: string) => void): void {
+  if (!source) return
+  let i = 0
+  let lastWasValue = false
+  const n = source.length
+  while (i < n) {
+    const ch = source[i]!
+    const next = source[i + 1]
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') { i++; continue }
+    if (ch === '/' && next === '/') {
+      while (i < n && source[i] !== '\n') i++
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      i += 2
+      while (i < n && !(source[i] === '*' && source[i + 1] === '/')) i++
+      i = Math.min(n, i + 2)
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i = skipJsString(source, i)
+      lastWasValue = true
+      continue
+    }
+    if (ch === '/') {
+      if (!lastWasValue) {
+        i = skipJsRegex(source, i)
+        lastWasValue = true
+        continue
+      }
+      fn(i, ch)
+      lastWasValue = false
+      i++
+      continue
+    }
+    if ((ch === '+' || ch === '-') && next === ch) {
+      fn(i, ch)
+      fn(i + 1, next)
+      lastWasValue = true
+      i += 2
+      continue
+    }
+    if (ch === ')' || ch === ']') {
+      fn(i, ch)
+      lastWasValue = true
+      i++
+      continue
+    }
+    if (/[A-Za-z_$]/.test(ch)) {
+      let j = i + 1
+      while (j < n && /[\w$]/.test(source[j]!)) j++
+      const ident = source.slice(i, j)
+      for (let k = i; k < j; k++) fn(k, source[k]!)
+      lastWasValue = !REGEX_PREFIX_KW.has(ident)
+      i = j
+      continue
+    }
+    if (ch >= '0' && ch <= '9') {
+      fn(i, ch)
+      lastWasValue = true
+      i++
+      while (i < n && /[\w.$]/.test(source[i]!)) {
+        fn(i, source[i]!)
+        i++
+      }
+      continue
+    }
+    fn(i, ch)
+    lastWasValue = false
+    i++
+  }
+}
 
 /**
  * Convert smart quotes used as JS delimiters, but leave apostrophes inside
@@ -384,19 +520,10 @@ export function hardenAuthorJs(source: string): string {
   )
   out = softFixArrayCallbackParens(out)
   // Soft-close truncated objects/arrays/parens (common when model cuts mid-fence).
+  // Skip strings AND regex literals — `/\"/g` is not an unclosed string.
   const opens = { '{': 0, '[': 0, '(': 0 }
   const excess = { '{': 0, '[': 0, '(': 0 }
-  let inStr: '"' | "'" | '`' | null = null
-  let escape = false
-  for (let i = 0; i < out.length; i++) {
-    const ch = out[i]!
-    if (inStr) {
-      if (escape) { escape = false; continue }
-      if (ch === '\\') { escape = true; continue }
-      if (ch === inStr) inStr = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue }
+  forEachJsCodeChar(out, (_i, ch) => {
     if (ch === '{') opens['{']++
     else if (ch === '}') {
       if (opens['{'] > 0) opens['{']--
@@ -410,7 +537,7 @@ export function hardenAuthorJs(source: string): string {
       if (opens['('] > 0) opens['(']--
       else excess['(']++
     }
-  }
+  })
   if (opens['('] > 0 && opens['('] <= 4) out += ')'.repeat(opens['('])
   if (opens['['] > 0 && opens['['] <= 4) out += ']'.repeat(opens['['])
   if (opens['{'] > 0 && opens['{'] <= 4) out += '}'.repeat(opens['{'])
@@ -459,42 +586,31 @@ export function softTrimExcessClosers(
   if (!source) return source
   // Drop closers that fire while depth is already 0 (cap so we don't erase whole files).
   let skipBrace = 4, skipBracket = 4, skipParen = 4
-  let out = ''
+  const drop = new Set<number>()
   let depthB = 0, depthK = 0, depthP = 0
-  let inStr: '"' | "'" | '`' | null = null
-  let escape = false
-  for (let i = 0; i < source.length; i++) {
-    const ch = source[i]!
-    if (inStr) {
-      out += ch
-      if (escape) { escape = false; continue }
-      if (ch === '\\') { escape = true; continue }
-      if (ch === inStr) inStr = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; out += ch; continue }
-    if (ch === '{') { depthB++; out += ch; continue }
+  forEachJsCodeChar(source, (i, ch) => {
+    if (ch === '{') { depthB++; return }
     if (ch === '}') {
-      if (depthB === 0) { if (skipBrace > 0) skipBrace--; continue }
+      if (depthB === 0) { if (skipBrace > 0) { skipBrace--; drop.add(i) } return }
       depthB--
-      out += ch
-      continue
+      return
     }
-    if (ch === '[') { depthK++; out += ch; continue }
+    if (ch === '[') { depthK++; return }
     if (ch === ']') {
-      if (depthK === 0) { if (skipBracket > 0) skipBracket--; continue }
+      if (depthK === 0) { if (skipBracket > 0) { skipBracket--; drop.add(i) } return }
       depthK--
-      out += ch
-      continue
+      return
     }
-    if (ch === '(') { depthP++; out += ch; continue }
+    if (ch === '(') { depthP++; return }
     if (ch === ')') {
-      if (depthP === 0) { if (skipParen > 0) skipParen--; continue }
+      if (depthP === 0) { if (skipParen > 0) { skipParen--; drop.add(i) } return }
       depthP--
-      out += ch
-      continue
     }
-    out += ch
+  })
+  if (drop.size === 0) return source
+  let out = ''
+  for (let i = 0; i < source.length; i++) {
+    if (!drop.has(i)) out += source[i]
   }
   return out
 }
@@ -1119,6 +1235,25 @@ export function buildSandboxBridgeScript(frameId: string): string {
       return false;
     },
     /** After author JS rebuilds DOM (filter/tab/innerHTML): refill photos, remap pins, resize charts/maps. */
+    setCredit: function (el, href, label) {
+      if (!el) return null;
+      var box = el.classList && el.classList.contains('iui-photo-credit') ? el : (el.querySelector && el.querySelector('.iui-photo-credit'));
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'iui-photo-credit';
+        try { el.appendChild(box); } catch (e1) { return null; }
+      }
+      var a = box.querySelector('a');
+      if (!a) {
+        a = document.createElement('a');
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        box.insertBefore(a, box.firstChild);
+      }
+      a.href = href || '#';
+      if (label) a.textContent = String(label);
+      return a;
+    },
     afterDomChange: function (reason) {
       try { if (typeof window.iuiSandbox.fillPhotos === 'function') window.iuiSandbox.fillPhotos(); } catch (e0) {}
       try { if (typeof L !== 'undefined' && L.iuiRefreshMaps) L.iuiRefreshMaps(reason || 'after-dom'); } catch (e1) {}
@@ -1201,6 +1336,23 @@ export function buildSandboxBridgeScript(frameId: string): string {
     },
     persistLocalState: function () {
       try { post({ type: 'localState', state: window.iuiSandbox.captureLocalState() }); } catch (e) {}
+    },
+    captureShareSnapshot: function () {
+      var html = '';
+      var css = '';
+      try {
+        var root = document.getElementById('iui-preview-root');
+        html = root ? String(root.innerHTML || '') : '';
+      } catch (e0) {}
+      try {
+        var style = document.getElementById('iui-author-css');
+        css = style ? String(style.textContent || '') : '';
+      } catch (e1) {}
+      var state = {};
+      try { state = window.iuiSandbox.captureLocalState() || {}; } catch (e2) {}
+      if (html.length > 200000) html = html.slice(0, 200000);
+      if (css.length > 200000) css = css.slice(0, 200000);
+      return { html: html, css: css, state: state };
     }
   };
   document.addEventListener('change', function () {
@@ -1369,6 +1521,16 @@ export function buildSandboxBridgeScript(frameId: string): string {
     }
     if (data.type === 'restoreLocalState' && data.state && typeof data.state === 'object') {
       try { window.iuiSandbox.restoreLocalState(data.state); measure(); } catch (e) {}
+    }
+    if (data.type === 'requestSnapshot') {
+      try {
+        var snap = window.iuiSandbox && window.iuiSandbox.captureShareSnapshot
+          ? window.iuiSandbox.captureShareSnapshot()
+          : { html: '', css: '', state: {} };
+        post({ type: 'snapshot', html: snap.html || '', css: snap.css || '', state: snap.state || {} });
+      } catch (eS) {
+        try { post({ type: 'snapshot', html: '', css: '', state: {} }); } catch (eS2) {}
+      }
     }
     // P0: single readiness gate — libs → DOM → chunked author JS (shared pipeline).
     // ready/bridgeReady above only mean the bridge is listening — NOT author-runnable.
@@ -1825,6 +1987,22 @@ function buildLeafletTileGuardScript(): string {
       window.__iuiAfterDomHook = true;
       var afterTimer = null;
       document.addEventListener('click', function () {
+        try {
+          document.querySelectorAll('img[data-iui-photo-wired="1"]').forEach(function (im) {
+            var marked = im.getAttribute('data-iui-photo-wired-src') || '';
+            var now = im.getAttribute('src') || '';
+            if (marked && now && marked !== now) {
+              im.removeAttribute('data-iui-photo-wired');
+              im.removeAttribute('data-iui-photo-host');
+            }
+          });
+          document.querySelectorAll('.iui-photo-credit').forEach(function (box) {
+            if (box.querySelector('a')) return;
+            try {
+              if (window.iuiSandbox && window.iuiSandbox.setCredit) window.iuiSandbox.setCredit(box, '#', '');
+            } catch (eA) {}
+          });
+        } catch (eClr) {}
         if (afterTimer) clearTimeout(afterTimer);
         afterTimer = setTimeout(function () {
           try { if (window.iuiSandbox && window.iuiSandbox.afterDomChange) window.iuiSandbox.afterDomChange('click'); } catch (e) {}
@@ -1988,11 +2166,19 @@ export function buildHtmlSandboxSrcdoc(
 ): string {
   const title = spec.title ? escapeHtml(spec.title) : 'IUI sandbox'
   const truncatedParts: Array<'css' | 'js' | 'html'> = []
-  const rawHtml = spec.html
-  const htmlSan = sanitizeSandboxMarkup(enrichPlaceMediaHtml(rawHtml))
+  const rawHtml = typeof options.liveHtml === 'string' && options.liveHtml.trim()
+    ? options.liveHtml
+    : spec.html
+  const htmlSan = sanitizeSandboxMarkup(
+    typeof options.liveHtml === 'string' && options.liveHtml.trim()
+      ? rawHtml
+      : enrichPlaceMediaHtml(rawHtml),
+  )
   const html = truncateAuthor(htmlSan, 'html')
   if (htmlSan.length > HTML_SANDBOX_MAX_HTML_BYTES) truncatedParts.push('html')
-  const cssSan = sanitizeSandboxCss(spec.css)
+  const cssSan = sanitizeSandboxCss(
+    typeof options.liveCss === 'string' && options.liveCss.trim() ? options.liveCss : spec.css,
+  )
   const authorCss = truncateAuthor(cssSan, 'css')
   if (cssSan.length > HTML_SANDBOX_MAX_AUTHOR_BYTES) truncatedParts.push('css')
   const jsRewritten = prepareAuthorJs(spec.js)
@@ -2036,6 +2222,7 @@ export function buildHtmlSandboxSrcdoc(
       jsExpressions: ${JSON.stringify(exprList.slice(0, 64).map((x) => prepareAuthorJs(x)))},
       jsChunks: ${JSON.stringify(authorChunks)}
     });
+    ${options.liveState ? `setTimeout(function () { try { if (window.iuiSandbox && window.iuiSandbox.restoreLocalState) window.iuiSandbox.restoreLocalState(${JSON.stringify(options.liveState)}); } catch (eR) {} }, 80);` : ''}
   }
   // window.load waits for head CDN <script src>; pipeline still re-checks globals.
   if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
@@ -2076,7 +2263,7 @@ export function buildSandboxDownloadHtml(
   spec: HtmlSandboxSpec,
   options: HtmlSandboxBuildOptions = {},
 ): string {
-  // Reuse srcdoc builder; strip bridge postMessage noise for offline open.
+  // Reuse srcdoc builder. liveHtml/liveCss bake the running iframe (filled photos, current filter).
   const doc = buildHtmlSandboxSrcdoc(spec, { ...options, frameId: options.frameId ?? 'download' })
   return doc
 }

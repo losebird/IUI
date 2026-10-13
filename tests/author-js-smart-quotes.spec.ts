@@ -51,4 +51,25 @@ describe('string-aware smart-quote hardening', () => {
     expect(src).toMatch(/function softHarden/)
     expect(src).not.toContain("split(q(0x2019)).join(\"'\"")
   })
+
+  it('does not append an extra ) after replace(/"/g) in a closed IIFE', () => {
+    const raw = "(function(){\nvar val='x';\nh+='<td value=\"'+String(val).replace(/\"/g,'&quot;')+'\"></td>';\n})();"
+    expect(accepts(raw)).toBe(true)
+    const out = hardenAuthorJs(raw)
+    expect(accepts(out)).toBe(true)
+    expect(out.trimEnd()).not.toMatch(/\)\s*\)\s*;?\s*$/)
+  })
+
+  it('keeps character-class quotes inside a regex as regex, not strings', () => {
+    const raw = "(function(){ var s = String(x).replace(/['\"]/g, ''); })();"
+    expect(accepts(raw)).toBe(true)
+    expect(accepts(hardenAuthorJs(raw))).toBe(true)
+  })
+
+  it('still closes a truly truncated call', () => {
+    const raw = 'foo(1, 2'
+    const out = hardenAuthorJs(raw)
+    expect(out).toContain(')')
+    expect(accepts(out)).toBe(true)
+  })
 })

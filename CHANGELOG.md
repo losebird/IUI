@@ -8,6 +8,12 @@
 - **After DOM change:** photo-fill observer stays for the iframe lifetime; `iuiSandbox.afterDomChange()` refills photos, rebinds `data-iui-lat/lng` map markers, and resizes charts/maps after filter/tab innerHTML.
 - **Place-map pins:** `.iui-pin-dot` is visible by default; only `.iui-itinerary` pins start hidden. Host rebinds numbered markers on `L.map` create and after DOM change, from card coordinates or previously seen `L.marker` positions.
 - **Author JS smart quotes:** `hardenAuthorJs` / iframe `softHarden` only convert curly quotes used as delimiters. Apostrophes inside ASCII-quoted strings (`'s’aider'`) stay valid.
+- **Share snapshot:** toolbar download asks the live iframe for HTML/CSS/localState, then bakes filled photos and current filter/flip into a standalone file. Fence HTML remains the fallback if the snapshot times out.
+- **Photo credit updates:** `iuiSandbox.setCredit` creates a missing `<a>` instead of writing `href` on null. `ensureCredit` reuses a live credit node and does not detach it during gallery next/prev. Card cover fill selectors are unchanged.
+- **Photo-fill loop:** host-owned credits are not rewritten on every observer tick; `wireImage` binds error once (`data-iui-photo-wired`); the fill MutationObserver is debounced so session switch cannot wedge the tab.
+- **Gallery slot:** `.iui-gallery` / single-slot `.photo` uses `object-fit: contain`. Author `img.src` changes clear a stale wired flag so next/prev is not overwritten. Stop-card cover is unchanged.
+- **Author src wins:** `fillPhotos` only fills empty or broken images. A gallery that already set `img.src` is not overwritten from `data-iui-place` after next/prev. A lone `.iui-place-card` is a hero (`height: auto`); two-plus place cards / itinerary strips stay 110px cover.
+- **Author JS regex literals:** `hardenAuthorJs` brace/paren balancing skips `/.../` (including `/\"/g` and character classes). A closed spreadsheet IIFE is no longer given a trailing `)` (`Unexpected token ')'`).
 
 ## 0.13.0-iui.26
 

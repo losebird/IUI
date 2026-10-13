@@ -181,6 +181,51 @@ describe('sandbox product helpers', () => {
     expect(doc).toContain('--dsl-g-accent: #111')
   })
 
+  it('bakes live iframe html into a share snapshot', () => {
+    const spec = parseHtmlSandboxFence(JSON.stringify({
+      html: '<div class="photo"></div>',
+      css: '.x{}',
+      js: 'var n=1',
+    }))!
+    const live = '<div class="iui-stop-card"><div class="photo"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/x.jpg" alt="x"/></div><span class="name">上海</span></div>'
+    const doc = buildSandboxDownloadHtml(spec, {
+      liveHtml: live,
+      liveCss: '.live{color:red}',
+      liveState: { fields: { q: 'ok' }, checks: {}, aria: {}, text: {} },
+    })
+    expect(doc).toContain('Special:FilePath/x.jpg')
+    expect(doc).toContain('.live{color:red}')
+    expect(doc).toContain('restoreLocalState')
+    expect(doc).toContain('"q":"ok"')
+    expect(doc).not.toContain('<div class="photo"></div></div>')
+  })
+
+  it('accepts snapshot host commands and iframe replies', () => {
+    expect(isIuiSandboxFrameCommand({
+      source: 'iui-html-host',
+      type: 'requestSnapshot',
+      frameId: 'f1',
+    })).toBe(true)
+    expect(isIuiSandboxHostMessage({
+      source: 'iui-html',
+      type: 'snapshot',
+      frameId: 'f1',
+      html: '<div>x</div>',
+      css: '.a{}',
+      state: { fields: {} },
+    })).toBe(true)
+    const src = buildHtmlSandboxSrcdoc(parseHtmlSandboxFence(JSON.stringify({ html: '<div>a</div>', css: '', js: '' }))!, { frameId: 'snap' })
+    expect(src).toContain('requestSnapshot')
+    expect(src).toContain('captureShareSnapshot')
+  })
+
+  it('exposes setCredit so author JS never assigns href on null', () => {
+    const spec = parseHtmlSandboxFence(JSON.stringify({ html: '<div class="photo"></div>', css: '', js: '' }))!
+    const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'credit' })
+    expect(doc).toContain('setCredit:')
+    expect(doc).toContain('iuiSandbox.setCredit')
+  })
+
   it('bridge listens for host measure', () => {
     const spec = parseHtmlSandboxFence(JSON.stringify({ html: '<div>a</div>', css: '', js: '' }))!
     const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'm1' })

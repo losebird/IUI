@@ -360,7 +360,7 @@ export const EN = {
   'sandbox.copy': 'Copy source',
   'sandbox.copied': 'Copied',
   'sandbox.reload': 'Reload',
-  'sandbox.download': 'Download HTML',
+  'sandbox.download': 'Share HTML',
   'sandbox.dismissError': 'Dismiss',
   'sandbox.stage.placeholder': 'placeholder',
   'sandbox.stage.css': 'CSS',

@@ -355,7 +355,7 @@ export const ZH: Record<keyof typeof EN, string> = {
   'sandbox.copy': '复制源码',
   'sandbox.copied': '已复制',
   'sandbox.reload': '重新加载',
-  'sandbox.download': '下载 HTML',
+  'sandbox.download': '分享 HTML',
   'sandbox.dismissError': '关闭',
   'sandbox.stage.placeholder': '占位',
   'sandbox.stage.css': 'CSS',

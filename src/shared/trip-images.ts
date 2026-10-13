@@ -770,28 +770,62 @@ export function buildTripPhotoFillScript(): string {
     }
     next();
   }
+  function setCreditLink(root, href, label) {
+    if (!root) return null;
+    var box = root.classList && root.classList.contains('iui-photo-credit')
+      ? root
+      : (root.querySelector && root.querySelector('.iui-photo-credit'));
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'iui-photo-credit';
+      (root.appendChild ? root : document.body).appendChild(box);
+    }
+    box.setAttribute('data-iui-host-credit', '1');
+    var a = box.querySelector('a');
+    if (!a) {
+      a = document.createElement('a');
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      box.insertBefore(a, box.firstChild);
+    }
+    a.href = href || '#';
+    if (label) a.textContent = label;
+    return a;
+  }
   function ensureCredit(card, info) {
-    if (!info) return;
+    if (!info || !card) return;
     var existing = card.querySelector('.iui-photo-credit');
-    if (existing && existing.getAttribute('data-iui-host-credit') === '1') return;
+    var a = existing && existing.querySelector('a');
+    // Host-owned credit is already live — do not rewrite href/text every fill
+    // (that retriggers the photo MutationObserver and wedges the tab).
+    if (existing && existing.getAttribute('data-iui-host-credit') === '1' && a && a.isConnected) return;
+    if (existing && (a && a.isConnected)) {
+      setCreditLink(existing, info.credit || '#', info.artist || 'Wikimedia');
+      return;
+    }
+    if (existing && !a) {
+      setCreditLink(existing, info.credit || '#', info.artist || 'Wikimedia');
+      return;
+    }
     if (existing) {
-      // Model often emits a dead "Main_Page" credit — replace with host credit when we filled.
+      // Dead model credit (no usable link) — replace in place, do not leave a hole.
       try { existing.remove(); } catch (e) {}
     }
     var c = document.createElement('div');
     c.className = 'iui-photo-credit';
-    c.setAttribute('data-iui-host-credit', '1');
-    var a = document.createElement('a');
-    a.href = info.credit || '#';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.textContent = info.artist || 'Wikimedia';
-    c.appendChild(a);
-    c.appendChild(document.createTextNode(' · ' + (info.license || 'Wikimedia') + ' · Wikimedia'));
     card.appendChild(c);
+    setCreditLink(c, info.credit || '#', info.artist || 'Wikimedia');
+    c.appendChild(document.createTextNode(' · ' + (info.license || 'Wikimedia') + ' · Wikimedia'));
   }
   function wireImage(img, photo, card, info, placeLabel, allowNetworkFallback) {
     if (!img || !info || !info.url) return;
+    var srcNow = img.getAttribute('src') || '';
+    if (img.getAttribute('data-iui-photo-wired') === '1' && srcNow && img.getAttribute('data-iui-photo-wired-src') === srcNow) {
+      ensureCredit(card, info);
+      return;
+    }
+    img.setAttribute('data-iui-photo-wired', '1');
+    img.setAttribute('data-iui-photo-wired-src', srcNow);
     img.setAttribute('data-iui-photo-host', '1');
     img.loading = 'eager';
     try { img.decoding = 'async'; } catch (e) {}
@@ -802,6 +836,7 @@ export function buildTripPhotoFillScript(): string {
       attempt++;
       img.setAttribute('data-iui-photo-attempt', String(attempt));
       img.src = url;
+      img.setAttribute('data-iui-photo-wired-src', url);
     }
     function onBroken() {
       if (img.getAttribute('data-iui-photo-recovering') === '1') return;
@@ -837,6 +872,23 @@ export function buildTripPhotoFillScript(): string {
     }, 2200);
     ensureCredit(card, info);
   }
+  function srcLooksAuthorOwned(img) {
+    var src = String((img && img.getAttribute && img.getAttribute('src')) || '').trim();
+    if (!src || src === '#' || src.indexOf('javascript:') === 0) return false;
+    var marked = img.getAttribute('data-iui-photo-wired-src') || '';
+    if (marked && marked !== src) {
+      try {
+        img.removeAttribute('data-iui-photo-host');
+        img.removeAttribute('data-iui-photo-wired');
+        img.removeAttribute('data-iui-photo-wired-src');
+        img.removeAttribute('data-iui-photo-recovering');
+        img.removeAttribute('data-iui-photo-attempt');
+      } catch (eDrop) {}
+    }
+    // Broken decode → host may refill. Loading or healthy → author src is truth.
+    if (img.complete && img.naturalWidth === 0) return false;
+    return true;
+  }
   function fillCard(card) {
     if (!card || card.nodeType !== 1) return false;
     // Avoid treating the whole strip / nested hosts as a card when querying [data-iui-place]
@@ -857,6 +909,9 @@ export function buildTripPhotoFillScript(): string {
       img = document.createElement('img');
       photo.appendChild(img);
     }
+    // Author already pointed this img at a URL (gallery next/prev, explicit Wikimedia).
+    // Never overwrite from data-iui-place — that is what made next look dead.
+    if (srcLooksAuthorOwned(img)) return true;
     // Rebuilt cards clone the host-fill flag onto a new img with empty src.
     // Drop stale markers so fill can run again after filter/tab innerHTML.
     if (img.getAttribute('data-iui-photo-host') === '1' && (!img.getAttribute('src') || (img.complete && img.naturalWidth === 0))) {
@@ -926,7 +981,11 @@ export function buildTripPhotoFillScript(): string {
     try {
       var root = document.getElementById('iui-preview-root') || document.body;
       if (root && !root.__iuiPhotoObs) {
-        var obs = new MutationObserver(function () { run(); });
+        var obsTimer = null;
+        var obs = new MutationObserver(function () {
+          if (obsTimer) return;
+          obsTimer = setTimeout(function () { obsTimer = null; run(); }, 48);
+        });
         obs.observe(root, { childList: true, subtree: true });
         root.__iuiPhotoObs = obs;
       }
@@ -934,6 +993,9 @@ export function buildTripPhotoFillScript(): string {
     try {
       window.iuiSandbox = window.iuiSandbox || {};
       window.iuiSandbox.fillPhotos = run;
+      window.iuiSandbox.setCredit = function (el, href, label) {
+        return setCreditLink(el, href, label);
+      };
     } catch (e2) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);

@@ -508,9 +508,67 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }
   }
 
+  var NULL_NODE = (function () {
+    var n = { nodeType: 1, style: {}, classList: { add: function () {}, remove: function () {}, contains: function () { return false; }, toggle: function () {} },
+      setAttribute: function () {}, getAttribute: function () { return null; }, removeAttribute: function () {},
+      appendChild: function (c) { return c; }, insertBefore: function (c) { return c; }, removeChild: function (c) { return c; },
+      querySelector: function () { return n; }, querySelectorAll: function () { return []; },
+      addEventListener: function () {}, removeEventListener: function () {},
+      closest: function () { return n; }, matches: function () { return false; },
+      getBoundingClientRect: function () { return { top: 0, left: 0, width: 0, height: 0, right: 0, bottom: 0 }; },
+      innerHTML: '', textContent: '', value: '', src: '', href: '', alt: '', id: '', className: '',
+      parentNode: null, firstChild: null, isConnected: false };
+    try {
+      ['src', 'href', 'alt', 'textContent', 'innerHTML', 'value', 'id', 'className'].forEach(function (k) {
+        Object.defineProperty(n, k, { configurable: true, enumerable: true, get: function () { return ''; }, set: function () {} });
+      });
+    } catch (eN) {}
+    return n;
+  })();
+  var origQS = Document.prototype.querySelector;
+  var origEQS = Element.prototype.querySelector;
+  function ensureLiveImg() {
+    var root = origGEBI ? origGEBI('iui-preview-root') : document.getElementById('iui-preview-root');
+    if (!root) root = document.body;
+    var img = origEQS.call(root, 'img');
+    if (img) return img;
+    var slot = origEQS.call(root, '.photo') || origEQS.call(root, '.cover') || origEQS.call(root, '.iui-gallery') || root;
+    img = document.createElement('img');
+    img.setAttribute('data-iui-live-img', '1');
+    try { slot.insertBefore(img, slot.firstChild); } catch (e) {
+      try { slot.appendChild(img); } catch (e2) {}
+    }
+    return img;
+  }
+  var origGEBI = document.getElementById.bind(document);
+  function installNullSafeQuery() {
+    if (document.__iuiNullSafe) return;
+    document.__iuiNullSafe = true;
+    Document.prototype.querySelector = function (sel) {
+      var el = origQS.call(this, sel);
+      if (el) return el;
+      var s = String(sel || '');
+      if (s === 'img' || s.indexOf('img') !== -1) return ensureLiveImg();
+      return NULL_NODE;
+    };
+    Element.prototype.querySelector = function (sel) {
+      var el = origEQS.call(this, sel);
+      if (el) return el;
+      var s = String(sel || '');
+      if (s === 'img' || s.indexOf('img') !== -1) return ensureLiveImg();
+      return NULL_NODE;
+    };
+    document.getElementById = function (id) {
+      var el = origGEBI(id);
+      if (el) return el;
+      if (String(id || '').toLowerCase().indexOf('img') !== -1 || String(id || '') === 'photo') return ensureLiveImg();
+      return NULL_NODE;
+    };
+  }
   function runChunkList(parts, exprs) {
     setPhase('authorRunning');
     var failed = 0;
+    installNullSafeQuery();
     withDomReplay(function () {
       var total = parts.length;
       for (var p = 0; p < parts.length; p++) {

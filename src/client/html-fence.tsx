@@ -154,6 +154,47 @@ function downloadText(filename: string, content: string): void {
   } catch { /* ignore */ }
 }
 
+type ShareSnapshot = { html: string; css: string; state: Record<string, unknown> }
+
+function requestSandboxSnapshot(
+  iframe: HTMLIFrameElement | null,
+  frameId: string,
+  timeoutMs = 400,
+): Promise<ShareSnapshot | null> {
+  const win = iframe?.contentWindow
+  if (!win || !iframe) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: ShareSnapshot | null) => {
+      if (settled) return
+      settled = true
+      window.removeEventListener('message', onMessage)
+      window.clearTimeout(timer)
+      resolve(value)
+    }
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== win) return
+      const data = event.data
+      if (!data || data.source !== 'iui-html' || data.type !== 'snapshot' || data.frameId !== frameId) return
+      if (typeof data.html !== 'string' || typeof data.css !== 'string') {
+        finish(null)
+        return
+      }
+      const state = data.state && typeof data.state === 'object' && !Array.isArray(data.state)
+        ? data.state as Record<string, unknown>
+        : {}
+      finish({ html: data.html, css: data.css, state })
+    }
+    const timer = window.setTimeout(() => finish(null), timeoutMs)
+    window.addEventListener('message', onMessage)
+    try {
+      win.postMessage({ source: 'iui-html-host', type: 'requestSnapshot', frameId }, '*')
+    } catch {
+      finish(null)
+    }
+  })
+}
+
 
 const REASK_PROMPT_FALLBACK =
   'Please regenerate the UI with a closed ```iui-html fence; itinerary cards must include Wikimedia photos and credits.'
@@ -617,9 +658,18 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
           type="button"
           style={TOOLBAR_BTN}
           onClick={() => {
-            const html = buildSandboxDownloadHtml(parsed, { designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()), frameId: 'download', brandId: getActivePackId(), mergePackTokens: false })
-            const name = `${(parsed.title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'}.html`
-            downloadText(name, html)
+            void (async () => {
+              const snap = await requestSandboxSnapshot(iframeRef.current, frameId)
+              const html = buildSandboxDownloadHtml(parsed, {
+                designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
+                frameId: 'download',
+                brandId: getActivePackId(),
+                mergePackTokens: false,
+                ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
+              })
+              const name = `${(parsed.title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'}.html`
+              downloadText(name, html)
+            })()
           }}
         >
           {t('sandbox.download')}

@@ -388,6 +388,36 @@ a:hover { text-decoration: underline; }
 .iui-hotel-card .name, .iui-product-card .name, .iui-place-card .name, .iui-cover-card .name {
   font-size: 14px; font-weight: 600; color: var(--color-text-primary); padding: 10px 12px 4px;
 }
+.iui-gallery, .iui-hero-photo {
+  width: 100%;
+}
+.iui-gallery .photo, .iui-hero-photo .photo, .iui-gallery .cover, .iui-hero-photo .cover {
+  height: auto !important; min-height: 160px; max-height: none !important;
+  overflow: visible; background: var(--color-background-secondary);
+}
+.iui-gallery .photo img, .iui-hero-photo .photo img, .iui-gallery .cover img, .iui-hero-photo .cover img {
+  width: 100%; height: auto !important; max-height: min(70vh, 640px); object-fit: contain !important; display: block;
+  background: var(--color-background-secondary);
+}
+/* Lone hero card (gallery). Two-plus sibling place/cover cards stay the 110px thumbnail rule above. */
+.iui-sandbox-card > .photo, .iui-sandbox-card > .cover,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-place-card > .photo,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-place-card > .cover,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-cover-card > .photo,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-cover-card > .cover,
+.iui-sandbox-card:not(:has(article ~ article)) > article > .photo,
+.iui-sandbox-card:not(:has(article ~ article)) > article > .cover {
+  height: auto !important; min-height: 160px; max-height: none !important; overflow: visible !important;
+}
+.iui-sandbox-card > .photo img, .iui-sandbox-card > .cover img,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-place-card > .photo img,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-place-card > .cover img,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-cover-card > .photo img,
+.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card)):not(:has(.iui-cover-card ~ .iui-cover-card)) > .iui-cover-card > .cover img,
+.iui-sandbox-card:not(:has(article ~ article)) > article > .photo img,
+.iui-sandbox-card:not(:has(article ~ article)) > article > .cover img {
+  width: 100%; height: auto !important; max-height: min(70vh, 640px); object-fit: contain !important; display: block;
+}
 .iui-photo-credit {
   font-size: 10px; line-height: 1.35; padding: 4px 10px 8px;
   color: var(--color-text-tertiary, #9ca3af);

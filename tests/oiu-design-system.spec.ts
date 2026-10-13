@@ -24,6 +24,15 @@ describe('OIU design-system port', () => {
     expect(css).toContain('fadeSlideIn')
     expect(css).toContain('.iui-itinerary .iui-pin-dot { opacity: 0; }')
     expect(css).toMatch(/\.iui-pin-dot \{[\s\S]*opacity: 1;/)
+    expect(css).toContain('.iui-gallery .photo img')
+    expect(css).toMatch(/\.iui-gallery \.photo img[\s\S]*max-height: min\(70vh, 640px\)/)
+    expect(css).toMatch(/\.iui-gallery \.photo img[\s\S]*object-fit: contain !important/)
+    expect(css).toContain('.iui-sandbox-card:not(:has(.iui-place-card ~ .iui-place-card))')
+    expect(css).toContain('.iui-sandbox-card:not(:has(article ~ article)) > article > .photo img')
+    expect(css).toContain('.iui-stop-card .photo img')
+    expect(css).toMatch(/\.iui-stop-card \.photo img \{[\s\S]*object-fit: cover/)
+    expect(css).not.toContain('#iui-preview-root img')
+    expect(css).not.toMatch(/#iui-preview-root img[\s\S]{0,80}max-height: 360px/)
   })
 
   it('importmap includes three/gsap/d3/chart.js/leaflet', () => {
