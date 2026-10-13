@@ -721,7 +721,7 @@ Layout helpers already injected:
 
 css parameter = widget-specific styles ONLY (theme/forms/SVG already loaded).
 
-Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat). Prefer host-injected UMD globals: Chart (chart.js) and L (Leaflet) — do NOT rely on import("chart.js") or import("leaflet") in srcdoc (flaky → blank charts/maps). Load other CDN libs inside async functions (no top-level await in classic js).
+Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat). Prefer host-injected UMD globals: Chart (chart.js) and L (Leaflet) — do NOT rely on import("chart.js") or import("leaflet") in srcdoc (flaky → blank charts/maps). Author JS is classic eval, not a module: never \`import … from\` or \`typeof import\`. Load Three with import('three').then(...) or an async IIFE await import('three'). Load other CDN libs inside async functions (no top-level await in classic js).
 
 ## Pattern — trip itinerary (California-coast density)
 Editorial card: short title+subtitle, day/stop chips, REAL Leaflet map (height 300px, grayscale via .iui-map-wrap), Pause/Replay chrome, then horizontally scrollable destination cards (photo 110px + number + name + day + one-line desc).

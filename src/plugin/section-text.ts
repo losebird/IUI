@@ -40,6 +40,7 @@ ${referee}
 - Emit a **complete runnable skeleton** first (css→html→js). Host waits for CDN globals before author JS — do not invent custom Chart/Leaflet loaders.
 - Charts: use global \`Chart\` or \`window.iuiCreateChart(canvas, cfg)\` (UMD injected). Fixed-height wrapper; \`maintainAspectRatio:false\`.
 - Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for itineraries. Call \`map.invalidateSize()\` after layout.
+- 3D: author JS is classic \`eval\`, not \`type=module\`. Never write static \`import … from\` or \`typeof import\` (both SyntaxError). Load Three with \`import('three').then(…)\` or an async IIFE \`await import('three')\` — importmap is already injected.
 - Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").
 - Keep JS syntactically valid (balanced braces). One broken statement can blank charts even when buttons survive chunk isolation.
 

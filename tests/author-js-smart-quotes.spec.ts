@@ -72,4 +72,21 @@ describe('string-aware smart-quote hardening', () => {
     expect(out).toContain(')')
     expect(accepts(out)).toBe(true)
   })
+
+  it('rewrites typeof import so dynamic import("three") can eval', () => {
+    const raw = "(function(){ if(typeof import==='function'){ import('three').then(function(m){ window._t=m; }); } })();"
+    expect(accepts(raw)).toBe(false)
+    const out = hardenAuthorJs(raw)
+    expect(out).not.toMatch(/typeof\s+import\b/)
+    expect(out).toContain("import('three')")
+    expect(accepts(out)).toBe(true)
+  })
+
+  it('leaves await import("three") in an async IIFE valid', () => {
+    const raw = "(async function(){ var THREE = await import('three'); window._t = THREE; })();"
+    expect(accepts(raw)).toBe(true)
+    const out = hardenAuthorJs(raw)
+    expect(out).toContain("import('three')")
+    expect(accepts(out)).toBe(true)
+  })
 })

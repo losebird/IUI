@@ -78,6 +78,8 @@ describe('OIU design-system port', () => {
     expect(section).toContain('runnable author JS')
     expect(section).toContain('in-page')
     expect(section).toContain('window.iuiCreateChart')
+    expect(section).toContain('typeof import')
+    expect(section).toContain("import('three')")
     expect(OIU_DESIGN_SKILL).toContain('California-coast')
   })
 

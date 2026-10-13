@@ -14,6 +14,7 @@
 - **Gallery slot:** `.iui-gallery` / single-slot `.photo` uses `object-fit: contain`. Author `img.src` changes clear a stale wired flag so next/prev is not overwritten. Stop-card cover is unchanged.
 - **Author src wins:** `fillPhotos` only fills empty or broken images. A gallery that already set `img.src` is not overwritten from `data-iui-place` after next/prev. A lone `.iui-place-card` is a hero (`height: auto`); two-plus place cards / itinerary strips stay 110px cover.
 - **Author JS regex literals:** `hardenAuthorJs` brace/paren balancing skips `/.../` (including `/\"/g` and character classes). A closed spreadsheet IIFE is no longer given a trailing `)` (`Unexpected token ')'`).
+- **Author JS import keyword:** classic-script eval cannot parse `typeof import` or static `import … from`. Harden rewrites the feature-detect so `import('three')` can run; the system prompt forbids both illegal forms.
 
 ## 0.13.0-iui.26
 

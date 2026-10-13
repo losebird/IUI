@@ -513,6 +513,7 @@ export function hardenAuthorJs(source: string): string {
       .replace(/<\/script/gi, '<\\/script'),
   )
   out = out.replace(/[\u2013\u2014]/g, '-')
+  out = rewriteIllegalImportKeywords(out)
   // Soft-fix model typos BEFORE paren/brace balancing so we don't insert an extra `)`.
   out = out.replace(
     /\b(var|let|const)\s+([A-Za-z_$][\w$]*)\s+([A-Za-z_$][\w$]*)\s*(=)/g,
@@ -723,7 +724,27 @@ export function rewriteChartEsmImports(source: string): string {
   )
 }
 
-/** Apply all author-JS rewrites used before sandbox eval. */
+/**
+ * Classic-script eval cannot parse `typeof import` or static `import … from`.
+ * Feature-detecting the import keyword is itself a SyntaxError; drop it so
+ * a following `import('three')` (legal dynamic import) can run.
+ * Does not rewrite arbitrary ESM modules.
+ */
+export function rewriteIllegalImportKeywords(source: string): string {
+  if (!source) return source
+  let out = source
+  out = out.replace(/\btypeof\s+import\s*===?\s*(['"])function\1/g, 'true')
+  out = out.replace(/\btypeof\s+import\s*!==?\s*(['"])function\1/g, 'false')
+  out = out.replace(/\btypeof\s+import\b/g, "'function'")
+  // `import X from 'three'` at statement start → dynamic import assigned later.
+  // Keep the rest of the file; callers that use X immediately may still race.
+  out = out.replace(
+    /(?:^|[\n;])[ \t]*import\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s*(['"])three\2\s*;?/g,
+    '\nimport("three").then(function(m){ var $1 = m.default || m; });',
+  )
+  return out
+}
+
 export function prepareAuthorJs(source: string): string {
   return hardenAuthorJs(rewriteChartEsmImports(rewriteBlockedMapTileUrls(source)))
 }
