@@ -215,12 +215,57 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
 
   function setPhase(p) { state.phase = p; }
 
+  function isSingleSmart(ch) {
+    return ch === '\u2018' || ch === '\u2019' || ch === '\u2032';
+  }
+  function isDoubleSmart(ch) {
+    return ch === '\u201C' || ch === '\u201D' || ch === '\u2033';
+  }
+  function rewriteSmartQuotes(src) {
+    var out = '';
+    var mode = 'out';
+    var escape = false;
+    var inLineComment = false;
+    var inBlockComment = false;
+    for (var i = 0; i < src.length; i++) {
+      var code = src.charCodeAt(i);
+      var ch = src.charAt(i);
+      var next = src.charAt(i + 1);
+      if (inLineComment) {
+        out += ch;
+        if (code === 10) inLineComment = false;
+        continue;
+      }
+      if (inBlockComment) {
+        out += ch;
+        if (ch === '*' && next === '/') { out += next; i++; inBlockComment = false; }
+        continue;
+      }
+      if (mode !== 'out') {
+        if (escape) { out += ch; escape = false; continue; }
+        if (code === 92) { out += ch; escape = true; continue; }
+        if (mode === 'sq' && ch === "'") { out += ch; mode = 'out'; continue; }
+        if (mode === 'dq' && ch === '"') { out += ch; mode = 'out'; continue; }
+        if (mode === 'tq' && code === 96) { out += ch; mode = 'out'; continue; }
+        if (mode === 'smart-single' && (ch === "'" || isSingleSmart(ch))) { out += "'"; mode = 'out'; continue; }
+        if (mode === 'smart-double' && (ch === '"' || isDoubleSmart(ch))) { out += '"'; mode = 'out'; continue; }
+        out += ch;
+        continue;
+      }
+      if (ch === '/' && next === '/') { out += ch; inLineComment = true; continue; }
+      if (ch === '/' && next === '*') { out += ch; inBlockComment = true; continue; }
+      if (ch === "'") { out += ch; mode = 'sq'; continue; }
+      if (ch === '"') { out += ch; mode = 'dq'; continue; }
+      if (code === 96) { out += ch; mode = 'tq'; continue; }
+      if (isSingleSmart(ch)) { out += "'"; mode = 'smart-single'; continue; }
+      if (isDoubleSmart(ch)) { out += '"'; mode = 'smart-double'; continue; }
+      out += ch;
+    }
+    return out;
+  }
   function softHarden(src) {
     if (typeof src !== 'string') return '';
-    var q = String.fromCharCode;
-    var out = src
-      .split(q(0x2018)).join("'").split(q(0x2019)).join("'").split(q(0x2032)).join("'")
-      .split(q(0x201C)).join('"').split(q(0x201D)).join('"').split(q(0x2033)).join('"');
+    var out = rewriteSmartQuotes(src);
     var needle = 'import(';
     var idx = 0;
     while ((idx = out.indexOf(needle, idx)) !== -1) {

@@ -297,22 +297,86 @@ export function rewriteBlockedMapTileUrls(source: string): string {
   return out
 }
 
+const SINGLE_SMART = new Set(['\u2018', '\u2019', '\u2032'])
+const DOUBLE_SMART = new Set(['\u201C', '\u201D', '\u2033'])
+
+/**
+ * Convert smart quotes used as JS delimiters, but leave apostrophes inside
+ * already-opened ASCII strings alone (`'s’aider'` must stay valid).
+ */
+export function rewriteSmartQuotesStringAware(source: string): string {
+  if (!source) return source
+  let out = ''
+  let mode: 'out' | "'" | '"' | '`' | 'smart-single' | 'smart-double' = 'out'
+  let escape = false
+  let inLineComment = false
+  let inBlockComment = false
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i]!
+    const next = source[i + 1]
+    if (inLineComment) {
+      out += ch
+      if (ch === '\n') inLineComment = false
+      continue
+    }
+    if (inBlockComment) {
+      out += ch
+      if (ch === '*' && next === '/') {
+        out += next
+        i++
+        inBlockComment = false
+      }
+      continue
+    }
+    if (mode !== 'out') {
+      if (escape) { out += ch; escape = false; continue }
+      if (ch === '\\') { out += ch; escape = true; continue }
+      if (mode === "'" && ch === "'") { out += ch; mode = 'out'; continue }
+      if (mode === '"' && ch === '"') { out += ch; mode = 'out'; continue }
+      if (mode === '`' && ch === '`') { out += ch; mode = 'out'; continue }
+      if (mode === 'smart-single' && (ch === "'" || SINGLE_SMART.has(ch))) {
+        out += "'"
+        mode = 'out'
+        continue
+      }
+      if (mode === 'smart-double' && (ch === '"' || DOUBLE_SMART.has(ch))) {
+        out += '"'
+        mode = 'out'
+        continue
+      }
+      out += ch
+      continue
+    }
+    if (ch === '/' && next === '/') { out += ch; inLineComment = true; continue }
+    if (ch === '/' && next === '*') { out += ch; inBlockComment = true; continue }
+    if (ch === "'") { out += ch; mode = "'"; continue }
+    if (ch === '"') { out += ch; mode = '"'; continue }
+    if (ch === '`') { out += ch; mode = '`'; continue }
+    if (SINGLE_SMART.has(ch)) { out += "'"; mode = 'smart-single'; continue }
+    if (DOUBLE_SMART.has(ch)) { out += '"'; mode = 'smart-double'; continue }
+    out += ch
+  }
+  return out
+}
+
 /**
  * Soft-harden model-authored JS before eval in the sandbox.
  * Fixes the long-tail SyntaxErrors we can heal without a full parser:
- * smart quotes, BOM/control chars, `</script>` breakout, lightly unbalanced braces.
- * Does NOT claim to fix arbitrary broken model JS.
+ * smart quotes used as delimiters, BOM/control chars, `</script>` breakout,
+ * lightly unbalanced braces.
+ * Does NOT claim to fix arbitrary broken model JS, and must not break a
+ * legal curly apostrophe inside an ASCII-quoted string.
  */
 export function hardenAuthorJs(source: string): string {
   if (!source) return source
-  let out = source
-    .replace(/^\uFEFF/, '')
-    .replace(/[\u2018\u2019\u2032]/g, "'")
-    .replace(/[\u201C\u201D\u2033]/g, '"')
-    .replace(/[\u2013\u2014]/g, '-')
-    // Keep \t \n \r; strip other C0 controls that break parsers.
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    .replace(/<\/script/gi, '<\\/script')
+  let out = rewriteSmartQuotesStringAware(
+    source
+      .replace(/^\uFEFF/, '')
+      // Keep \t \n \r; strip other C0 controls that break parsers.
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+      .replace(/<\/script/gi, '<\\/script'),
+  )
+  out = out.replace(/[\u2013\u2014]/g, '-')
   // Soft-fix model typos BEFORE paren/brace balancing so we don't insert an extra `)`.
   out = out.replace(
     /\b(var|let|const)\s+([A-Za-z_$][\w$]*)\s+([A-Za-z_$][\w$]*)\s*(=)/g,

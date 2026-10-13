@@ -7,6 +7,7 @@
 - **Session-switch flash:** settled ```iui-html mounts park off-document instead of unmounting; switching back restores the same iframe.
 - **After DOM change:** photo-fill observer stays for the iframe lifetime; `iuiSandbox.afterDomChange()` refills photos, rebinds `data-iui-lat/lng` map markers, and resizes charts/maps after filter/tab innerHTML.
 - **Place-map pins:** `.iui-pin-dot` is visible by default; only `.iui-itinerary` pins start hidden. Host rebinds numbered markers on `L.map` create and after DOM change, from card coordinates or previously seen `L.marker` positions.
+- **Author JS smart quotes:** `hardenAuthorJs` / iframe `softHarden` only convert curly quotes used as delimiters. Apostrophes inside ASCII-quoted strings (`'s’aider'`) stay valid.
 
 ## 0.13.0-iui.26
 
