@@ -80,6 +80,7 @@ describe('OIU design-system port', () => {
     expect(section).toContain('window.iuiCreateChart')
     expect(section).toContain('typeof import')
     expect(section).toContain("import('three')")
+    expect(section).toContain('video.play()')
     expect(OIU_DESIGN_SKILL).toContain('California-coast')
   })
 

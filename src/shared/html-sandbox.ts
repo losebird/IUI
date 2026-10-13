@@ -16,6 +16,26 @@ import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
+/**
+ * Chrome/Safari reject video.play() with AbortError when pause()/src change
+ * interrupts it (https://goo.gl/LdLk22). Not an author crash — do not paint
+ * the sandbox failure strip.
+ */
+export function isBenignMediaAbort(reason: unknown): boolean {
+  if (reason == null) return false
+  const name = typeof reason === 'object' && reason && 'name' in reason
+    ? String((reason as { name?: unknown }).name || '')
+    : ''
+  const msg = typeof reason === 'object' && reason && 'message' in reason
+    ? String((reason as { message?: unknown }).message || '')
+    : String(reason)
+  if (name === 'AbortError') return true
+  const lower = msg.toLowerCase()
+  return lower.includes('play() request was interrupted')
+    || (lower.includes('the play() request was interrupted') && lower.includes('pause()'))
+    || lower.includes('goo.gl/ldlk22')
+}
+
 /** Allowed script/link host suffixes (exact host or subdomain). HTTPS only. */
 export const HTML_SANDBOX_CDN_ALLOWLIST = [
   'cdn.jsdelivr.net',
@@ -1392,7 +1412,14 @@ export function buildSandboxBridgeScript(frameId: string): string {
   });
   window.addEventListener('unhandledrejection', function (ev) {
     var reason = ev && ev.reason;
-    post({ type: 'error', message: String(reason && reason.message ? reason.message : reason) });
+    var name = reason && reason.name ? String(reason.name) : '';
+    var msg = String(reason && reason.message ? reason.message : reason);
+    var lower = msg.toLowerCase();
+    if (name === 'AbortError' || lower.indexOf('play() request was interrupted') !== -1 || lower.indexOf('goo.gl/ldlk22') !== -1) {
+      try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (e0) {}
+      return;
+    }
+    post({ type: 'error', message: msg });
   });
   function invokeDataHandler(el, attr, ev) {
     if (!el || !el.getAttribute) return false;

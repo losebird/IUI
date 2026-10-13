@@ -12,6 +12,8 @@ import {
   isSandboxSpecEmpty,
   isIuiSandboxFrameCommand,
   buildSandboxDownloadHtml,
+  isBenignMediaAbort,
+  buildSandboxBridgeScript,
 } from '../src/shared/html-sandbox.ts'
 
 describe('html-sandbox', () => {
@@ -142,6 +144,15 @@ describe('sandbox host messages + CSP', () => {
     expect(isIuiSandboxHostMessage({ source: 'iui-html', type: 'ready', frameId: 'f1' })).toBe(true)
     expect(isIuiSandboxHostMessage({ source: 'iui-html', type: 'error', frameId: 'f1', message: 'boom' })).toBe(true)
     expect(isIuiSandboxHostMessage({ source: 'iui-html', type: 'error', frameId: 'f1' })).toBe(false)
+  })
+
+  it('treats play() interrupted by pause() as a benign media abort', () => {
+    expect(isBenignMediaAbort({ name: 'AbortError', message: 'The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22' })).toBe(true)
+    expect(isBenignMediaAbort(new Error('boom'))).toBe(false)
+    expect(isBenignMediaAbort({ name: 'TypeError', message: 'Cannot set properties of null' })).toBe(false)
+    const bridge = buildSandboxBridgeScript('media')
+    expect(bridge).toContain('play() request was interrupted')
+    expect(bridge).toContain('AbortError')
   })
 
   it('includes hardened CSP directives', () => {
