@@ -51,4 +51,11 @@ describe('SKILL.md sandbox-first contract', () => {
     expect(raw).toMatch(/不要写文件|不要先调 bash/)
     expect(raw).toMatch(/旧 ```iui 组件树|```json 冒充 UI/)
   })
+
+  it('locks Nanjing map density (detail sheet) without freezing a city template', () => {
+    expect(raw).toMatch(/点针或卡/)
+    expect(raw).toMatch(/停留/)
+    expect(raw).toMatch(/避坑/)
+    expect(raw).toMatch(/不是冻成某一城的模版|禁止把三日南京布局/)
+  })
 })

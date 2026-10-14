@@ -39,7 +39,7 @@ ${referee}
 **HARD — runnable author JS (no soft-repair pile):**
 - Emit a **complete runnable skeleton** first (css→html→js). Host waits for CDN globals before author JS — do not invent custom Chart/Leaflet loaders.
 - Charts: use global \`Chart\` or \`window.iuiCreateChart(canvas, cfg)\` (UMD injected). Fixed-height wrapper; \`maintainAspectRatio:false\`.
-- Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for itineraries. Call \`map.invalidateSize()\` after layout.
+- Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for 2+ stops. Call \`map.invalidateSize()\` after layout. Multi-stop pages MUST include a click-to-detail sheet (停留 / 票 / 怎么去 / 避坑) — pins-only is not enough. Do not freeze one city's layout as a template.
 - 3D: author JS is classic \`eval\`, not \`type=module\`. Never write static \`import … from\` or \`typeof import\` (both SyntaxError). Load Three with \`import('three').then(…)\` or an async IIFE \`await import('three')\` — importmap is already injected.
 - Media: \`video.play()\` returns a Promise — always \`.catch(() => {})\` (or ignore AbortError). Chrome rejects play() if pause()/src change happens first; that is not a sandbox crash.
 - Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").

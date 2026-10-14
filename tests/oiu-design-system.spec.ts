@@ -35,6 +35,19 @@ describe('OIU design-system port', () => {
     expect(css).not.toMatch(/#iui-preview-root img[\s\S]{0,80}max-height: 360px/)
   })
 
+  it('cards-strip can scroll inside a column flex/grid card instead of blowing the first border', () => {
+    const css = buildOiuDesignSystemCss()
+    const strip = css.match(/\.iui-cards-strip\s*\{[^}]+\}/)?.[0] ?? ''
+    const itinerary = css.match(/\.iui-itinerary\s*\{[^}]+\}/)?.[0] ?? ''
+    // 8×200px stop cards must not inflate min-content and paint past the
+    // itinerary/sandbox-card border that was laid out at iframe width.
+    expect(strip).toMatch(/overflow-x:\s*auto/)
+    expect(strip).toMatch(/min-width:\s*0/)
+    expect(strip).toMatch(/max-width:\s*100%/)
+    expect(itinerary).toMatch(/min-width:\s*0/)
+    expect(itinerary).toMatch(/max-width:\s*100%/)
+  })
+
   it('importmap includes three/gsap/d3/chart.js/leaflet', () => {
     const tag = buildOiuImportmapScriptTag()
     expect(tag).toContain('type="importmap"')
@@ -81,7 +94,10 @@ describe('OIU design-system port', () => {
     expect(section).toContain('typeof import')
     expect(section).toContain("import('three')")
     expect(section).toContain('video.play()')
-    expect(OIU_DESIGN_SKILL).toContain('California-coast')
+    expect(OIU_DESIGN_SKILL).toContain('Nanjing density')
+    expect(OIU_DESIGN_SKILL).toContain('停留')
+    expect(OIU_DESIGN_SKILL).toMatch(/避坑/)
+    expect(section).toContain('click-to-detail')
   })
 
   it('lists new starters', () => {

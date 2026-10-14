@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Map density contract:** multi-stop maps must ship Leaflet + numbered pins + horizontal stop cards + an in-page detail sheet (停留 / 票 / 怎么去 / 避坑). Skill, referee, and the itinerary starter lock this Nanjing-level density without freezing one city's layout as a template.
+- **Itinerary strip overflow:** `.iui-cards-strip` / `.iui-itinerary` now `min-width:0; max-width:100%`. A row of 200px stop cards used to inflate min-content and paint past the first rounded sandbox border; extra cards now scroll inside that frame.
+- **Itinerary pin race:** `createTripAnimator` skips null `pinElements` (Leaflet `marker.getElement()` still empty on first paint). That used to throw `Cannot read properties of null (reading 'textContent')` and paint as 模型作者 JS 第 1/1 片失败 while the rest of the page stayed visible.
 - **Streaming flicker:** freeze one preview-shell iframe for the whole fence stream. Growing css/html patches via `previewCss` / `previewHtml`; author JS injects in place. No per-token `srcdoc` rewrite.
 - **Composer lag:** `dom-fence` / markdown-rescue MutationObservers ignore composer (`data-composer-seat`) characterData so Lexical keystrokes no longer schedule a full fence sweep.
 - **Session-switch flash:** settled ```iui-html mounts park off-document instead of unmounting; switching back restores the same iframe.

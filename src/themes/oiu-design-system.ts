@@ -318,6 +318,7 @@ a:hover { text-decoration: underline; }
   background: var(--color-background-primary);
   border: 0.5px solid var(--color-border-tertiary);
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  min-width: 0; max-width: 100%;
 }
 .iui-itinerary-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
 .iui-itinerary-title { font-size: 18px; font-weight: 600; letter-spacing: -0.015em; color: var(--color-text-primary); }
@@ -341,6 +342,7 @@ a:hover { text-decoration: underline; }
 .iui-cards-strip {
   display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
   scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  min-width: 0; max-width: 100%; width: 100%;
 }
 .iui-stop-card {
   flex: 0 0 200px; border-radius: var(--border-radius-lg);
@@ -587,11 +589,20 @@ export function createTripAnimatorSource(): string {
     throw new Error("A trip needs 2–30 stops.");
   if (!Number.isFinite(duration) || duration < 1000 || duration > 120000)
     throw new Error("Trip duration must be between 1 and 120 seconds.");
-  if (options.pinElements) {
-    options.pinElements.forEach(function (pin, index) {
-      if (!pin.textContent || !String(pin.textContent).trim()) pin.textContent = String(index + 1);
+  // Leaflet marker.getElement() is often still null on first paint. A truthy
+  // pinElements array with holes must not throw (that used to surface as
+  // "模型作者 JS 第 1/1 片失败: Cannot read properties of null (reading 'textContent')").
+  function eachPin(fn) {
+    var pins = options.pinElements;
+    if (!pins || typeof pins.forEach !== 'function') return;
+    pins.forEach(function (pin, index) {
+      if (!pin) return;
+      try { fn(pin, index); } catch (e) {}
     });
   }
+  eachPin(function (pin, index) {
+    if (!pin.textContent || !String(pin.textContent).trim()) pin.textContent = String(index + 1);
+  });
   var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false;
   function reduceMotion() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -605,15 +616,14 @@ export function createTripAnimatorSource(): string {
     var pinStep = progress * stopCount;
     var pinIndex = Math.min(stopCount - 1, Math.floor(pinStep));
     var pinProgress = progress === 1 ? 1 : Math.min(1, (pinStep - pinIndex) / 0.55);
-    if (options.pinElements) {
-      options.pinElements.forEach(function (pin, index) {
-        var landing = index < pinIndex ? 1 : index === pinIndex ? pinProgress : 0;
-        var t = landing - 1;
-        var ease = 1 + 2.2 * t * t * t + 1.2 * t * t;
-        pin.style.opacity = landing > 0 ? "1" : "0";
-        pin.style.transform = "translateY(" + (-18 * (1 - ease)) + "px) scale(" + (0.72 + 0.28 * ease) + ")";
-      });
-    }
+    eachPin(function (pin, index) {
+      if (!pin.style) return;
+      var landing = index < pinIndex ? 1 : index === pinIndex ? pinProgress : 0;
+      var t = landing - 1;
+      var ease = 1 + 2.2 * t * t * t + 1.2 * t * t;
+      pin.style.opacity = landing > 0 ? "1" : "0";
+      pin.style.transform = "translateY(" + (-18 * (1 - ease)) + "px) scale(" + (0.72 + 0.28 * ease) + ")";
+    });
     onFrame({
       progress: progress, fromIndex: fromIndex, toIndex: fromIndex + 1, fraction: fraction,
       activeStop: pinIndex, pinIndex: pinIndex, pinProgress: pinProgress
@@ -723,13 +733,18 @@ css parameter = widget-specific styles ONLY (theme/forms/SVG already loaded).
 
 Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat). Prefer host-injected UMD globals: Chart (chart.js) and L (Leaflet) — do NOT rely on import("chart.js") or import("leaflet") in srcdoc (flaky → blank charts/maps). Author JS is classic eval, not a module: never \`import … from\` or \`typeof import\`. Load Three with import('three').then(...) or an async IIFE await import('three'). Load other CDN libs inside async functions (no top-level await in classic js).
 
-## Pattern — trip itinerary (California-coast density)
-Editorial card: short title+subtitle, day/stop chips, REAL Leaflet map (height 300px, grayscale via .iui-map-wrap), Pause/Replay chrome, then horizontally scrollable destination cards (photo 110px + number + name + day + one-line desc).
-- Numbered L.divIcon pins with inner .iui-pin-dot. Itinerary pins start opacity:0 and drop in; place-map pins stay visible. Thin connecting polyline revealed as itinerary pins drop.
-- Host installs window.createTripAnimator — USE IT (do not invent timers):
+## Pattern — maps / multi-stop (Nanjing density, not a frozen city template)
+Lock DENSITY, not copy. Any map with 2+ places (trip, 探店, 一日游, 景点详解) MUST ship:
+1) REAL Leaflet in .iui-map-wrap (height 300px, grayscale). Pause/Replay chrome.
+2) Numbered L.divIcon pins (.iui-pin-dot). createTripAnimator — do not invent timers. Filter null getElement() before pinElements.
+3) Horizontal .iui-cards-strip + .iui-stop-card (photo 110px + number + name + one-line). Extra cards SCROLL inside the first rounded frame (host sets min-width:0).
+4) Click pin OR card opens an in-page detail sheet: 停留 / 票或预约 / 怎么去 / 避坑 (plus a why line). Do not leave the map as pins-only.
+Single-place maps may skip the strip/animator; still real Leaflet + one marker + that place's detail.
+Optional only when the ask has the data: day timeline, lodging .iui-compare-3, budget. NEVER force a 3-day Nanjing layout onto 探店/天气/单点.
+- Host installs window.createTripAnimator:
   createTripAnimator({ stopCount, durationMs:6000, pinElements, map, onFrame, onState })
-  → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles. onFrame gives {pinIndex, pinProgress, activeStop}.
-- On activateStop: highlight card (aria-current), set strip.scrollLeft to card offset (not scrollIntoView), update status text.
+  → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles.
+- On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
 - Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (Esri Light Gray → Topo → OSM FR HOT). Never tile.openstreetmap.org or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup.
 - Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):

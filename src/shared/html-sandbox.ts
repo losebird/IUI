@@ -1123,7 +1123,7 @@ button.secondary{background:var(--iui-pack-surface);color:var(--iui-pack-accent,
 input,select,textarea{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius-control,${d.radiusControl});padding:8px 10px;min-height:var(--iui-pack-control-h,${d.controlHeight});width:100%;background:var(--iui-pack-surface);color:var(--iui-pack-fg);outline:none}
 input:focus,select:focus,textarea:focus{border-color:color-mix(in srgb,var(--iui-pack-accent,${accent}) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--iui-pack-accent,${accent}) 28%,transparent)}
 a{color:var(--iui-pack-accent,${accent})}
-.iui-sandbox-card{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius,${d.radius});padding:var(--iui-pack-pad,${d.pad});background:var(--iui-pack-surface);box-shadow:var(--iui-pack-elev,${e[1]})}
+.iui-sandbox-card{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius,${d.radius});padding:var(--iui-pack-pad,${d.pad});background:var(--iui-pack-surface);box-shadow:var(--iui-pack-elev,${e[1]});min-width:0;max-width:100%}
 .iui-sandbox-muted{color:var(--iui-pack-muted-fg);font-size:var(--iui-pack-font-sm,${d.fontSizeSm})}
 .iui-sandbox-toolbar{display:flex;gap:var(--iui-pack-gap-sm,${d.gapSm});flex-wrap:wrap;margin-bottom:var(--iui-pack-gap,${d.gap});align-items:center}
 .iui-sandbox-grid{display:grid;gap:var(--iui-pack-gap,${d.gap});grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
@@ -2290,7 +2290,8 @@ export function buildHtmlSandboxSrcdoc(
   let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}; style-src 'unsafe-inline' ${cdnCspOrigins()}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins()}; font-src https: data:; connect-src ${cdnCspOrigins()} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
-html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important}
+html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}
+#iui-preview-root{min-width:0;max-width:100%;overflow-x:clip}
 .leaflet-container{min-height:280px;border-radius:var(--border-radius-lg,12px)}
 body{padding:4px!important}
 </style><style id="iui-author-css">${authorCss}</style></head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`

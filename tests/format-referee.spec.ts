@@ -168,6 +168,10 @@ describe('manual / map / booking / visual', () => {
     expect(classifyAsk('给我一张南京地图')?.id).toBe('map')
     expect(classifyAsk('帮我订一张高铁票')?.id).toBe('booking')
     expect(classifyAsk('把今日菜单给我看看')?.id).toBe('visual')
+    const map = getIntentRule('map')!
+    expect(map.repairHint).toMatch(/详解/)
+    expect(map.repairHint).toMatch(/避坑/)
+    expect(map.recipe).toMatch(/iui-cards-strip/)
   })
 
   it('steers visual fallback when unlisted UI ask has no fence', () => {

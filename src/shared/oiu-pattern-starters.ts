@@ -46,7 +46,10 @@ function activate(i){
   });
   var card=strip.children[i];
   if(card) strip.scrollLeft=Math.max(0, card.offsetLeft - strip.offsetLeft - 12);
-  document.getElementById('status').textContent=stops[i].n+' · '+stops[i].d;
+  var s=stops[i];
+  document.getElementById('status').textContent=s.n+' · '+s.d;
+  var sheet=document.getElementById('sheet');
+  if(sheet) sheet.innerHTML='<h4 style="margin:0 0 6px">'+s.n+'</h4><p class="iui-sandbox-muted" style="margin:0">停留 2h · 怎么去 示意公路 · 避坑 连线非核实驾车路线</p>';
 }
 var tour=window.createTripAnimator({
   stopCount: stops.length,
@@ -79,13 +82,13 @@ setTimeout(function(){ tour.play(); }, 400);
 export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   {
     id: 'itinerary-coast',
-    title: '海岸行程（地图+播放+横滑）',
-    summary: '灰阶 Leaflet、pin 逐站落下、Pause/Replay、横滑景点卡+Wikimedia 实景图',
+    title: '海岸行程（地图+播放+横滑+详解）',
+    summary: '灰阶 Leaflet、pin 落下、Pause/Replay、横滑站卡、点开停留/怎么去/避坑',
     spec: {
       title: '加州海岸三日',
       height: 560,
       css: '.disclaimer{font-size:11px;color:var(--color-text-tertiary);margin-top:4px}',
-      html: '<div class="iui-itinerary" id="trip"><div class="iui-itinerary-head"><div><div class="iui-itinerary-title">加州海岸 · 三日</div><div class="iui-itinerary-sub">SF → Monterey → Big Sur</div></div><div class="iui-chip">3 天</div><div class="iui-chip">3 站</div></div><div class="iui-map-wrap"><div id="map" style="height:100%;width:100%"></div><div class="iui-map-chrome"><button type="button" id="pause">Pause</button><button type="button" id="replay">Replay</button><span class="iui-chip" id="status" role="status">准备中</span></div></div><div class="iui-cards-strip" id="strip"></div><p class="disclaimer">示意行程连线 — 非核实驾车路线 · © OSM</p></div>',
+      html: '<div class="iui-itinerary" id="trip"><div class="iui-itinerary-head"><div><div class="iui-itinerary-title">加州海岸 · 三日</div><div class="iui-itinerary-sub">SF → Monterey → Big Sur</div></div><div class="iui-chip">3 天</div><div class="iui-chip">3 站</div></div><div class="iui-map-wrap"><div id="map" style="height:100%;width:100%"></div><div class="iui-map-chrome"><button type="button" id="pause">Pause</button><button type="button" id="replay">Replay</button><span class="iui-chip" id="status" role="status">准备中</span></div></div><div class="iui-cards-strip" id="strip"></div><div class="iui-sandbox-card" id="sheet"><b>点针或卡片</b> 看停留 / 怎么去 / 避坑</div><p class="disclaimer">示意行程连线 — 非核实驾车路线 · © OSM</p></div>',
       js: ITINERARY_JS,
       stages: ['css', 'html', 'js'],
       partial: false,

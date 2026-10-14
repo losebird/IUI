@@ -62,6 +62,7 @@ describe('0.13.0-iui.20 trip photos + replay tiles', () => {
     expect(src).toContain('iuiRefreshMaps')
     expect(src).toContain('animator-replay')
     expect(src).toMatch(/function replay\([\s\S]*refreshMaps/)
+    expect(src).toContain('if (!pin) return')
   })
 
   it('well-known remains soft cache for Suzhou/Jinan (not the only path)', () => {

@@ -188,17 +188,17 @@ export const INTENT_RULES: readonly IntentRule[] = [
       '(?:^|\\n)#{1,3}\\s*.*(地图|导航|路线)',
     ],
     successCriteria: [
-      '短 lead → ```iui-html Leaflet 真地图沙箱（灰阶瓦片 + marker）→ 可选 outro。',
-      '可用 createTripAnimator；禁止纯文字道歉或只贴 URL。',
+      '短 lead → ```iui-html 真 Leaflet。多站必须：灰阶地图 + 编号针 + 横滑站卡 + 点针/卡出详解（停留/票/怎么去/避坑）。',
+      '用 createTripAnimator；禁止纯文字道歉、只贴 URL、或只有针没有详情。',
     ],
     recipe: sb(
       '目的地',
-      '<div class="iui-sandbox-card iui-itinerary" style="display:grid;gap:10px"><h3>珠江路</h3><div id="map" class="iui-map-wrap iui-map-grayscale" style="height:280px;border-radius:12px"></div><button class="iui-sandbox-btn" id="b">规划路线</button></div>',
+      '<div class="iui-sandbox-card iui-itinerary" style="display:grid;gap:10px"><h3>珠江路一带</h3><div class="iui-map-chrome"><button class="iui-sandbox-btn" id="pause" type="button">暂停</button><button class="iui-sandbox-btn" id="replay" type="button">重播</button><span id="status">点标记看详情</span></div><div id="map" class="iui-map-wrap" style="height:280px"></div><div class="iui-cards-strip" id="strip"></div><div id="sheet" class="iui-sandbox-card"><b>停留</b> 40 分 · <b>怎么去</b> 地铁 1 号线</div></div>',
       '',
-      "var map=L.map('map').setView([32.0439,118.7881],15);L.tileLayer(L.iuiDefaultTileLayer?undefined:undefined);(L.iuiDefaultTileLayer?L.iuiDefaultTileLayer(map):L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:19}).addTo(map));L.marker([32.0439,118.7881]).addTo(map);document.getElementById('b').onclick=function(){window.iuiSandbox&&iuiSandbox.sendPrompt('帮我规划珠江路路线')}",
-      420,
+      "var stops=[{n:'珠江路',lat:32.0439,lng:118.7881,stay:'40 分',go:'地铁 1 号线',pit:'早高峰勿打车'}];var map=L.map('map',{scrollWheelZoom:false}).setView([32.0439,118.7881],14);L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:19}).addTo(map);var m=L.marker([32.0439,118.7881]).addTo(map);document.getElementById('strip').innerHTML='<button class=\"iui-stop-card\" type=\"button\"><div class=\"name\">珠江路</div></button>';function open(){document.getElementById('sheet').innerHTML='<b>停留</b> '+stops[0].stay+' · <b>怎么去</b> '+stops[0].go+' · <b>避坑</b> '+stops[0].pit};open();m.on('click',open);document.getElementById('strip').onclick=open;",
+      560,
     ),
-    repairHint: '地图/导航必须 ```iui-html Leaflet 沙箱真地图。禁止纯文字「搜索不可用」或只贴 URL。',
+    repairHint: '地图必须 ```iui-html 真 Leaflet。多站还要横滑卡 + 点开详解（停留/票/怎么去/避坑）。禁止只贴 URL 或只有针没有详情。',
   },
   {
     id: 'resource',
