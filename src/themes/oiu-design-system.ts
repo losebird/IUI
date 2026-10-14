@@ -334,7 +334,11 @@ a:hover { text-decoration: underline; }
   overflow: hidden; border: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-secondary);
 }
-.iui-map-wrap .leaflet-container { height: 100%; width: 100%; filter: grayscale(1) contrast(1.12) brightness(1.02); }
+.iui-map-wrap .leaflet-container,
+.leaflet-container {
+  height: 100%; width: 100%; min-height: 280px;
+  filter: grayscale(1) contrast(1.12) brightness(1.02);
+}
 .iui-map-chrome {
   position: absolute; z-index: 500; left: 12px; bottom: 12px;
   display: flex; gap: 6px; align-items: center;
@@ -432,8 +436,9 @@ a:hover { text-decoration: underline; }
   border: 2px solid #111; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   opacity: 1;
 }
-.iui-itinerary .iui-pin-dot { opacity: 0; }
-.iui-pin-dot.active, .iui-itinerary .iui-pin-dot.active { opacity: 1; background: #111; color: #fff; }
+/* Pins stay visible even if createTripAnimator never gets the DOM.
+   Drop animation uses inline opacity only while playing. */
+.iui-pin-dot.active, .iui-itinerary .iui-pin-dot.active { background: #111; color: #fff; }
 
 .iui-weather { display: flex; flex-direction: column; gap: 14px; }
 .iui-weather-hero {
@@ -590,19 +595,33 @@ export function createTripAnimatorSource(): string {
   if (!Number.isFinite(duration) || duration < 1000 || duration > 120000)
     throw new Error("Trip duration must be between 1 and 120 seconds.");
   // Leaflet marker.getElement() is often still null on first paint. A truthy
-  // pinElements array with holes must not throw (that used to surface as
-  // "模型作者 JS 第 1/1 片失败: Cannot read properties of null (reading 'textContent')").
-  function eachPin(fn) {
+  // pinElements array with holes must not throw. If the array is empty, adopt
+  // .iui-pin-dot nodes already in the map pane.
+  function resolvePins() {
+    var out = [];
     var pins = options.pinElements;
-    if (!pins || typeof pins.forEach !== 'function') return;
-    pins.forEach(function (pin, index) {
+    if (pins && typeof pins.forEach === 'function') {
+      pins.forEach(function (pin) { if (pin) out.push(pin); });
+    }
+    if (out.length === 0) {
+      var dots = document.querySelectorAll('.iui-pin-dot');
+      for (var d = 0; d < dots.length; d++) out.push(dots[d]);
+    }
+    return out;
+  }
+  function eachPin(fn) {
+    resolvePins().forEach(function (pin, index) {
       if (!pin) return;
       try { fn(pin, index); } catch (e) {}
     });
   }
-  eachPin(function (pin, index) {
-    if (!pin.textContent || !String(pin.textContent).trim()) pin.textContent = String(index + 1);
-  });
+  function showPins() {
+    eachPin(function (pin, index) {
+      if (!pin.textContent || !String(pin.textContent).trim()) pin.textContent = String(index + 1);
+      if (pin.style) { pin.style.opacity = '1'; pin.style.transform = 'none'; }
+    });
+  }
+  showPins();
   var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false;
   function reduceMotion() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -618,6 +637,11 @@ export function createTripAnimatorSource(): string {
     var pinProgress = progress === 1 ? 1 : Math.min(1, (pinStep - pinIndex) / 0.55);
     eachPin(function (pin, index) {
       if (!pin.style) return;
+      if (!playing && elapsed === 0) {
+        pin.style.opacity = "1";
+        pin.style.transform = "none";
+        return;
+      }
       var landing = index < pinIndex ? 1 : index === pinIndex ? pinProgress : 0;
       var t = landing - 1;
       var ease = 1 + 2.2 * t * t * t + 1.2 * t * t;
@@ -696,6 +720,9 @@ export function createTripAnimatorSource(): string {
   window.addEventListener("pagehide", dispose);
   if (reduceMotion()) elapsed = duration;
   emit();
+  setTimeout(showPins, 0);
+  setTimeout(showPins, 160);
+  setTimeout(showPins, 480);
   return { play: play, pause: pause, replay: replay, seek: seek, dispose: dispose };
 }`
 }
@@ -746,7 +773,7 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
   → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles.
 - On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
-- Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (Esri Light Gray → Topo → OSM FR HOT). Never tile.openstreetmap.org or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup.
+- Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
 - Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):
   1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...] }) BEFORE the fence for ANY destination / hotel / cover
      (Tokyo, California coast, Shanghai daytrip, hotels, landmarks — not only France).

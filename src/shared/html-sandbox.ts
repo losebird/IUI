@@ -57,10 +57,10 @@ export const IUI_DEFAULT_MAP_TILE_ATTR =
   'Tiles &copy; Esri'
 /**
  * Fallback raster chain when Esri returns tileerror or regional gaps
- * ("Map data not yet available"). OSM FR HOT is first fallback (China/JP
- * coverage); Esri Light Gray / Topo follow. East-Asia map centers skip
- * Esri Street and start on OSM FR HOT immediately.
- * Order: try next URL after repeated tileerror / stub-gap detection.
+ * ("Map data not yet available"). OSM FR HOT first (China/JP coverage),
+ * then Esri Light Gray. Never World_Topo_Map — that colorful terrain looks
+ * like "the map is wrong" next to the grayscale street contract.
+ * East-Asia centers skip Esri Street and start on OSM FR HOT immediately.
  */
 export const IUI_MAP_TILE_FALLBACKS: readonly { url: string; attribution: string }[] = [
   // Prefer OSM FR HOT early: Esri Street often serves "Map data not yet available"
@@ -71,10 +71,6 @@ export const IUI_MAP_TILE_FALLBACKS: readonly { url: string; attribution: string
   },
   {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri',
-  },
-  {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri',
   },
 ]
@@ -1899,6 +1895,11 @@ function buildLeafletTileGuardScript(): string {
           }
         }
         try { layer.addTo(map); } catch (e5) {}
+        try {
+          map.getContainer().querySelectorAll('.iui-pin-dot').forEach(function (dot) {
+            if (dot && dot.style) dot.style.opacity = '1';
+          });
+        } catch (ePin) {}
         refreshOne(map, reason || 'rebind-markers');
       });
     };

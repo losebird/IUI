@@ -54,6 +54,8 @@ describe('0.13.0-iui.20 trip photos + replay tiles', () => {
     expect(doc).toContain('view-empty')
     expect(doc).toContain('bReplay')
     expect(IUI_MAP_TILE_FALLBACKS[0]!.url).toContain('openstreetmap.fr')
+    expect(IUI_MAP_TILE_FALLBACKS.some((f) => f.url.includes('World_Topo'))).toBe(false)
+    expect(doc).not.toContain('World_Topo_Map')
   })
 
   it('createTripAnimator.replay refreshes maps (invalidateSize / iuiRefreshMaps)', () => {

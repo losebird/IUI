@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Map tiles stay grayscale:** drop Esri `World_Topo_Map` from the fallback chain (that colorful terrain looked like the wrong map). Street Map → OSM FR HOT → Light Gray only. Grayscale filter applies to every `.leaflet-container`, not only `.iui-map-wrap`.
+- **Pins stay visible:** itinerary `.iui-pin-dot` is no longer `opacity:0` by default. `createTripAnimator` adopts late Leaflet pin DOM and forces opacity 1 before play, so empty `getElement()` no longer leaves a blank map.
 - **Map density contract:** multi-stop maps must ship Leaflet + numbered pins + horizontal stop cards + an in-page detail sheet (停留 / 票 / 怎么去 / 避坑). Skill, referee, and the itinerary starter lock this Nanjing-level density without freezing one city's layout as a template.
 - **Itinerary strip overflow:** `.iui-cards-strip` / `.iui-itinerary` now `min-width:0; max-width:100%`. A row of 200px stop cards used to inflate min-content and paint past the first rounded sandbox border; extra cards now scroll inside that frame.
 - **Itinerary pin race:** `createTripAnimator` skips null `pinElements` (Leaflet `marker.getElement()` still empty on first paint). That used to throw `Cannot read properties of null (reading 'textContent')` and paint as 模型作者 JS 第 1/1 片失败 while the rest of the page stayed visible.

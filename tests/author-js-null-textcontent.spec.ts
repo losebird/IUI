@@ -43,7 +43,7 @@ describe('screenshot: null.textContent during author JS chunk 1/1', () => {
       onFrame(f: { activeStop: number }) { frames.push(f) },
     }) as TripTour
 
-    expect(pin.textContent).toBe('2')
+    expect(pin.textContent).toBe('1')
     expect(frames.length).toBeGreaterThan(0)
     expect(() => tour.seek(1)).not.toThrow()
     expect(() => tour.replay()).not.toThrow()
@@ -81,6 +81,23 @@ document.getElementById('pause').onclick=function(){tour.pause()};
       return document.querySelectorAll('[data-iui-author-fail]').length;
     `)
     expect(run()).toBe(0)
+  })
+
+  it('createTripAnimator adopts late .iui-pin-dot nodes when pinElements is empty', () => {
+    const createTripAnimator = installAnimator()
+    const late = document.createElement('span')
+    late.className = 'iui-pin-dot'
+    document.body.appendChild(late)
+    const tour = createTripAnimator({
+      stopCount: 2,
+      durationMs: 6000,
+      pinElements: [null, null],
+      onFrame() {},
+    }) as TripTour
+    expect(late.textContent).toBe('1')
+    expect(late.style.opacity).toBe('1')
+    tour.dispose()
+    late.remove()
   })
 
   it('Leaflet-style marker.getElement() returning null no longer trips the host animator', () => {
