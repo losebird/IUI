@@ -19,6 +19,7 @@ import {
   buildSandboxDownloadHtml,
   HTML_SANDBOX_MAX_HTML_BYTES,
   isAllowedSandboxOpenUrl,
+  sandboxOpenLinkUrl,
   isIuiSandboxHostMessage,
   isSandboxSpecEmpty,
   listHtmlSandboxStarters,
@@ -497,6 +498,11 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         const action = event.data.action.trim()
         if (!action) return
         const payload = event.data.payload ?? {}
+        const openUrl = sandboxOpenLinkUrl(action, payload)
+        if (openUrl) {
+          try { window.open(openUrl, '_blank', 'noopener,noreferrer') } catch { /* ignore */ }
+          return
+        }
         onAction?.(action, payload)
         return
       }
@@ -516,7 +522,6 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
         }
         try {
           window.open(url, '_blank', 'noopener,noreferrer')
-          onAction?.('sandbox_open_link', { url })
         } catch (err) {
           setError(err instanceof Error ? err.message : 'openLink failed')
         }

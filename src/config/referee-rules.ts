@@ -353,6 +353,57 @@ export const INTENT_RULES: readonly IntentRule[] = [
     repairHint: '对比必须 ```iui-html 并排卡片沙箱（三列优先）。纯 Markdown 对比不算成功。',
   },
   {
+    id: 'grid-table',
+    label: '可筛表格 / AG Grid',
+    askPatterns: [
+      'ag.?grid', '数据表', '可筛选', '可排序', 'spreadsheet', '明细表',
+      '排行榜.*表', '名单.*筛选', 'filterable table', 'sortable table',
+    ],
+    mode: 'must_fence',
+    preferredTypes: ['sandbox', 'ag-grid'],
+    markdownFailPatterns: [
+      '\\|\\s*\\S+\\s*\\|\\s*\\S+',
+      '(?:^|\\n)\\s*[-*]\\s+\\S+\\s+[\\d.]+',
+    ],
+    successCriteria: [
+      '```iui-html 用 agGrid.createGrid + ag-theme-quartz ag-theme-iui。',
+      '禁止 Markdown 表冒充可筛数据表。行程小表不走这条。',
+    ],
+    recipe: sb(
+      '明细表',
+      '<div class="iui-sandbox-card" style="display:grid;gap:10px"><h3>明细</h3><div id="grid" class="ag-theme-quartz ag-theme-iui" style="width:100%"></div></div>',
+      '',
+      "agGrid.createGrid(document.getElementById('grid'),{domLayout:'autoHeight',columnDefs:[{field:'name',headerName:'名称',filter:true,sortable:true},{field:'n',headerName:'数量',sortable:true}],rowData:[{name:'甲',n:3},{name:'乙',n:1},{name:'丙',n:8}]});",
+      360,
+    ),
+    repairHint: '可筛/可排序数据表必须 ```iui-html + agGrid.createGrid（ag-theme-iui）。Markdown 表不算。行程里的预算小表不要改成 Grid。',
+  },
+  {
+    id: 'mindmap',
+    label: '脑图 / Mermaid',
+    askPatterns: [
+      '脑图', '思维导图', 'mindmap', 'mermaid', '流程图', 'flowchart',
+      '知识图谱', '结构图',
+    ],
+    mode: 'must_fence',
+    preferredTypes: ['sandbox', 'mermaid'],
+    markdownFailPatterns: [
+      '(?:^|\\n)\\s{0,3}[-*]\\s+\\S+\\n\\s{2,}[-*]',
+      '(?:^|\\n)#{1,3}\\s*.*(脑图|思维导图|流程图)',
+    ],
+    successCriteria: [
+      '```iui-html 用 mermaid / .iui-mindmap，不要 ASCII 树。',
+    ],
+    recipe: sb(
+      '脑图',
+      '<div class="iui-sandbox-card" style="display:grid;gap:10px"><h3>结构</h3><pre class="mermaid iui-mindmap">mindmap\n  root((主题))\n    分支甲\n    分支乙</pre></div>',
+      '',
+      "if(window.mermaid&&mermaid.run)mermaid.run({querySelector:'.mermaid'});",
+      420,
+    ),
+    repairHint: '脑图/流程图必须 ```iui-html + mermaid（.iui-mindmap）。禁止 Markdown 缩进树。',
+  },
+  {
     id: 'visual',
     label: '通用可视 / 兜底卡',
     askPatterns: [

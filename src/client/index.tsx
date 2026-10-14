@@ -45,6 +45,7 @@ import { startBindingWatch } from './binding-store.ts'
 import { installIuiSettings } from './settings/index.ts'
 import { installMarkdownRescue } from './markdown-rescue.tsx'
 import { registerComposerDraftSetter, writeComposerEditable, findComposerEditable } from './composer-bridge.ts'
+import { sandboxOpenLinkUrl } from '../shared/html-sandbox.ts'
 
 /** Host extension surface the registry channel needs (absent on pristine). */
 type HostFenceExt = {
@@ -87,6 +88,7 @@ function panelActionSend(ctx: Context, sessionId: SessionId): GenuiPanelInjected
     sessionId,
     sendGenuiAction: (action, payload) => {
       if (conversation === undefined) return
+      if (openSandboxLinkLocally(action, payload)) return
       const payloadText = Object.keys(payload).length === 0
         ? ''
         : ` 组件数据: ${JSON.stringify(payload)}`
@@ -123,10 +125,18 @@ function sendPanelInstruction(ctx: Context, sessionId: SessionId, instruction: s
  * contract host's sendGenuiAction uses, so the model sees one identical
  * [genui-action] contract on both channels.
  */
+function openSandboxLinkLocally(action: string, payload: Record<string, unknown>): boolean {
+  const url = sandboxOpenLinkUrl(action, payload)
+  if (!url) return false
+  try { window.open(url, '_blank', 'noopener,noreferrer') } catch { /* ignore */ }
+  return true
+}
+
 function sendInlineGenuiAction(ctx: Context, sessionId: SessionId, action: string, payload: Record<string, unknown>): void {
   const scoped = ctx.sessions.scope(sessionId)
   const conversation = scoped?.get('conversation') as IConversation | undefined
   if (conversation === undefined) return
+  if (openSandboxLinkLocally(action, payload)) return
   const payloadText = Object.keys(payload).length === 0
     ? ''
     : ` 组件数据: ${JSON.stringify(payload)}`

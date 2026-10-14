@@ -440,6 +440,31 @@ a:hover { text-decoration: underline; }
    Drop animation uses inline opacity only while playing. */
 .iui-pin-dot.active, .iui-itinerary .iui-pin-dot.active { background: #111; color: #fff; }
 
+.ag-theme-iui, .ag-theme-quartz.ag-theme-iui {
+  --ag-background-color: var(--color-background-primary);
+  --ag-foreground-color: var(--color-text-primary);
+  --ag-header-background-color: var(--color-background-secondary);
+  --ag-header-foreground-color: var(--color-text-secondary);
+  --ag-border-color: var(--color-border-tertiary);
+  --ag-row-hover-color: var(--color-background-secondary);
+  --ag-selected-row-background-color: var(--color-background-info);
+  --ag-font-family: var(--font-sans);
+  --ag-font-size: 13px;
+  --ag-border-radius: var(--border-radius-md);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+.ag-theme-iui .ag-header-cell-label { font-weight: 600; }
+.iui-mindmap, .mermaid.iui-mindmap {
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 12px;
+  overflow: auto;
+}
+.iui-mindmap svg { max-width: 100%; height: auto; display: block; }
+
 .iui-weather { display: flex; flex-direction: column; gap: 14px; }
 .iui-weather-hero {
   display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
@@ -799,13 +824,20 @@ Use <div class="iui-kanban-3"> with three .iui-kanban-col (each .iui-kanban-col-
 NEVER ship a thin 3-KPI strip. Required density:
 1) Hero band (.iui-weather-hero): city+date, LARGE temp (≥48px), condition icon, high/low.
 2) Detail chips (.iui-weather-chip): feels-like, humidity, wind, AQI (or UV).
-3) Hourly Chart.js line in a fixed-height (~200px) wrapper (.iui-weather-chart) — use global Chart / window.iuiCreateChart(canvas, cfg) (UMD injected); maintainAspectRatio:false; never leave the canvas blank.
+3) Hourly Chart.js line in a fixed-height (~200px) wrapper (.iui-weather-chart) — use global Chart / window.iuiCreateChart(canvas, cfg) (UMD injected); maintainAspectRatio:false; never leave the canvas blank. Chart cfg MUST parse (var cfg={type,data,options:{scales:{x,y,y1}}}; — count the closing braces; a missing } before ; is SyntaxError Unexpected token ';' ; closing the object with ) instead of } is Unexpected token ')').
 4) 7-day row (.iui-weather-days > .iui-weather-day): icon + cond + hi/lo; click switches hero (local JS).
 Use token colors only; soft info gradient on hero. Label sample data if not live.
 
 ## Pattern — calculators / charts
 Real defaults on first paint; Chart.js/ECharts with maintainAspectRatio:false and fixed-height wrapper (220–320px). Validate finite numbers; no NaN.
 
+## Pattern — filterable table (AG Grid only)
+Use ONLY when the ask is a sortable/filterable multi-column sheet (名单、排行、明细). agGrid.createGrid(el, {columnDefs, rowData}); el class = ag-theme-quartz ag-theme-iui. Few rows: domLayout autoHeight. Host injects ag-grid-community + quartz and paints --ag-* from --color-*. NEVER wrap a 3-row budget table or itinerary facts in AG Grid.
+
+## Pattern — mindmap (Mermaid)
+<pre class="mermaid iui-mindmap">mindmap\\n  root((主题))\\n</pre> then mermaid.run. Host injects mermaid UMD and initializes themeVariables from --color-*. Do not emit ASCII trees or nested Markdown lists as the mindmap.
+
 ## Bridge
 window.iuiSandbox.sendPrompt(text) / openLink(url) / action(name,payload) — only on user click, never on load.
+Official sites (气象局 / booking / maps): openLink(httpsUrl) or data-iui-open-link. NEVER action('sandbox_open_link') — host opens the URL locally and must not [genui-action] a new page.
 `.trim()

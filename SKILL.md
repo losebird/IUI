@@ -39,6 +39,15 @@ description: "Render free, polished HTML/CSS/JS pages inline through the iui-htm
 ### 图表 / 计算器
 Chart.js 或 ECharts；首屏就有真实示例数据；数字校验 `Number.isFinite`。
 
+### 外链
+官网 / 预订 / 地图用 `iuiSandbox.openLink(httpsUrl)` 或 `data-iui-open-link`。禁止 `action('sandbox_open_link')`（会再生成一页）。宿主对 https/mailto 只打开、不喊模型。
+
+### 可筛表格（AG Grid，不是所有 table）
+只有「可排序/筛选/多列数据表」才用 `agGrid.createGrid`，容器加 `ag-theme-quartz ag-theme-iui`。少行用 `domLayout:'autoHeight'`。行程里的小表、预算格子、三列定价不要改成 Grid。宿主探测到 `agGrid` 会挂 CDN 并补主题。
+
+### 脑图（Mermaid）
+脑图 / 流程图用 `<pre class="mermaid iui-mindmap">` 或 `mermaid.run`。不要手绘树、不要 Markdown 缩进树。宿主探测到 mermaid 会挂 UMD 并用 `--color-*` 初始化。
+
 ## 禁止
 - 旧 ```iui 组件树、```json 冒充 UI、Markdown 表格冒充界面。
 - 只写说明书不出围栏；把页面写进文件。

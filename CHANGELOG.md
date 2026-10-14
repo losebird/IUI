@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Open-link is local:** `openLink(url)` and `action('sandbox_open_link', {url})` open https/mailto in a new tab. They no longer emit `[genui-action]` (that regenerated a whole page and billed another turn).
+- **Weather Chart cfg brace:** `var cfg={…};` missing `}` → `Unexpected token ';'`; `makeChart({…options})` closed with `)` instead of `}` → `Unexpected token ')'`. Host inserts the fewest `}` before that `;` / `)`, only inside an object literal. Balanced `drawHourly` stays untouched.
+- **AG Grid / Mermaid CDN skin:** `autoCdnTags` injects ag-grid-community + quartz and mermaid UMD when the fence actually uses them (`agGrid.createGrid` / `.mermaid`). Host paints `.ag-theme-iui` from `--color-*` and boots mermaid `themeVariables`. Narrow contract: filterable sheets and mindmaps only — itinerary budget tables stay HTML.
 - **Map tiles stay grayscale:** drop Esri `World_Topo_Map` from the fallback chain (that colorful terrain looked like the wrong map). Street Map → OSM FR HOT → Light Gray only. Grayscale filter applies to every `.leaflet-container`, not only `.iui-map-wrap`.
 - **Pins stay visible:** itinerary `.iui-pin-dot` is no longer `opacity:0` by default. `createTripAnimator` adopts late Leaflet pin DOM and forces opacity 1 before play, so empty `getElement()` no longer leaves a blank map.
 - **Map density contract:** multi-stop maps must ship Leaflet + numbered pins + horizontal stop cards + an in-page detail sheet (停留 / 票 / 怎么去 / 避坑). Skill, referee, and the itinerary starter lock this Nanjing-level density without freezing one city's layout as a template.

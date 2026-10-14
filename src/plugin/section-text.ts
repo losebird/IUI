@@ -35,11 +35,14 @@ ${referee}
 - Do NOT call \`validate_dsh_ui\`. Emit the sandbox fence directly.
 - Itinerary / multi-city trips: you MAY call \`get_trip_stop_images / get_place_images\` once (1–8 Wikipedia titles) to resolve Wikimedia photos+credits, THEN emit \`\`\`iui-html with those image_url values. Host also auto-fills well-known places if photos are missing.
 - LOCAL-FIRST: clicks / tabs / sliders stay in the iframe; use \`iuiSandbox.action\` only when the host must know.
+- Official / outbound URLs: \`window.iuiSandbox.openLink(httpsUrl)\` or \`data-iui-open-link\`. NEVER \`action('sandbox_open_link')\` — that used to re-generate a whole page. Host now opens https/mailto locally and does not send [genui-action].
 
 **HARD — runnable author JS (no soft-repair pile):**
 - Emit a **complete runnable skeleton** first (css→html→js). Host waits for CDN globals before author JS — do not invent custom Chart/Leaflet loaders.
 - Charts: use global \`Chart\` or \`window.iuiCreateChart(canvas, cfg)\` (UMD injected). Fixed-height wrapper; \`maintainAspectRatio:false\`.
 - Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for 2+ stops. Call \`map.invalidateSize()\` after layout. Multi-stop pages MUST include a click-to-detail sheet (停留 / 票 / 怎么去 / 避坑) — pins-only is not enough. Do not freeze one city's layout as a template.
+- Filterable / sortable data tables: \`agGrid.createGrid\` on \`.ag-theme-quartz.ag-theme-iui\` (host injects CDN). Do NOT convert itinerary budget tables or 3-col pricing into AG Grid.
+- Mindmaps / flowcharts: \`<pre class="mermaid iui-mindmap">\` + mermaid.run (host injects UMD + token theme). Not a hand-drawn tree.
 - 3D: author JS is classic \`eval\`, not \`type=module\`. Never write static \`import … from\` or \`typeof import\` (both SyntaxError). Load Three with \`import('three').then(…)\` or an async IIFE \`await import('three')\` — importmap is already injected.
 - Media: \`video.play()\` returns a Promise — always \`.catch(() => {})\` (or ignore AbortError). Chrome rejects play() if pause()/src change happens first; that is not a sandbox crash.
 - Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").

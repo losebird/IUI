@@ -305,6 +305,17 @@ export function isAllowedSandboxOpenUrl(url: string): boolean {
   }
 }
 
+/**
+ * Author JS often calls `action('sandbox_open_link', {url})` for an
+ * outbound official site. That must open the URL locally — never
+ * `[genui-action]` a new generation. Returns the allowed URL, or null.
+ */
+export function sandboxOpenLinkUrl(action: string, payload: Record<string, unknown> | undefined): string | null {
+  if (!/open[_-]?link/i.test(String(action || ''))) return null
+  const raw = payload && typeof payload.url === 'string' ? payload.url.trim() : ''
+  return isAllowedSandboxOpenUrl(raw) ? raw : null
+}
+
 /** Max author CSS / JS bytes kept in srcdoc (defence in depth). */
 export const HTML_SANDBOX_MAX_AUTHOR_BYTES = 48_000
 /** Max author HTML bytes kept in srcdoc. */
@@ -536,6 +547,11 @@ export function hardenAuthorJs(source: string): string {
     '$1 $3 $4',
   )
   out = softFixArrayCallbackParens(out)
+  // Chart `var cfg={…};` often misses the object closer *before* the semicolon.
+  // Must run BEFORE trailing EOF `}` — a closer at end-of-file cannot heal
+  // `Unexpected token ';'` inside the statement.
+  out = softCloseObjectBeforeSemicolon(out)
+  out = softCloseObjectBeforeCallParen(out)
   // Soft-close truncated objects/arrays/parens (common when model cuts mid-fence).
   // Skip strings AND regex literals — `/\"/g` is not an unclosed string.
   const opens = { '{': 0, '[': 0, '(': 0 }
@@ -564,6 +580,224 @@ export function hardenAuthorJs(source: string): string {
   // Soft-strip invalid RegExp flags (common model typo → "Invalid regular expression flags").
   out = sanitizeAuthorRegexFlags(out)
   return out
+}
+
+/**
+ * Insert missing `}` immediately before a statement-ending `;` when an object
+ * literal assigned after `=` is still open (Suzhou weather:
+ * `var cfg={…options:{scales:{y1:{…}}}};` — four closers, five needed).
+ * Function-body `{` (wx(c){c=Number(c);}) and `for (...)` parens are ignored.
+ * Cap at 4. No-op if the file already parses.
+ */
+export function softCloseObjectBeforeSemicolon(source: string): string {
+  if (!source) return source
+  const ok = (src: string): boolean => {
+    try {
+      new Function(src)
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (ok(source)) return source
+
+  type Frame = { kind: 'fn' | 'obj' | 'arr' | 'paren'; objDepth: number }
+  const stack: Frame[] = []
+  let lastWasEq = false
+  let lastWasKwFn = false
+  const sites: Array<{ i: number; missing: number }> = []
+
+  forEachJsCodeChar(source, (i, ch) => {
+    const top = stack[stack.length - 1]
+    if (ch === '{') {
+      if (top?.kind === 'obj') {
+        top.objDepth++
+      } else {
+        const asObj = lastWasEq && !lastWasKwFn
+        stack.push({ kind: asObj ? 'obj' : 'fn', objDepth: asObj ? 1 : 0 })
+      }
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === '}') {
+      if (top) {
+        if (top.kind === 'obj' && top.objDepth > 1) top.objDepth--
+        else stack.pop()
+      }
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === '[') {
+      stack.push({ kind: 'arr', objDepth: 0 })
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === ']') {
+      if (top?.kind === 'arr') stack.pop()
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === '(') {
+      stack.push({ kind: 'paren', objDepth: 0 })
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === ')') {
+      if (top?.kind === 'paren') stack.pop()
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (ch === '=') {
+      lastWasEq = true
+      lastWasKwFn = false
+      return
+    }
+    if (ch === ';') {
+      const obj = [...stack].reverse().find((f) => f.kind === 'obj')
+      if (obj && obj.objDepth > 0) sites.push({ i, missing: obj.objDepth })
+      lastWasEq = false
+      lastWasKwFn = false
+      return
+    }
+    if (/[A-Za-z_$]/.test(ch)) {
+      let j = i
+      while (j < source.length && /[\w$]/.test(source[j]!)) j++
+      const ident = source.slice(i, j)
+      lastWasKwFn = ident === 'function' || ident === 'catch' || ident === 'else' || ident === 'do' || ident === 'try' || ident === 'finally'
+      if (ident !== 'function' && ident !== 'catch' && ident !== 'else') lastWasEq = false
+      return
+    }
+    if (ch !== ':' && ch !== ',') {
+      lastWasEq = false
+      lastWasKwFn = false
+    }
+  })
+
+  for (let s = sites.length - 1; s >= 0; s--) {
+    const site = sites[s]!
+    const max = Math.min(4, site.missing)
+    for (let n = 1; n <= max; n++) {
+      const candidate = `${source.slice(0, site.i)}${'}'.repeat(n)}${source.slice(site.i)}`
+      if (ok(candidate)) return candidate
+    }
+  }
+  return source
+}
+
+/**
+ * `makeChart({…options:{scales:{y:{title:{…}}}}} )` — model closed the
+ * object with `)` instead of `}`. Insert the fewest `}` immediately before
+ * that `)` when an object argument is still open. Cap at 4. No-op if the
+ * file already parses. Does not rewrite a balanced `drawHourly` call.
+ */
+export function softCloseObjectBeforeCallParen(source: string): string {
+  if (!source) return source
+  const ok = (src: string): boolean => {
+    try {
+      new Function(src)
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (ok(source)) return source
+
+  type Frame = { kind: 'fn' | 'obj' | 'arr' | 'paren'; objDepth: number }
+  const collect = (src: string): Array<{ i: number; missing: number }> => {
+    const stack: Frame[] = []
+    let lastWasEq = false
+    // Survives `function (cfg)` / `(function ()` parameter lists until `{`.
+    let awaitingFnBrace = false
+    const found: Array<{ i: number; missing: number }> = []
+    forEachJsCodeChar(src, (i, ch) => {
+      const top = stack[stack.length - 1]
+      if (ch === '{') {
+        if (awaitingFnBrace) {
+          stack.push({ kind: 'fn', objDepth: 0 })
+        } else if (top?.kind === 'obj') {
+          top.objDepth++
+        } else if (top?.kind === 'paren') {
+          stack.push({ kind: 'obj', objDepth: 1 })
+        } else {
+          stack.push({ kind: lastWasEq ? 'obj' : 'fn', objDepth: lastWasEq ? 1 : 0 })
+        }
+        lastWasEq = false
+        awaitingFnBrace = false
+        return
+      }
+      if (ch === '}') {
+        if (top) {
+          if (top.kind === 'obj' && top.objDepth > 1) top.objDepth--
+          else stack.pop()
+        }
+        lastWasEq = false
+        awaitingFnBrace = false
+        return
+      }
+      if (ch === '[') { stack.push({ kind: 'arr', objDepth: 0 }); lastWasEq = false; return }
+      if (ch === ']') { if (top?.kind === 'arr') stack.pop(); lastWasEq = false; return }
+      if (ch === '(') { stack.push({ kind: 'paren', objDepth: 0 }); lastWasEq = false; return }
+      if (ch === ')') {
+        if (top?.kind === 'obj' && top.objDepth > 0) found.push({ i, missing: top.objDepth })
+        if (top?.kind === 'paren') stack.pop()
+        lastWasEq = false
+        return
+      }
+      if (ch === '=') { lastWasEq = true; return }
+      if (ch === ';') { lastWasEq = false; awaitingFnBrace = false; return }
+      if (/[A-Za-z_$]/.test(ch)) {
+        let j = i
+        while (j < src.length && /[\w$]/.test(src[j]!)) j++
+        const ident = src.slice(i, j)
+        awaitingFnBrace = ident === 'function' || ident === 'catch' || ident === 'else'
+          || ident === 'do' || ident === 'try' || ident === 'finally'
+        if (!awaitingFnBrace) lastWasEq = false
+        return
+      }
+      if (ch !== ':' && ch !== ',') lastWasEq = false
+    })
+    return found
+  }
+  const sites = collect(source)
+
+  const insertAt = (src: string, i: number, n: number): string =>
+    `${src.slice(0, i)}${'}'.repeat(n)}${src.slice(i)}`
+
+  // drawDaily + drawHourly can both miss a `}`. Heal the earliest still-open
+  // call-object `)` first (later `catch(function(){…})` would be the wrong site).
+  const objectCallSites = (src: string, list: Array<{ i: number; missing: number }>) =>
+    list.filter((s) => {
+      let k = s.i - 1
+      while (k >= 0 && (src[k] === ' ' || src[k] === '\n' || src[k] === '\r' || src[k] === '\t')) k--
+      return k >= 0 && src[k] === '}'
+    })
+
+  let cur = source
+  let found = objectCallSites(cur, sites)
+  for (let step = 0; step < 6; step++) {
+    if (ok(cur)) return cur
+    if (!found.length) return source
+    let healed: string | null = null
+    for (let s = 0; s < found.length && !healed; s++) {
+      const site = found[s]!
+      const max = Math.min(4, site.missing)
+      for (let n = 1; n <= max; n++) {
+        const candidate = insertAt(cur, site.i, n)
+        if (ok(candidate)) { healed = candidate; break }
+      }
+    }
+    if (healed) return healed
+    cur = insertAt(cur, found[0]!.i, 1)
+    if (ok(cur)) return cur
+    found = objectCallSites(cur, collect(cur))
+  }
+  return source
 }
 
 /** Peel `}` immediately before `)` until `new Function` accepts (extra Chart-options brace). */
@@ -1250,7 +1484,13 @@ export function buildSandboxBridgeScript(frameId: string): string {
     get appData() { return window.__iuiAppData || {}; },
     action: function (name, payload) {
       var data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-      post({ type: 'action', action: String(name || ''), payload: data });
+      var act = String(name || '');
+      var url = typeof data.url === 'string' ? data.url.trim() : '';
+      if (/open[_-]?link/i.test(act) && url) {
+        post({ type: 'openLink', url: url.slice(0, 2000) });
+        return;
+      }
+      post({ type: 'action', action: act, payload: data });
     },
     sendPrompt: function (text) {
       var t = String(text || '').trim();
@@ -2169,6 +2409,103 @@ function buildChartGuardScript(): string {
 <\/script>`
 }
 
+function buildAgGridGuardScript(): string {
+  return `<script>
+(function () {
+  function paintHost(el) {
+    if (!el || !el.classList) return;
+    if (!el.classList.contains('ag-theme-quartz') && !el.classList.contains('ag-theme-alpine') && !el.classList.contains('ag-theme-balham')) {
+      el.classList.add('ag-theme-quartz');
+    }
+    el.classList.add('ag-theme-iui');
+  }
+  function wrapCreate() {
+    var g = window.agGrid;
+    if (!g || g.__iuiPatched) return;
+    var orig = g.createGrid;
+    if (typeof orig !== 'function') return;
+    g.createGrid = function (el, opts) {
+      paintHost(el);
+      var o = opts && typeof opts === 'object' ? opts : {};
+      if (!o.domLayout && el && (!el.style || !el.style.height || el.style.height === 'auto')) o.domLayout = 'autoHeight';
+      try { return orig.call(g, el, o); } catch (err) {
+        try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
+        throw err;
+      }
+    };
+    g.__iuiPatched = true;
+  }
+  function wait(cb) {
+    if (window.agGrid) { cb(); return; }
+    var n = 0, t = setInterval(function () {
+      if (window.agGrid) { clearInterval(t); cb(); }
+      else if (++n > 100) clearInterval(t);
+    }, 40);
+  }
+  wait(function () {
+    wrapCreate();
+    document.querySelectorAll('[class*="ag-theme"]').forEach(paintHost);
+  });
+})();
+<\/script>`
+}
+
+function buildMermaidGuardScript(): string {
+  return `<script>
+(function () {
+  function cssVar(name, fallback) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      if (v && String(v).trim()) return String(v).trim();
+    } catch (e) {}
+    return fallback;
+  }
+  function boot(m) {
+    if (!m || m.__iuiBooted) return;
+    try {
+      m.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: 'base',
+        themeVariables: {
+          background: cssVar('--color-background-primary', '#fff'),
+          primaryColor: cssVar('--color-background-info', '#E6F1FB'),
+          primaryTextColor: cssVar('--color-text-primary', '#1a1a1a'),
+          primaryBorderColor: cssVar('--color-border-tertiary', '#ccc'),
+          lineColor: cssVar('--color-text-secondary', '#73726c'),
+          secondaryColor: cssVar('--color-background-secondary', '#f7f6f3'),
+          tertiaryColor: cssVar('--color-background-tertiary', '#efeee9'),
+          fontFamily: cssVar('--font-sans', 'system-ui,sans-serif')
+        }
+      });
+      m.__iuiBooted = true;
+    } catch (e) {}
+  }
+  function runAll() {
+    var m = window.mermaid;
+    if (!m || typeof m.run !== 'function') return;
+    boot(m);
+    document.querySelectorAll('.mermaid, .iui-mindmap, pre.mermaid').forEach(function (el) {
+      if (!el.classList.contains('iui-mindmap')) el.classList.add('iui-mindmap');
+    });
+    try { m.run({ querySelector: '.mermaid, .iui-mindmap' }); } catch (e) {}
+  }
+  function wait(cb) {
+    if (window.mermaid) { cb(window.mermaid); return; }
+    var n = 0, t = setInterval(function () {
+      if (window.mermaid) { clearInterval(t); cb(window.mermaid); }
+      else if (++n > 100) clearInterval(t);
+    }, 40);
+  }
+  wait(function (m) {
+    boot(m);
+    setTimeout(runAll, 0);
+    setTimeout(runAll, 240);
+  });
+})();
+<\/script>`
+}
+
 function autoCdnTags(html: string, js: string): string {
   const all = html + '\n' + js
   const tags: string[] = []
@@ -2205,6 +2542,27 @@ function autoCdnTags(html: string, js: string): string {
     tags.push(buildLeafletTileGuardScript())
   }
   if (need(/\bd3\s*\.\s*(?:select|scale|line|arc)/, /d3(?:@|\.min|\.v)/i)) tags.push('<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"><\/script>')
+  const hasAgGridScript = /<script[^>]+src=["'][^"']*ag-grid/i.test(html)
+  const wantsAgGrid =
+    /\bagGrid\s*\.\s*(?:createGrid|Grid)\s*\(/.test(all) ||
+    /ag-grid-community/.test(all) ||
+    /ag-theme-(?:quartz|alpine|balham|iui)/.test(all) ||
+    /class\s*=\s*["'][^"']*ag-theme/.test(all)
+  if (wantsAgGrid && !hasAgGridScript) {
+    tags.push('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css"/>')
+    tags.push('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css"/>')
+    tags.push('<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"><\/script>')
+  }
+  if (wantsAgGrid || hasAgGridScript) tags.push(buildAgGridGuardScript())
+  const hasMermaidScript = /<script[^>]+src=["'][^"']*mermaid/i.test(html)
+  const wantsMermaid =
+    /\bmermaid\s*\.\s*(?:run|initialize|render)\s*\(/.test(all) ||
+    /class\s*=\s*["'][^"']*\bmermaid\b/.test(all) ||
+    /iui-mindmap/.test(all)
+  if (wantsMermaid && !hasMermaidScript) {
+    tags.push('<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"><\/script>')
+  }
+  if (wantsMermaid || hasMermaidScript) tags.push(buildMermaidGuardScript())
   return tags.join('')
 }
 

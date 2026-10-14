@@ -353,6 +353,24 @@ describe('sandbox bridge P2', () => {
     expect(isAllowedSandboxOpenUrl('http://example.com')).toBe(false)
     expect(isAllowedSandboxOpenUrl('javascript:alert(1)')).toBe(false)
   })
+
+  it('sandboxOpenLinkUrl intercepts open_link actions with https', async () => {
+    const { sandboxOpenLinkUrl } = await import('../src/shared/html-sandbox.ts')
+    expect(sandboxOpenLinkUrl('sandbox_open_link', { url: 'https://weather.cma.cn/web/weather/58357.html' }))
+      .toBe('https://weather.cma.cn/web/weather/58357.html')
+    expect(sandboxOpenLinkUrl('openLink', { url: 'https://www.nmc.cn/' })).toBe('https://www.nmc.cn/')
+    expect(sandboxOpenLinkUrl('weather_day', { url: 'https://example.com' })).toBeNull()
+    expect(sandboxOpenLinkUrl('sandbox_open_link', { url: 'javascript:alert(1)' })).toBeNull()
+    expect(sandboxOpenLinkUrl('sandbox_open_link', {})).toBeNull()
+  })
+
+  it('srcdoc action() rewrites open_link to the openLink message', async () => {
+    const { buildHtmlSandboxSrcdoc, parseHtmlSandboxFence } = await import('../src/shared/html-sandbox.ts')
+    const spec = parseHtmlSandboxFence(JSON.stringify({ html: '<div></div>', css: '', js: '' }))!
+    const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'f' })
+    expect(doc).toMatch(/open\[_-]\?link/)
+    expect(doc).toContain("post({ type: 'openLink'")
+  })
 })
 
 

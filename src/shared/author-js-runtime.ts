@@ -204,6 +204,10 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   var LEAFLET_JS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
   var LEAFLET_CSS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
   var CHART_JS = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+  var AGGRID_JS = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js';
+  var AGGRID_CSS = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css';
+  var AGGRID_THEME = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
+  var MERMAID_JS = 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js';
   var state = { phase: 'boot', ran: false, lastOpts: null };
 
   function post(msg) {
@@ -293,6 +297,21 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       || !!(document.querySelector && document.querySelector('.iui-map-wrap, #map, [id="map"]'));
   }
 
+  function wantsAgGrid(src) {
+    src = String(src || '');
+    return src.indexOf('agGrid') !== -1
+      || src.indexOf('ag-grid-community') !== -1
+      || src.indexOf('ag-theme-') !== -1
+      || !!(document.querySelector && document.querySelector('[class*="ag-theme"]'));
+  }
+  function wantsMermaid(src) {
+    src = String(src || '');
+    return src.indexOf('mermaid.run') !== -1
+      || src.indexOf('mermaid.initialize') !== -1
+      || src.indexOf('iui-mindmap') !== -1
+      || !!(document.querySelector && document.querySelector('.mermaid, .iui-mindmap'));
+  }
+
   function wantsChart(src) {
     src = String(src || '');
     var hasCanvas = !!(document.querySelector && document.querySelector('canvas'));
@@ -324,6 +343,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       var t0 = setInterval(function () {
         if ((src.indexOf('leaflet') !== -1 && typeof L !== 'undefined')
           || (src.indexOf('chart') !== -1 && typeof Chart !== 'undefined')
+          || (src.indexOf('ag-grid') !== -1 && typeof agGrid !== 'undefined')
+          || (src.indexOf('mermaid') !== -1 && typeof mermaid !== 'undefined')
           || existing.getAttribute('data-iui-loaded') === '1') {
           clearInterval(t0); done(true);
         } else if (++n0 > 125) { clearInterval(t0); done(false); }
@@ -639,6 +660,38 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     } else if (wantsChart(probe)) {
       chain.push(function (next) {
         waitGlobal(function () { return typeof Chart !== 'undefined'; }, function () { next(); });
+      });
+    }
+    if (wantsAgGrid(probe) && typeof agGrid === 'undefined') {
+      chain.push(function (next) {
+        ensureCss(AGGRID_CSS);
+        ensureCss(AGGRID_THEME);
+        ensureScript(AGGRID_JS, function (ok) {
+          if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'AG Grid CDN failed to load' } });
+          waitGlobal(function () { return typeof agGrid !== 'undefined'; }, function (ready) {
+            if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'agGrid global not ready' } });
+            next();
+          });
+        });
+      });
+    } else if (wantsAgGrid(probe)) {
+      chain.push(function (next) {
+        waitGlobal(function () { return typeof agGrid !== 'undefined'; }, function () { next(); });
+      });
+    }
+    if (wantsMermaid(probe) && typeof mermaid === 'undefined') {
+      chain.push(function (next) {
+        ensureScript(MERMAID_JS, function (ok) {
+          if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Mermaid CDN failed to load' } });
+          waitGlobal(function () { return typeof mermaid !== 'undefined'; }, function (ready) {
+            if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'mermaid global not ready' } });
+            next();
+          });
+        });
+      });
+    } else if (wantsMermaid(probe)) {
+      chain.push(function (next) {
+        waitGlobal(function () { return typeof mermaid !== 'undefined'; }, function () { next(); });
       });
     }
     var i = 0;

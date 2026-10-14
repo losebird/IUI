@@ -99,11 +99,15 @@ describe('OIU design-system port', () => {
     expect(OIU_DESIGN_SKILL).toContain('停留')
     expect(OIU_DESIGN_SKILL).toMatch(/避坑/)
     expect(section).toContain('click-to-detail')
+    expect(section).toContain('openLink(httpsUrl)')
+    expect(OIU_DESIGN_SKILL).toMatch(/NEVER action\('sandbox_open_link'\)/)
   })
 
   it('lists new starters', () => {
     const ids = listHtmlSandboxStarters().map((s) => s.id)
     expect(ids).toContain('itinerary-coast')
     expect(ids).toContain('pricing-3col')
+    expect(ids).toContain('ag-grid-sheet')
+    expect(ids).toContain('mermaid-mindmap')
   })
 })
