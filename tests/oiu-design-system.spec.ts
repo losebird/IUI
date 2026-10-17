@@ -103,6 +103,12 @@ describe('OIU design-system port', () => {
     expect(OIU_DESIGN_SKILL).toMatch(/NEVER action\('sandbox_open_link'\)/)
   })
 
+  it('tells the model that onFrame receives a frame object, not a numeric index', () => {
+    expect(OIU_DESIGN_SKILL).toContain('{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}')
+    expect(OIU_DESIGN_SKILL).toContain('onFrame:function(f){activate(f.pinIndex)}')
+    expect(OIU_DESIGN_SKILL).toContain('参数不是数字下标')
+  })
+
   it('lists new starters', () => {
     const ids = listHtmlSandboxStarters().map((s) => s.id)
     expect(ids).toContain('itinerary-coast')

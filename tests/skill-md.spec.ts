@@ -58,4 +58,10 @@ describe('SKILL.md sandbox-first contract', () => {
     expect(raw).toMatch(/避坑/)
     expect(raw).toMatch(/不是冻成某一城的模版|禁止把三日南京布局/)
   })
+
+  it('tells the model that onFrame receives a frame object, not a numeric index', () => {
+    expect(raw).toContain('{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}')
+    expect(raw).toContain('onFrame:function(f){activate(f.pinIndex)}')
+    expect(raw).toContain('参数不是数字下标')
+  })
 })
