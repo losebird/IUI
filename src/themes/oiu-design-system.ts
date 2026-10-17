@@ -1,3 +1,5 @@
+import { describeToolsAllowedBeforeFence, getStreamHeuristics } from '../config/stream-heuristics.ts'
+
 /**
  * IUI sandbox design-system (theme CSS + SVG/form helpers + importmap + trip animator).
  * Legal attribution for adapted MIT material: see NOTICE.
@@ -647,11 +649,34 @@ export function createTripAnimatorSource(): string {
     });
   }
   showPins();
-  var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false;
+  var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false, frameFailed = false;
   function reduceMotion() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
+  function reportOnFrameError(err) {
+    frameFailed = true;
+    playing = false;
+    lastTime = null;
+    if (frameId !== null) cancelAnimationFrame(frameId);
+    frameId = null;
+    console.error('[iui-html] trip animator onFrame', err);
+    var msg = (err && err.name ? String(err.name) + ': ' : '') + (err && err.message ? String(err.message) : String(err));
+    var strip = document.createElement('div');
+    strip.className = 'iui-fail-strip';
+    strip.setAttribute('role', 'alert');
+    strip.setAttribute('data-iui-animator-fail', '1');
+    strip.textContent = msg;
+    var root = document.getElementById('iui-preview-root');
+    if (root && root.parentNode) root.parentNode.insertBefore(strip, root);
+    else (document.body || document.documentElement).appendChild(strip);
+    try {
+      if (onState) onState(elapsed >= duration ? 'complete' : 'paused');
+    } catch (stateErr) {
+      console.error('[iui-html] trip animator onState', stateErr);
+    }
+  }
   function emit() {
+    if (frameFailed || disposed) return;
     var progress = Math.min(1, elapsed / duration);
     var step = progress * (stopCount - 1);
     var fromIndex = Math.min(stopCount - 2, Math.floor(step));
@@ -673,10 +698,14 @@ export function createTripAnimatorSource(): string {
       pin.style.opacity = landing > 0 ? "1" : "0";
       pin.style.transform = "translateY(" + (-18 * (1 - ease)) + "px) scale(" + (0.72 + 0.28 * ease) + ")";
     });
-    onFrame({
-      progress: progress, fromIndex: fromIndex, toIndex: fromIndex + 1, fraction: fraction,
-      activeStop: pinIndex, pinIndex: pinIndex, pinProgress: pinProgress
-    });
+    try {
+      onFrame({
+        progress: progress, fromIndex: fromIndex, toIndex: fromIndex + 1, fraction: fraction,
+        activeStop: pinIndex, pinIndex: pinIndex, pinProgress: pinProgress
+      });
+    } catch (err) {
+      reportOnFrameError(err);
+    }
   }
   function pause() {
     if (disposed) return;
@@ -690,11 +719,12 @@ export function createTripAnimatorSource(): string {
     if (lastTime !== null) elapsed = Math.min(duration, elapsed + Math.max(0, time - lastTime));
     lastTime = time;
     emit();
+    if (frameFailed) return;
     if (elapsed >= duration) pause();
     else frameId = requestAnimationFrame(tick);
   }
   function play() {
-    if (disposed || playing) return;
+    if (disposed || playing || frameFailed) return;
     if (reduceMotion()) { elapsed = duration; emit(); if (onState) onState("complete"); return; }
     if (elapsed >= duration) return;
     playing = true; lastTime = null;
@@ -759,6 +789,13 @@ export function buildTripAnimatorScriptTag(): string {
 /**
  * Agent-facing design skill (trip/pricing/weather patterns). Injected via system prompt.
  */
+function photoToolBeforeFenceLine(): string {
+  const names = getStreamHeuristics().toolsAllowedBeforeFence
+  const policy = describeToolsAllowedBeforeFence()
+  if (names.length === 0) return policy
+  return `${policy} Call ${names.join(' or ')} with { wikipedia_titles: [...] } BEFORE the fence for ANY destination / hotel / cover`
+}
+
 export const OIU_DESIGN_SKILL = `
 The sandbox already includes a shared design system. Build on it — do NOT restyle from scratch.
 
@@ -796,11 +833,13 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
 - Host installs window.createTripAnimator:
   createTripAnimator({ stopCount, durationMs:6000, pinElements, map, onFrame, onState })
   → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles.
+  onFrame receives an object {progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}. 参数不是数字下标.
+  Example: onFrame:function(f){activate(f.pinIndex)}
 - On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
 - Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
 - Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):
-  1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...] }) BEFORE the fence for ANY destination / hotel / cover
+  1) ${photoToolBeforeFenceLine()}
      (Tokyo, California coast, Shanghai daytrip, hotels, landmarks — not only France).
      Put each image_url into .photo / .cover img and show .iui-photo-credit (artist · license → credit_url).
   2) Or emit Wikimedia Commons HTTPS yourself (Special:FilePath / upload / thumb).
