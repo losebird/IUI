@@ -109,6 +109,12 @@ describe('OIU design-system port', () => {
     expect(OIU_DESIGN_SKILL).toContain('参数不是数字下标')
   })
 
+  it('tells the model to show onState\'s Chinese label and keep the English token', () => {
+    expect(OIU_DESIGN_SKILL).toContain('onState(state, label)')
+    expect(OIU_DESIGN_SKILL).toContain('playing, paused, or complete')
+    expect(OIU_DESIGN_SKILL).toContain('播放中, 已暂停, or 已完成')
+  })
+
   it('lists new starters', () => {
     const ids = listHtmlSandboxStarters().map((s) => s.id)
     expect(ids).toContain('itinerary-coast')
