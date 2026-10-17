@@ -90,6 +90,14 @@ export function getStreamHeuristics(): StreamHeuristics {
   return _override ?? STREAM_HEURISTICS
 }
 
+export function describeToolsAllowedBeforeFence(
+  policy: StreamHeuristics = getStreamHeuristics(),
+): string {
+  const names = policy.toolsAllowedBeforeFence
+  if (names.length === 0) return 'No tool is allowed before the fence.'
+  return `Tools allowed before the fence: ${names.join(', ')}. No other tool before the fence.`
+}
+
 const fenceOpenerCache = new Map<string, RegExp>()
 
 export function fenceFirstRegex(policy: StreamHeuristics = getStreamHeuristics()): RegExp {

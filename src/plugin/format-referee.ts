@@ -15,6 +15,7 @@ import {
 import { resolveFence } from '../shared/fence-resolve.ts'
 import { looksLikeGenuiSpecBody } from '../shared/genui-shape.ts'
 import { parseHtmlSandboxFence } from '../shared/html-sandbox.ts'
+import { describeToolsAllowedBeforeFence } from '../config/stream-heuristics.ts'
 import { safeRegExp } from '../shared/safe-regexp.ts'
 
 /** Sandbox-first recipe used by every prime/steer (catalog recipes removed). */
@@ -498,7 +499,7 @@ export function buildRefereePromptBlock(): string {
   return [
     '**Format referee (sandbox-first):**',
     '- Short facts / yes-no / greetings → plain text only.',
-    '- Any visual / interactive ask (图表、可视化、看板、表单、地图、对比、小工具、动画、游戏…) → ONE closed ```iui-html fence in the reply body THIS turn. Do NOT write files, do NOT call bash/shell/search to build the page — the fence IS the page. Exception: get_trip_stop_images (itinerary photos) is allowed once before the fence.',
+    '- Any visual / interactive ask (图表、可视化、看板、表单、地图、对比、小工具、动画、游戏…) → ONE closed ```iui-html fence in the reply body THIS turn. Do NOT write files, do NOT call bash/shell/search to build the page — the fence IS the page. ' + describeToolsAllowedBeforeFence(),
     '- Body = one JSON object {"title","height","css","html","js"} (JSON strings, escape quotes). Write real, polished CSS + HTML + JS (local interactivity, animations, CDN libs allowed).',
     '- Never emit legacy ```iui component trees ({"type":"hero"...}) or ```json for UI. Never use Markdown tables/lists as the UI.',
     '- Pattern: 1 short sentence → ```iui-html → optional 1 sentence.',
@@ -522,7 +523,7 @@ export function buildFirstTokenContract(rule: IntentRule): string {
     `status=first_token_contract\n` +
     `intent=${rule.id}\n` +
     'FIRST_CHARS_MUST_BE=```iui-html\n' +
-    `no_tools_before_fence=true\n` +
+    `${describeToolsAllowedBeforeFence()}\n` +
     `no_markdown_as_ui=true\n` +
     `no_apology_only=true\n\n` +
     `HARD first-token: for intent=${rule.id}, the FIRST non-whitespace characters of your assistant body MUST be the fence opener ` +
@@ -541,7 +542,7 @@ export function buildToolBeforeFenceAbort(rule: IntentRule): string {
     `next=emit_fence_now\n` +
     `no_more_bash=true\n` +
     `no_more_validate=true\n` +
-    `no_tools_before_fence=true\n\n` +
+    `${describeToolsAllowedBeforeFence()}\n\n` +
     `ABORT TOOLS: you called a tool before emitting ` +
     '```iui-html' +
     ` for intent=${rule.id}. ` +
@@ -567,7 +568,7 @@ export function buildFenceFirstHint(rule: IntentRule): string {
     'FIRST_CHARS_MUST_BE=```iui-html\n' +
     `no_more_bash=true\n` +
     `no_more_validate=true\n` +
-    `no_tools_before_fence=true\n` +
+    `${describeToolsAllowedBeforeFence()}\n` +
     `brief_prose_wrap_ok=true\n` +
     `prose_after_fence_preferred=true\n` +
     `no_markdown_as_ui=true\n\n` +

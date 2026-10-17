@@ -3,8 +3,18 @@
  * Design bar + sandbox patterns for free HTML pages.
  */
 import { FENCE_LANG_HTML, FENCE_LANG_PRIMARY } from '../config/defaults.ts'
+import { describeToolsAllowedBeforeFence, getStreamHeuristics } from '../config/stream-heuristics.ts'
 import { OIU_DESIGN_SKILL } from '../themes/oiu-design-system.ts'
 import { buildRefereePromptBlock } from './format-referee.ts'
+
+function itineraryPhotoClause(): string {
+  const names = getStreamHeuristics().toolsAllowedBeforeFence
+  const policy = describeToolsAllowedBeforeFence()
+  const after =
+    'THEN emit ```iui-html with those image_url values. Host also auto-fills well-known places if photos are missing.'
+  if (names.length === 0) return `${policy} ${after}`
+  return `you MAY call \`${names.join(' / ')}\` once (1–8 Wikipedia titles) to resolve Wikimedia photos+credits, ${policy} ${after}`
+}
 
 /**
  * Slim fence contract injected every request.
@@ -33,7 +43,7 @@ ${referee}
 - Short facts / yes-no / greetings → plain text only.
 - Do NOT emit legacy \`\`\`iui JSON component trees (catalog packs removed). Do NOT use \`\`\`json for UI.
 - Do NOT call \`validate_dsh_ui\`. Emit the sandbox fence directly.
-- Itinerary / multi-city trips: you MAY call \`get_trip_stop_images / get_place_images\` once (1–8 Wikipedia titles) to resolve Wikimedia photos+credits, THEN emit \`\`\`iui-html with those image_url values. Host also auto-fills well-known places if photos are missing.
+- Itinerary / multi-city trips: ${itineraryPhotoClause()}
 - LOCAL-FIRST: clicks / tabs / sliders stay in the iframe; use \`iuiSandbox.action\` only when the host must know.
 - Official / outbound URLs: \`window.iuiSandbox.openLink(httpsUrl)\` or \`data-iui-open-link\`. NEVER \`action('sandbox_open_link')\` — that used to re-generate a whole page. Host now opens https/mailto locally and does not send [genui-action].
 

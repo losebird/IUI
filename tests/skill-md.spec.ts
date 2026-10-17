@@ -58,4 +58,15 @@ describe('SKILL.md sandbox-first contract', () => {
     expect(raw).toMatch(/避坑/)
     expect(raw).toMatch(/不是冻成某一城的模版|禁止把三日南京布局/)
   })
+
+  it('tells the model that onFrame receives a frame object, not a numeric index', () => {
+    expect(raw).toContain('{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}')
+    expect(raw).toContain('onFrame:function(f){activate(f.pinIndex)}')
+    expect(raw).toContain('参数不是数字下标')
+  })
+
+  it('tells the model to show onState\'s Chinese label and keep the English token', () => {
+    expect(raw).toContain('onState 第一个参数是英文 token `playing`、`paused`、`complete`')
+    expect(raw).toContain('第二个参数是显示用的中文标签「播放中」「已暂停」「已完成」')
+  })
 })
