@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.13.0-iui.27
+
+onFrame is a frame object, and a throwing callback no longer fails the author script:
+
+- Skill text names `{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}` and the example `onFrame:function(f){activate(f.pinIndex)}`. The argument is not a numeric index.
+- A throwing `onFrame` pauses that animation, logs the original error, and shows a Chinese notice. The notice says the animation code failed and is paused, and that the user can replay or ask the AI to regenerate. The original error is secondary.
+- Replay starts the animation again and removes the pause notice once playback starts. If `onFrame` throws again, the animation pauses and the same notice stays, without stacking a second strip. Pause can stop a run that recovered.
+- Referee prompts and the system section take the before-fence photo-tool exception from `toolsAllowedBeforeFence`. The `SKILL.md` photo sentence must list that same allow-list.
+- The map status line shows 播放中, 已暂停, or 已完成. Those words come from the animator state. `onState` still receives `playing`, `paused`, and `complete`.
+
 - **Open-link is local:** `openLink(url)` and `action('sandbox_open_link', {url})` open https/mailto in a new tab. They no longer emit `[genui-action]` (that regenerated a whole page and billed another turn).
 - **Weather Chart cfg brace:** `var cfg={…};` missing `}` → `Unexpected token ';'`; `makeChart({…options})` closed with `)` instead of `}` → `Unexpected token ')'`. Host inserts the fewest `}` before that `;` / `)`, only inside an object literal. Balanced `drawHourly` stays untouched.
 - **AG Grid / Mermaid CDN skin:** `autoCdnTags` injects ag-grid-community + quartz and mermaid UMD when the fence actually uses them (`agGrid.createGrid` / `.mermaid`). Host paints `.ag-theme-iui` from `--color-*` and boots mermaid `themeVariables`. Narrow contract: filterable sheets and mindmaps only — itinerary budget tables stay HTML.
@@ -24,15 +34,6 @@
 - **Author JS regex literals:** `hardenAuthorJs` brace/paren balancing skips `/.../` (including `/\"/g` and character classes). A closed spreadsheet IIFE is no longer given a trailing `)` (`Unexpected token ')'`).
 - **Author JS import keyword:** classic-script eval cannot parse `typeof import` or static `import … from`. Harden rewrites the feature-detect so `import('three')` can run; the system prompt forbids both illegal forms.
 - **Media AbortError:** sandbox `unhandledrejection` ignores Chrome `play()` interrupted by `pause()` / src change (`AbortError`, goo.gl/LdLk22). Real author failures still paint the strip. The system prompt tells models to `.catch` `video.play()`.
-
-## 0.13.0-iui.27
-
-onFrame is a frame object, and a throwing callback no longer fails the author script:
-
-- Skill text names `{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}` and the example `onFrame:function(f){activate(f.pinIndex)}`. The argument is not a numeric index.
-- A throwing `onFrame` pauses that animation, logs the original error, and shows a Chinese notice. The notice says the animation code failed and is paused, and that the user can replay or ask the AI to regenerate. The original error is secondary.
-- Replay starts the animation again and removes the pause notice once playback starts. If `onFrame` throws again, the animation pauses and the same notice stays, without stacking a second strip. Pause can stop a run that recovered.
-- Referee prompts and the system section take the before-fence photo-tool exception from `toolsAllowedBeforeFence`. The `SKILL.md` photo sentence must list that same allow-list.
 
 ## 0.13.0-iui.26
 
