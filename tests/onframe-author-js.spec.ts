@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks } from '../src/shared/author-js-runtime.ts'
 import { getHtmlSandboxStarter, prepareAuthorJs } from '../src/shared/html-sandbox.ts'
-import { buildTripAnimatorScriptTag } from '../src/themes/oiu-design-system.ts'
+import { buildTripAnimatorScriptTag, OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system.ts'
 
 type Settled = { type?: string; ok?: boolean; failedChunks?: number }
 
@@ -299,6 +299,26 @@ describe('author JS that indexes the onFrame argument', () => {
     await waitFor(() => status() === '已完成', 8000)
     expect(status()).toBe('已完成')
   }, 15000)
+
+  it('runs the published onState example at top level and shows the Chinese label', async () => {
+    const skill = readFileSync(join(process.cwd(), 'SKILL.md'), 'utf8')
+    for (const source of [skill, OIU_DESIGN_SKILL]) {
+      const match = source.match(/onState:\s*function\s*\(\s*st\s*,\s*label\s*\)\s*\{([^{}]*)\}/)
+      expect(match).not.toBeNull()
+      const js = `
+        createTripAnimator({
+          stopCount: 2,
+          durationMs: 1000,
+          pinElements: [],
+          onFrame: function () { throw new Error('boom-example'); },
+          onState: function (st, label) {${match![1]}}
+        });
+      `
+      const observed = await runAuthorJs(js, '<span id="status">-</span>')
+      expect(observed.authorFail).toBe(0)
+      expect(document.getElementById('status')?.textContent).toBe('已暂停')
+    }
+  })
 
   it('leaves #mapStatus alone when the author displays the English token', async () => {
     const js = `(function(){
