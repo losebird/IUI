@@ -31,7 +31,7 @@ description: "Render free, polished HTML/CSS/JS pages inline through the iui-htm
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。
 有日程/住宿/预算再画（住宿用 `.iui-compare-3`）；没有就省略。禁止把三日南京布局套到探店或天气。
 
-行程卡照片：优先调用工具 `get_trip_stop_images`（1–8 个维基标题），把 `image_url` 写入 `.photo img`，并用 `.iui-photo-credit` 展示署名。
+行程卡照片：优先调用工具 `get_trip_stop_images`、`get_place_images`（1–8 个维基标题），把 `image_url` 写入 `.photo img`，并用 `.iui-photo-credit` 展示署名。
 
 ### 定价三列
 `<div class="iui-compare-3">` 内三个 `.iui-tier`（一个 `.featured`）。桌面必须并排，禁止竖着堆三档。

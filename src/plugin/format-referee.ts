@@ -568,7 +568,7 @@ export function buildFenceFirstHint(rule: IntentRule): string {
     'FIRST_CHARS_MUST_BE=```iui-html\n' +
     `no_more_bash=true\n` +
     `no_more_validate=true\n` +
-    `no_tools_before_fence=true\n` +
+    `${describeToolsAllowedBeforeFence()}\n` +
     `brief_prose_wrap_ok=true\n` +
     `prose_after_fence_preferred=true\n` +
     `no_markdown_as_ui=true\n\n` +
