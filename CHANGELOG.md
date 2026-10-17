@@ -25,6 +25,15 @@
 - **Author JS import keyword:** classic-script eval cannot parse `typeof import` or static `import … from`. Harden rewrites the feature-detect so `import('three')` can run; the system prompt forbids both illegal forms.
 - **Media AbortError:** sandbox `unhandledrejection` ignores Chrome `play()` interrupted by `pause()` / src change (`AbortError`, goo.gl/LdLk22). Real author failures still paint the strip. The system prompt tells models to `.catch` `video.play()`.
 
+## 0.13.0-iui.27
+
+onFrame is a frame object, and a throwing callback no longer fails the author script:
+
+- Skill text names `{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}` and the example `onFrame:function(f){activate(f.pinIndex)}`. The argument is not a numeric index.
+- A throwing `onFrame` pauses that animation, logs the original error, and shows a Chinese notice. The notice says the animation code failed and is paused, and that the user can replay or ask the AI to regenerate. The original error is secondary.
+- Replay starts the animation again. If `onFrame` throws again, the animation pauses and the notice stays. Pause can stop a run that recovered.
+- Referee prompts and the system section take the before-fence photo-tool exception from `toolsAllowedBeforeFence`. The `SKILL.md` photo sentence must list that same allow-list.
+
 ## 0.13.0-iui.26
 
 Golden-prompt regression suite (first-principles after failure-visible .25):
