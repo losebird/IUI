@@ -650,8 +650,20 @@ export function createTripAnimatorSource(): string {
   }
   showPins();
   var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false, frameFailed = false;
+  var failStrip = null, failStyleOn = false;
   function reduceMotion() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  function animatorFailStyle() {
+    if (failStyleOn) return;
+    failStyleOn = true;
+    var style = document.createElement('style');
+    style.id = 'iui-animator-fail-css';
+    style.textContent = '.iui-fail-strip[data-iui-animator-fail]{display:block;margin:8px 0;padding:10px 12px;border-radius:10px;font:12px/1.45 system-ui,sans-serif;color:#991b1b;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);white-space:pre-wrap;word-break:break-word}'
+      + '.iui-fail-strip[data-iui-animator-fail] .iui-fail-title{font-weight:700;margin-bottom:4px}'
+      + '.iui-fail-strip[data-iui-animator-fail] .iui-fail-hint{margin-bottom:4px}'
+      + '.iui-fail-strip[data-iui-animator-fail] .iui-fail-meta{opacity:.85;font-size:11px;margin-top:4px}';
+    (document.head || document.documentElement).appendChild(style);
   }
   function reportOnFrameError(err) {
     frameFailed = true;
@@ -661,14 +673,30 @@ export function createTripAnimatorSource(): string {
     frameId = null;
     console.error('[iui-html] trip animator onFrame', err);
     var msg = (err && err.name ? String(err.name) + ': ' : '') + (err && err.message ? String(err.message) : String(err));
-    var strip = document.createElement('div');
-    strip.className = 'iui-fail-strip';
-    strip.setAttribute('role', 'alert');
-    strip.setAttribute('data-iui-animator-fail', '1');
-    strip.textContent = msg;
-    var root = document.getElementById('iui-preview-root');
-    if (root && root.parentNode) root.parentNode.insertBefore(strip, root);
-    else (document.body || document.documentElement).appendChild(strip);
+    animatorFailStyle();
+    if (!failStrip) {
+      failStrip = document.createElement('div');
+      failStrip.className = 'iui-fail-strip';
+      failStrip.setAttribute('role', 'alert');
+      failStrip.setAttribute('data-iui-animator-fail', '1');
+      var root = document.getElementById('iui-preview-root');
+      if (root && root.parentNode) root.parentNode.insertBefore(failStrip, root);
+      else (document.body || document.documentElement).appendChild(failStrip);
+    }
+    var strip = failStrip;
+    while (strip.firstChild) strip.removeChild(strip.firstChild);
+    var title = document.createElement('div');
+    title.className = 'iui-fail-title';
+    title.textContent = '这段动画的代码出错了，动画已暂停。';
+    var hint = document.createElement('div');
+    hint.className = 'iui-fail-hint';
+    hint.textContent = '可以点「重播」再试一次，或让 AI 重新生成这一页。';
+    var meta = document.createElement('div');
+    meta.className = 'iui-fail-meta';
+    meta.textContent = msg;
+    strip.appendChild(title);
+    strip.appendChild(hint);
+    strip.appendChild(meta);
     try {
       if (onState) onState(elapsed >= duration ? 'complete' : 'paused');
     } catch (stateErr) {

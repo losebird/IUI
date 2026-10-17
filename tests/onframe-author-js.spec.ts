@@ -89,7 +89,7 @@ async function runAuthorJs(js: string, html: string) {
     settled,
     logs,
     authorFail: document.querySelectorAll('[data-iui-author-fail]').length,
-    titles: [...document.querySelectorAll('.iui-fail-title')].map((el) => el.textContent ?? ''),
+    titles: [...document.querySelectorAll('[data-iui-author-fail] .iui-fail-title')].map((el) => el.textContent ?? ''),
     alerts: [...document.querySelectorAll('[role="alert"]')].map((el) => el.textContent ?? ''),
   }
 }
