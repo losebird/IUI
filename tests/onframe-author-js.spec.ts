@@ -164,6 +164,55 @@ describe('author JS that indexes the onFrame argument', () => {
     expect(observed.authorFail).toBe(0)
   })
 
+  it('停下后点重播仍然没反应', async () => {
+    await runAuthorJs(nameArtifact.js, nameArtifact.html)
+    let errors = 0
+    const orig = console.error
+    console.error = (...args: unknown[]) => {
+      const line = args.map((arg) => (arg instanceof Error ? `${arg.name}: ${arg.message}` : String(arg))).join(' ')
+      if (line.includes("reading 'name'")) errors += 1
+      orig(...args)
+    }
+    try {
+      document.getElementById('replay')!.click()
+    } finally {
+      console.error = orig
+    }
+    expect(errors).toBeGreaterThan(0)
+    expect(document.querySelector('[data-iui-author-fail]')).toBeNull()
+    expect(document.querySelector('[role="alert"] .iui-fail-meta')?.textContent ?? '').toContain("reading 'name'")
+  })
+
+  it('replay after a frame error can run again and pause can stop it', async () => {
+    const js = `(function(){
+      window.__calls = 0;
+      window.__states = [];
+      window.__tour = createTripAnimator({
+        stopCount: 2,
+        durationMs: 6000,
+        pinElements: [],
+        onFrame: function(){
+          window.__calls++;
+          if (window.__calls === 1) throw new Error('boom-frame');
+        },
+        onState: function(st){ window.__states.push(st); }
+      });
+      document.getElementById('replay').onclick = function(){ window.__tour.replay(); };
+      document.getElementById('pause').onclick = function(){ window.__tour.pause(); };
+    })();`
+    await runAuthorJs(js, '<button id="pause"></button><button id="replay"></button>')
+    const win = window as unknown as { __calls: number; __states: string[] }
+    expect(win.__calls).toBe(1)
+    document.getElementById('replay')!.click()
+    expect(win.__calls).toBeGreaterThan(1)
+    expect(win.__states).toContain('playing')
+    const callsAtPlay = win.__calls
+    document.getElementById('pause')!.click()
+    expect(win.__states[win.__states.length - 1]).toBe('paused')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(win.__calls).toBe(callsAtPlay)
+  })
+
   it('a callback that reads pinIndex still receives the frame and does not raise an alert', async () => {
     const js = `(function(){
       window.__frames = [];
