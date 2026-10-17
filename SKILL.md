@@ -25,7 +25,7 @@ description: "Render free, polished HTML/CSS/JS pages inline through the iui-htm
 ### 地图 / 多站（南京密度，不是冻成某一城的模版）
 2 站及以上（行程、探店、一日游、景点详解）必须同时有：
 1. 真 Leaflet（`.iui-map-wrap` 高 300px）+ Pause/Replay
-2. 编号针 + `createTripAnimator`（`pinElements` 先丢掉 `getElement()` 的 null）。onFrame 给出对象 {progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}。参数不是数字下标。示例 `onFrame:function(f){activate(f.pinIndex)}`。onState 第一个参数是英文 token `playing`、`paused`、`complete`，第二个参数是显示用的中文标签「播放中」「已暂停」「已完成」。
+2. 编号针 + `createTripAnimator`（`pinElements` 先丢掉 `getElement()` 的 null）。onFrame 给出对象 {progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}。参数不是数字下标。示例 `onFrame:function(f){activate(f.pinIndex)}`。onState 第一个参数是英文 token `playing`、`paused`、`complete`，第二个参数是显示用的中文标签「播放中」「已暂停」「已完成」。示例 `onState: function (st, label) { status.textContent = label; }`。`st` 是英文 token，只做逻辑判断。
 3. 横滑 `.iui-cards-strip` + `.iui-stop-card`（多卡在第一次圆角框里滚，不要撑破边框）
 4. **点针或卡 → 页内详解**：停留 / 票或预约 / 怎么去 / 避坑（加一句为何排这一站）
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。

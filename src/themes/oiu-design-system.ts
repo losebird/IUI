@@ -876,6 +876,8 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
   onFrame receives an object {progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}. 参数不是数字下标.
   Example: onFrame:function(f){activate(f.pinIndex)}
   onState(state, label) keeps the English token playing, paused, or complete as the first argument, and passes 播放中, 已暂停, or 已完成 as the second argument for the status line. Write label into the page's own status element.
+  Example: onState: function (st, label) { status.textContent = label; }
+  st is the English token. Use st only for logic.
 - On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
 - Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
