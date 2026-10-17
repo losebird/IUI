@@ -31,7 +31,7 @@ onFrame is a frame object, and a throwing callback no longer fails the author sc
 
 - Skill text names `{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}` and the example `onFrame:function(f){activate(f.pinIndex)}`. The argument is not a numeric index.
 - A throwing `onFrame` pauses that animation, logs the original error, and shows a Chinese notice. The notice says the animation code failed and is paused, and that the user can replay or ask the AI to regenerate. The original error is secondary.
-- Replay starts the animation again. If `onFrame` throws again, the animation pauses and the notice stays. Pause can stop a run that recovered.
+- Replay starts the animation again and removes the pause notice once playback starts. If `onFrame` throws again, the animation pauses and the same notice stays, without stacking a second strip. Pause can stop a run that recovered.
 - Referee prompts and the system section take the before-fence photo-tool exception from `toolsAllowedBeforeFence`. The `SKILL.md` photo sentence must list that same allow-list.
 
 ## 0.13.0-iui.26

@@ -783,6 +783,11 @@ export function createTripAnimatorSource(): string {
       if (window.L && typeof L.iuiRefreshMaps === 'function') L.iuiRefreshMaps('animator-replay');
     } catch (e2) {}
   }
+  function removeFailStrip() {
+    var strip = failStrip;
+    failStrip = null;
+    if (strip && strip.parentNode) strip.parentNode.removeChild(strip);
+  }
   function replay() {
     if (disposed) return;
     frameFailed = false;
@@ -790,6 +795,7 @@ export function createTripAnimatorSource(): string {
     if (frameFailed) return;
     refreshMaps();
     play();
+    if (!frameFailed) removeFailStrip();
     setTimeout(refreshMaps, 80);
     setTimeout(refreshMaps, 320);
     setTimeout(refreshMaps, 800);
