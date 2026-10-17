@@ -251,6 +251,40 @@ describe('author JS that indexes the onFrame argument', () => {
     expect(animatorNotice()).not.toContain('动画已暂停')
   })
 
+  it('the status bar shows Chinese for the animator state while onState still receives English', async () => {
+    const js = `(function(){
+      window.__calls = 0;
+      window.__states = [];
+      window.__tour = createTripAnimator({
+        stopCount: 2,
+        durationMs: 1000,
+        pinElements: [],
+        onFrame: function(){
+          window.__calls++;
+          if (window.__calls === 1) throw new Error('boom-status');
+        },
+        onState: function(st){
+          window.__states.push(st);
+          document.getElementById('mapStatus').textContent = st || '示意行程连线 — 非核实驾车路线';
+        }
+      });
+      document.getElementById('replay').onclick = function(){ window.__tour.replay(); };
+    })();`
+    await runAuthorJs(js, '<p id="mapStatus"></p><button id="replay"></button>')
+    const win = window as unknown as { __states: string[] }
+    const status = () => document.getElementById('mapStatus')?.textContent ?? ''
+    expect(win.__states).toContain('paused')
+    expect(status()).toBe('已暂停')
+    expect(status()).not.toMatch(/\bpaused\b/)
+    document.getElementById('replay')!.click()
+    expect(win.__states).toContain('playing')
+    expect(status()).toBe('播放中')
+    await waitFor(() => win.__states.includes('complete'))
+    expect(win.__states).toContain('complete')
+    expect(status()).toBe('已完成')
+    expect(win.__states.every((state) => state === 'playing' || state === 'paused' || state === 'complete')).toBe(true)
+  })
+
   it('replay after a frame error can run again and pause can stop it', async () => {
     const js = `(function(){
       window.__calls = 0;
