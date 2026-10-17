@@ -47,7 +47,6 @@ function activate(i){
   var card=strip.children[i];
   if(card) strip.scrollLeft=Math.max(0, card.offsetLeft - strip.offsetLeft - 12);
   var s=stops[i];
-  document.getElementById('status').textContent=s.n+' · '+s.d;
   var sheet=document.getElementById('sheet');
   if(sheet) sheet.innerHTML='<h4 style="margin:0 0 6px">'+s.n+'</h4><p class="iui-sandbox-muted" style="margin:0">停留 2h · 怎么去 示意公路 · 避坑 连线非核实驾车路线</p>';
 }
@@ -61,10 +60,11 @@ var tour=window.createTripAnimator({
     line.setLatLngs(pts.slice(0, count));
     activate(f.activeStop);
   },
-  onState: function(st){
+  onState: function(st, label){
     var p=document.getElementById('pause');
     p.disabled = st==='complete';
     p.textContent = st==='playing' ? 'Pause' : 'Resume';
+    document.getElementById('status').textContent = label;
   }
 });
 document.getElementById('pause').onclick=function(){

@@ -10,7 +10,12 @@ onFrame is a frame object, and a throwing callback no longer fails the author sc
 - A throwing `onFrame` pauses that animation, logs the original error, and shows a Chinese notice. The notice says the animation code failed and is paused, and that the user can replay or ask the AI to regenerate. The original error is secondary.
 - Replay starts the animation again and removes the pause notice once playback starts. If `onFrame` throws again, the animation pauses and the same notice stays, without stacking a second strip. Pause can stop a run that recovered.
 - Referee prompts and the system section take the before-fence photo-tool exception from `toolsAllowedBeforeFence`. The `SKILL.md` photo sentence must list that same allow-list.
-- `#mapStatus` shows 播放中, 已暂停, or 已完成 when it was showing `playing`, `paused`, or `complete`. The Chinese word is looked up from that state. `onState` still receives the English token.
+
+`onState` keeps an English token and passes a Chinese label for the page to show:
+
+- The first argument stays `playing`, `paused`, or `complete`. The second argument is 播放中, 已暂停, or 已完成, looked up from that token. The itinerary starter writes the label into `#status`. The page chooses the element.
+
+Notes written before 0.13.0-iui.26 that ship in this version:
 
 - **Open-link is local:** `openLink(url)` and `action('sandbox_open_link', {url})` open https/mailto in a new tab. They no longer emit `[genui-action]` (that regenerated a whole page and billed another turn).
 - **Weather Chart cfg brace:** `var cfg={…};` missing `}` → `Unexpected token ';'`; `makeChart({…options})` closed with `)` instead of `}` → `Unexpected token ')'`. Host inserts the fewest `}` before that `;` / `)`, only inside an object literal. Balanced `drawHourly` stays untouched.

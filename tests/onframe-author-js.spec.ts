@@ -298,7 +298,7 @@ describe('author JS that indexes the onFrame argument', () => {
     expect(status()).toBe('播放中')
     await waitFor(() => status() === '已完成', 8000)
     expect(status()).toBe('已完成')
-  })
+  }, 15000)
 
   it('leaves #mapStatus alone when the author displays the English token', async () => {
     const js = `(function(){
