@@ -179,8 +179,8 @@ describe('author JS that indexes the onFrame argument', () => {
       console.error = orig
     }
     expect(errors).toBeGreaterThan(0)
-    expect(document.querySelector('[data-iui-author-fail]')).toBeNull()
-    expect(document.querySelector('[role="alert"] .iui-fail-meta')?.textContent ?? '').toContain("reading 'name'")
+    expect(document.querySelectorAll('[data-iui-author-fail]').length).toBe(0)
+    expect(nativeQuery.document.call(document, '[role="alert"] .iui-fail-meta')?.textContent ?? '').toContain("reading 'name'")
   })
 
   it('replay after a frame error can run again and pause can stop it', async () => {

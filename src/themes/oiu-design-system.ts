@@ -785,7 +785,9 @@ export function createTripAnimatorSource(): string {
   }
   function replay() {
     if (disposed) return;
+    frameFailed = false;
     pause(); elapsed = 0; emit();
+    if (frameFailed) return;
     refreshMaps();
     play();
     setTimeout(refreshMaps, 80);
