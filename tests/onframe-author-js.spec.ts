@@ -150,6 +150,20 @@ describe('author JS that indexes the onFrame argument', () => {
     })
   })
 
+  it('the animator alert explains the pause in Chinese and keeps the original error secondary', async () => {
+    const observed = await runAuthorJs(nameArtifact.js, nameArtifact.html)
+    const alert = document.querySelector('[role="alert"]')
+    const title = alert?.querySelector('.iui-fail-title')?.textContent ?? ''
+    const hint = alert?.querySelector('.iui-fail-hint')?.textContent ?? ''
+    const meta = alert?.querySelector('.iui-fail-meta')?.textContent ?? ''
+    expect(title).toBe('这段动画的代码出错了，动画已暂停。')
+    expect(hint).toBe('可以点「重播」再试一次，或让 AI 重新生成这一页。')
+    expect(meta).toContain("reading 'name'")
+    expect(title).not.toContain('name')
+    expect(observed.logs.some((line) => line.includes("reading 'name'"))).toBe(true)
+    expect(observed.authorFail).toBe(0)
+  })
+
   it('a callback that reads pinIndex still receives the frame and does not raise an alert', async () => {
     const js = `(function(){
       window.__frames = [];
