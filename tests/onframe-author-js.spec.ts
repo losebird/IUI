@@ -180,7 +180,75 @@ describe('author JS that indexes the onFrame argument', () => {
     }
     expect(errors).toBeGreaterThan(0)
     expect(document.querySelectorAll('[data-iui-author-fail]').length).toBe(0)
+    expect(document.querySelectorAll('[data-iui-animator-fail]').length).toBe(1)
     expect(nativeQuery.document.call(document, '[role="alert"] .iui-fail-meta')?.textContent ?? '').toContain("reading 'name'")
+  })
+
+  async function waitFor(pred: () => boolean) {
+    const started = Date.now()
+    while (!pred() && Date.now() - started < 2500) {
+      await new Promise((resolve) => setTimeout(resolve, 16))
+    }
+  }
+
+  function animatorNotice(): string {
+    return [...document.querySelectorAll('[data-iui-animator-fail]')].map((el) => el.textContent ?? '').join('\n')
+  }
+
+  it('clears the pause notice after replay when only the first frame threw', async () => {
+    const js = `(function(){
+      window.__calls = 0;
+      window.__states = [];
+      window.__tour = createTripAnimator({
+        stopCount: 2,
+        durationMs: 1000,
+        pinElements: [],
+        onFrame: function(){
+          window.__calls++;
+          if (window.__calls === 1) throw new Error('boom-frame');
+        },
+        onState: function(st){ window.__states.push(st); }
+      });
+      document.getElementById('replay').onclick = function(){ window.__tour.replay(); };
+    })();`
+    await runAuthorJs(js, '<button id="replay"></button>')
+    const win = window as unknown as { __calls: number; __states: string[] }
+    expect(win.__calls).toBe(1)
+    expect(animatorNotice()).toContain('动画已暂停')
+    document.getElementById('replay')!.click()
+    await waitFor(() => win.__states.includes('complete'))
+    expect(win.__states).toContain('complete')
+    expect(document.querySelectorAll('[data-iui-animator-fail]').length).toBe(0)
+    expect(animatorNotice()).not.toContain('动画已暂停')
+  })
+
+  it('clears the pause notice after replay when the fifth frame threw once', async () => {
+    const js = `(function(){
+      window.__calls = 0;
+      window.__states = [];
+      window.__tour = createTripAnimator({
+        stopCount: 3,
+        durationMs: 1000,
+        pinElements: [],
+        onFrame: function(){
+          window.__calls++;
+          if (window.__calls === 5) throw new Error('boom-fifth');
+        },
+        onState: function(st){ window.__states.push(st); }
+      });
+      document.getElementById('replay').onclick = function(){ window.__tour.replay(); };
+    })();`
+    await runAuthorJs(js, '<button id="replay"></button>')
+    const win = window as unknown as { __calls: number; __states: string[]; __tour: { play: () => void } }
+    win.__tour.play()
+    await waitFor(() => win.__calls >= 5)
+    expect(win.__calls).toBe(5)
+    expect(animatorNotice()).toContain('动画已暂停')
+    document.getElementById('replay')!.click()
+    await waitFor(() => win.__states.includes('complete'))
+    expect(win.__states).toContain('complete')
+    expect(document.querySelectorAll('[data-iui-animator-fail]').length).toBe(0)
+    expect(animatorNotice()).not.toContain('动画已暂停')
   })
 
   it('replay after a frame error can run again and pause can stop it', async () => {
