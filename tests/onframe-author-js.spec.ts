@@ -164,7 +164,7 @@ describe('author JS that indexes the onFrame argument', () => {
     expect(observed.authorFail).toBe(0)
   })
 
-  it('停下后点重播仍然没反应', async () => {
+  it('replay after a stop calls the throwing callback again and keeps one notice', async () => {
     await runAuthorJs(nameArtifact.js, nameArtifact.html)
     let errors = 0
     const orig = console.error
