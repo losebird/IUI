@@ -651,6 +651,14 @@ export function createTripAnimatorSource(): string {
   showPins();
   var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false, frameFailed = false;
   var failStrip = null, failStyleOn = false;
+  var stateLabel = { playing: "播放中", paused: "已暂停", complete: "已完成" };
+  function publishState(state) {
+    if (onState) onState(state);
+    var label = stateLabel[state];
+    if (!label) return;
+    var el = document.getElementById("mapStatus");
+    if (el && el.parentNode && el.textContent === state) el.textContent = label;
+  }
   function reduceMotion() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
@@ -698,7 +706,7 @@ export function createTripAnimatorSource(): string {
     strip.appendChild(hint);
     strip.appendChild(meta);
     try {
-      if (onState) onState(elapsed >= duration ? 'complete' : 'paused');
+      publishState(elapsed >= duration ? 'complete' : 'paused');
     } catch (stateErr) {
       console.error('[iui-html] trip animator onState', stateErr);
     }
@@ -740,7 +748,7 @@ export function createTripAnimatorSource(): string {
     playing = false; lastTime = null;
     if (frameId !== null) cancelAnimationFrame(frameId);
     frameId = null;
-    if (onState) onState(elapsed >= duration ? "complete" : "paused");
+    publishState(elapsed >= duration ? "complete" : "paused");
   }
   function tick(time) {
     if (!playing || disposed) return;
@@ -753,10 +761,10 @@ export function createTripAnimatorSource(): string {
   }
   function play() {
     if (disposed || playing || frameFailed) return;
-    if (reduceMotion()) { elapsed = duration; emit(); if (onState) onState("complete"); return; }
+    if (reduceMotion()) { elapsed = duration; emit(); publishState("complete"); return; }
     if (elapsed >= duration) return;
     playing = true; lastTime = null;
-    if (onState) onState("playing");
+    publishState("playing");
     frameId = requestAnimationFrame(tick);
   }
   function seek(stop) {
@@ -766,7 +774,7 @@ export function createTripAnimatorSource(): string {
     pause();
     elapsed = stop === stopCount - 1 ? duration : duration * (stop + 0.6) / stopCount;
     emit();
-    if (onState) onState(elapsed >= duration ? "complete" : "paused");
+    publishState(elapsed >= duration ? "complete" : "paused");
   }
   function refreshMaps() {
     try {
