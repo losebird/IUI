@@ -1,8 +1,3 @@
-/**
- * Real low-effort author JS treated the onFrame argument as a stop index.
- * The host passes a frame object, so stops[frame].name / .day throw, and the
- * author pipeline marks the whole chunk failed.
- */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
