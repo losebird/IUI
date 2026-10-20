@@ -4,6 +4,7 @@
  * (single source of truth). Design tokens inject via build options.
  */
 
+import { DESIGN_ENHANCE_JS } from './design-enhance.ts'
 import { IUI_TOKEN_CATALOG, tokenCatalogToCssVars, cssVarsToInline } from '../themes/tokens.ts'
 import { sandboxBrandCssVars } from '../themes/sandbox-brand.ts'
 import {
@@ -60,7 +61,7 @@ export const IUI_DEFAULT_MAP_TILE_ATTR =
  * Fallback raster chain when Esri returns tileerror or regional gaps
  * ("Map data not yet available"). OSM FR HOT first (China/JP coverage),
  * then Esri Light Gray. Never World_Topo_Map — that colorful terrain looks
- * like "the map is wrong" next to the grayscale street contract.
+ * like "the map is wrong" next to the muted street basemap.
  * East-Asia centers skip Esri Street and start on OSM FR HOT immediately.
  */
 export const IUI_MAP_TILE_FALLBACKS: readonly { url: string; attribution: string }[] = [
@@ -177,6 +178,8 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'action'; frameId: string; action: string; payload: Record<string, unknown> }
   | { source: 'iui-html'; type: 'sendPrompt'; frameId: string; text: string }
   | { source: 'iui-html'; type: 'openLink'; frameId: string; url: string }
+  /** D8: copy from an opaque-origin frame (host writes the clipboard on the same click). */
+  | { source: 'iui-html'; type: 'copyText'; frameId: string; text: string }
   /** @deprecated Prefer bridgeReady — kept as handshake alias. Does NOT mean libs/author ready. */
   | { source: 'iui-html'; type: 'ready'; frameId: string }
   | { source: 'iui-html'; type: 'bridgeReady'; frameId: string }
@@ -277,6 +280,9 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   }
   if (record.type === 'openLink') {
     return typeof record.url === 'string' && record.url.length > 0 && record.url.length <= 2000
+  }
+  if (record.type === 'copyText') {
+    return typeof record.text === 'string' && record.text.length <= 200_064
   }
   if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady' || record.type === 'heartbeat' || record.type === 'escape') return true
   if (record.type === 'authorSettled') {
@@ -1505,7 +1511,7 @@ button.ghost:hover{background:var(--iui-pack-surface-muted)}
 /* Design-system kit (token-driven primitives for iui-html authors) */
 .iui-sandbox-field{display:flex;flex-direction:column;gap:var(--iui-pack-gap-xs,${d.gapXs})}
 .iui-sandbox-label{font-size:var(--iui-pack-font-sm,${d.fontSizeSm});color:var(--iui-pack-muted-fg);font-weight:500}
-.iui-sandbox-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--iui-pack-segment-radius,999px);font-size:11px;font-weight:650;background:var(--iui-pack-tint);color:var(--iui-pack-accent,${accent});border:1px solid color-mix(in srgb,var(--iui-pack-accent,${accent}) 22%,transparent)}
+.iui-sandbox-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--iui-pack-segment-radius,999px);font-size:12px;font-weight:650;background:var(--iui-pack-tint);color:var(--iui-pack-accent,${accent});border:1px solid color-mix(in srgb,var(--iui-pack-accent,${accent}) 22%,transparent)}
 .iui-sandbox-badge.warn{background:color-mix(in srgb,var(--iui-pack-warn) 16%,transparent);color:var(--iui-pack-warn);border-color:color-mix(in srgb,var(--iui-pack-warn) 28%,transparent)}
 .iui-sandbox-badge.danger{background:color-mix(in srgb,var(--iui-pack-danger) 14%,transparent);color:var(--iui-pack-danger);border-color:color-mix(in srgb,var(--iui-pack-danger) 28%,transparent)}
 .iui-sandbox-alert{padding:var(--iui-pack-pad-sm,${d.padSm});border-radius:var(--iui-pack-radius-sm,${d.radiusSm});border:1px solid var(--iui-pack-border);background:var(--iui-pack-surface-muted);color:var(--iui-pack-fg);font-size:var(--iui-pack-font,${d.fontSize})}
@@ -1947,6 +1953,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     window.iuiSandbox.submitForm(form);
   }, true);
   window.addEventListener('load', function () { measure(true); });
+` + DESIGN_ENHANCE_JS + `
   // F13: size changes come from ResizeObserver (html, body, page root); the
   // MutationObserver only watches structure/text, not every attribute tick.
   if (typeof ResizeObserver !== 'undefined' && document.documentElement) {
@@ -1964,7 +1971,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
   }
   if (typeof MutationObserver !== 'undefined' && document.body) {
     try {
-      new MutationObserver(function () { measure(); })
+      new MutationObserver(function () { measure(); if (window.__iuiEnhance) window.__iuiEnhance(); })
         .observe(document.body, { childList: true, subtree: true, characterData: true });
     } catch (e) {}
   }
@@ -2368,8 +2375,18 @@ function buildLeafletTileGuardScript(): string {
         try { layer = L.layerGroup(); } catch (e2) { layer = null; }
         if (!layer) return;
         map.__iuiMarkerLayer = layer;
+        // D6: never stack a host pin on a marker the author already shows (visible twice once pins are spread).
+        var authorKeys = Object.create(null);
+        try {
+          map.eachLayer(function (lyr) {
+            if (!lyr || !lyr._icon || typeof lyr.getLatLng !== 'function') return;
+            var all = lyr.getLatLng();
+            authorKeys[Number(all.lat).toFixed(5) + ',' + Number(all.lng).toFixed(5)] = 1;
+          });
+        } catch (eK) {}
         for (var pi = 0; pi < points.length; pi++) {
           var p = points[pi];
+          if (authorKeys[Number(p.lat).toFixed(5) + ',' + Number(p.lng).toFixed(5)]) continue;
           try {
             var icon = L.divIcon({
               className: 'iui-host-pin',
@@ -2418,6 +2435,7 @@ function buildLeafletTileGuardScript(): string {
     L.map = function () {
       var map = origMap.apply(this, arguments);
       trackMap(map);
+      try { if (window.__iuiTrackDeclutter) window.__iuiTrackDeclutter(map); } catch (eD) {}
       try {
         map.on('tileerror', function () {
           tileFails++;
@@ -2648,7 +2666,7 @@ function buildChartGuardScript(): string {
           cv.__iuiChartOk = true;
           var tip = document.createElement('div');
           tip.className = 'iui-sandbox-muted';
-          tip.style.cssText = 'font-size:11px;margin-top:4px';
+          tip.style.cssText = 'font-size:12px;margin-top:4px';
           tip.textContent = '示意折线（模型图表未挂载时的回退）';
           if (cv.parentElement) cv.parentElement.appendChild(tip);
         }
@@ -3133,7 +3151,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
     spec: {
       title: '并排对比',
       height: 280,
-      css: '.opt h3{margin:0 0 6px;font-size:14px}.metric{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f4f4f5}.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#f4f4f5;margin-left:6px}',
+      css: '.opt h3{margin:0 0 6px;font-size:14px}.metric{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f4f4f5}.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:#f4f4f5;margin-left:6px}',
       html: '<div class="iui-sandbox-card"><div class="iui-sandbox-toolbar"><strong>方案对比</strong><span class="iui-sandbox-muted">示例</span></div><div class="iui-sandbox-compare"><div class="iui-sandbox-kpi opt"><h3>方案 A<span class="pill">推荐</span></h3><div class="metric"><span>价格</span><strong>¥128</strong></div><div class="metric"><span>耗时</span><strong>2h</strong></div><button type="button" data-iui-action="pick" data-iui-payload="{&quot;id&quot;:&quot;a&quot;}">选择 A</button></div><div class="iui-sandbox-kpi opt"><h3>方案 B</h3><div class="metric"><span>价格</span><strong>¥96</strong></div><div class="metric"><span>耗时</span><strong>3.5h</strong></div><button type="button" class="secondary" data-iui-action="pick" data-iui-payload="{&quot;id&quot;:&quot;b&quot;}">选择 B</button></div></div></div>',
       js: '',
       stages: ['css', 'html'],

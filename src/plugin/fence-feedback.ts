@@ -60,6 +60,7 @@ import {
 } from '../config/stream-heuristics.ts'
 import { getIntentRule, isExplicitUiAsk } from '../config/referee-rules.ts'
 import { recordFenceOp } from '../shared/fence-ops.ts'
+import { designLintNote, lintSandboxDesign, type DesignIssue } from '../shared/design-lint.ts'
 import { ingestToolResultBindings } from './binding-bridge.ts'
 
 /** Plugin name recorded on every message this loop steers. */
@@ -228,6 +229,10 @@ interface SessionFeedback {
    * the next turn's first pre-step (once). Cleared after injection.
    */
   pendingNextTurnReminder: string | null
+  /** D1: design-lint note from the last delivered page (next UI turn only, never a steer). */
+  pendingDesignNote: string | null
+  /** Fence fingerprints already design-linted (one note per page body). */
+  designLinted: Set<string>
   /** Fence-first prime already injected this turn. */
   primedThisTurn: boolean
   /** Mid-turn fence nudge already injected (step>0, still no fence). */
@@ -598,6 +603,33 @@ export interface FenceFeedbackOptions {
   getFormatRouterConfig?: () => FormatRouterConfig
 }
 
+/**
+ * D1: lint every closed iui-html fence of a delivered reply once and keep a
+ * short note for the next UI turn. Never steers the current turn.
+ */
+export function queueDesignNote(
+  state: { text: string; pendingDesignNote: string | null; designLinted: Set<string> },
+  logger?: { info?: (msg: string) => void },
+): string | null {
+  const issues: DesignIssue[] = []
+  for (const fence of extractDshUiFences(state.text)) {
+    if (!fence.closed) continue
+    const fp = fenceFingerprint(fence.raw)
+    if (state.designLinted.has(fp)) continue
+    state.designLinted.add(fp)
+    if (state.designLinted.size > 64) state.designLinted.delete(state.designLinted.values().next().value!)
+    const spec = parseHtmlSandboxFence(fence.raw)
+    if (spec === null) continue
+    issues.push(...lintSandboxDesign({ html: spec.html, css: spec.css }))
+  }
+  if (issues.length === 0) return null
+  const note = designLintNote(issues)
+  state.pendingDesignNote = note
+  recordFenceOp('design_lint', [...new Set(issues.map((i) => i.kind))].join(','))
+  logger?.info?.(`iui: design lint queued ${issues.length} issue(s) for next UI turn`)
+  return note
+}
+
 export function installFenceFeedback(
   ctx: Context,
   options: FenceFeedbackOptions | boolean,
@@ -636,6 +668,8 @@ export function installFenceFeedback(
         routedFormatId: null,
         routedSource: null,
         pendingNextTurnReminder: null,
+        pendingDesignNote: null,
+        designLinted: new Set(),
         primedThisTurn: false,
         midNudgedThisTurn: false,
         toolsBeforeFence: false,
@@ -878,6 +912,12 @@ export function installFenceFeedback(
       // A reminder from the previous ask only applies if THIS ask also wants a page.
       const reminderApplies = reminder !== null && reminder !== undefined && isExplicitUiAsk(askNow)
       if (!reminderApplies) state.pendingNextTurnReminder = null
+      const designNote = state.pendingDesignNote
+      if (designNote !== null && isExplicitUiAsk(askNow)) {
+        extras.push(createFeedbackMessage(designNote, agent.session.header.version))
+        ctx.logger?.info?.(`iui: injecting design-lint note turn=${turn}`)
+      }
+      state.pendingDesignNote = null
       if (reminderApplies) {
         state.pendingNextTurnReminder = null
         extras.push(createFeedbackMessage(reminder, agent.session.header.version))
@@ -984,6 +1024,7 @@ export function installFenceFeedback(
     // Hard stop: valid fence or successful validate → never steer again this turn.
     if (state.validatedOkThisTurn || replyHasValidFence(state.text)) {
       state.deliveredThisTurn = true
+      if (opts.formatReferee) queueDesignNote(state, ctx.logger)
       return
     }
     const usedThisTurn = state.correctionsTurn === turn ? state.correctionsThisTurn : 0

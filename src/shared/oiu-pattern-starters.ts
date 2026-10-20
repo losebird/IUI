@@ -79,6 +79,129 @@ strip.onclick=function(e){
 setTimeout(function(){ tour.play(); }, 400);
 `.trim()
 
+/** D7: 3D starter — three-point light, soft shadows, auto-fit camera (object ≥ 40% of frame), damped orbit. */
+const SCENE_3D_JS = `
+(async function(){
+  var wrap=document.getElementById('stage');
+  var note=wrap.querySelector('.iui-3d-loading');
+  try{
+    var THREE=await import('three');
+    var OC=(await import('three/addons/controls/OrbitControls.js')).OrbitControls;
+    var w=wrap.clientWidth||480,h=wrap.clientHeight||320;
+    var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    renderer.setSize(w,h);
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace=THREE.SRGBColorSpace;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    wrap.appendChild(renderer.domElement);
+    var scene=new THREE.Scene();
+    var camera=new THREE.PerspectiveCamera(40,w/h,0.05,200);
+    // Three-point lighting + soft sky fill.
+    scene.add(new THREE.HemisphereLight(0xffffff,0x8a8070,0.55));
+    var key=new THREE.DirectionalLight(0xffffff,2.2);
+    key.position.set(4,6,3);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.radius=4;key.shadow.bias=-0.0005;
+    var fill=new THREE.DirectionalLight(0xdbe8ff,0.7);fill.position.set(-5,2.5,2);
+    var rim=new THREE.DirectionalLight(0xffffff,1.2);rim.position.set(-2,4,-5);
+    scene.add(key,fill,rim);
+    var obj=new THREE.Mesh(new THREE.TorusKnotGeometry(0.8,0.28,220,32),new THREE.MeshStandardMaterial({color:0x185FA5,roughness:0.32,metalness:0.2}));
+    obj.castShadow=true;obj.position.y=1.15;scene.add(obj);
+    var ground=new THREE.Mesh(new THREE.CircleGeometry(4,64),new THREE.ShadowMaterial({opacity:0.22}));
+    ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+    var controls=new OC(camera,renderer.domElement);
+    controls.enableDamping=true;controls.dampingFactor=0.08;
+    var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    controls.autoRotate=!still;controls.autoRotateSpeed=1.2;
+    // Auto-fit: the object's bounding sphere fills ~70% of the smaller frame side (never < 40%).
+    function fit(){
+      var sphere=new THREE.Box3().setFromObject(obj).getBoundingSphere(new THREE.Sphere());
+      var v=camera.fov*Math.PI/360,hz=Math.atan(Math.tan(v)*camera.aspect);
+      var d=sphere.radius/Math.sin(0.7*Math.min(v,hz));
+      var dir=new THREE.Vector3(1,0.65,1.2).normalize();
+      camera.position.copy(sphere.center).addScaledVector(dir,d);
+      camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();
+      controls.target.copy(sphere.center);controls.minDistance=d*0.5;controls.maxDistance=d*3;controls.update();
+    }
+    fit();
+    controls.addEventListener('start',function(){controls.autoRotate=false;sync();});
+    var running=false;
+    function loop(){controls.update();renderer.render(scene,camera);}
+    function run(on){if(on===running)return;running=on;renderer.setAnimationLoop(on?loop:null);}
+    run(true);
+    document.addEventListener('visibilitychange',function(){run(!document.hidden);});
+    if(window.ResizeObserver)new ResizeObserver(function(){
+      var W=wrap.clientWidth,H=wrap.clientHeight;if(!W||!H)return;
+      renderer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();
+    }).observe(wrap);
+    var spin=document.getElementById('spin');
+    function sync(){spin.setAttribute('aria-pressed',controls.autoRotate?'true':'false');spin.textContent=controls.autoRotate?'暂停旋转':'自动旋转';}
+    spin.onclick=function(){controls.autoRotate=!controls.autoRotate;sync();};
+    document.getElementById('reset').onclick=function(){fit();};
+    sync();
+    wrap.setAttribute('data-iui-3d-ready','1');
+  }catch(e){
+    wrap.setAttribute('data-iui-3d-error','1');
+    note.textContent='3D 场景加载失败：'+(e&&e.message?e.message:e);
+  }
+})();
+`.trim()
+
+/** D-补充: meeting-room board (data personality, two-layer stats, equal-height cards). */
+const MEETING_ROOMS_JS = `
+var NOW=10.5;
+var rooms=[
+  {n:'星河厅',f:'3F',cap:20,b:[[9,10],[10,12],[14,15.5]],m:'季度规划评审'},
+  {n:'松风',f:'3F',cap:8,b:[[13,14],[16,17]],m:''},
+  {n:'云杉',f:'5F',cap:6,b:[[10.75,11.5],[15,16]],m:'候选人面试'},
+  {n:'海棠',f:'5F',cap:12,b:[[9.5,11],[11,12.5]],m:'设计周会'},
+  {n:'竹影（电话间）',f:'6F',cap:2,b:[],m:''},
+  {n:'远山',f:'6F',cap:16,b:[[17,18.5]],m:''}
+];
+function state(r){
+  for(var i=0;i<r.b.length;i++){var s=r.b[i];if(NOW>=s[0]&&NOW<s[1])return {k:'busy',t:'使用中',until:s[1]};}
+  for(var j=0;j<r.b.length;j++){var x=r.b[j];if(x[0]>NOW&&x[0]-NOW<=0.5)return {k:'soon',t:'即将开始',at:x[0]};}
+  return {k:'free',t:'空闲'};
+}
+function hm(v){var h=Math.floor(v),m=Math.round((v-h)*60);return h+':'+(m<10?'0':'')+m;}
+var filter='all';
+function render(){
+  var free=0,busy=0,total=0,used=0;
+  rooms.forEach(function(r){var st=state(r);if(st.k==='busy')busy++;else free++;total+=r.b.length;r.b.forEach(function(s){used+=s[1]-s[0];});});
+  document.getElementById('sFree').firstChild.nodeValue=String(free);
+  document.getElementById('sBusy').firstChild.nodeValue=String(busy);
+  document.getElementById('sTotal').firstChild.nodeValue=String(total);
+  document.getElementById('sUse').firstChild.nodeValue=String(Math.round(used/(rooms.length*12)*100));
+  var grid=document.getElementById('rooms');grid.innerHTML='';
+  rooms.forEach(function(r,i){
+    var st=state(r);
+    if(filter!=='all'&&!(filter==='free'?st.k!=='busy':st.k==='busy'))return;
+    var bars=r.b.map(function(s){return '<i style="left:'+((s[0]-8)/12*100)+'%;width:'+((s[1]-s[0])/12*100)+'%"></i>';}).join('');
+    var line=st.k==='busy'?(r.m||'已预订')+' · 至 '+hm(st.until):st.k==='soon'?'下一场 '+hm(st.at)+' 开始':'现在可用';
+    var el=document.createElement('article');
+    el.className='room';
+    el.innerHTML='<div class="top"><div class="iui-card-title">'+r.n+'</div><span class="st '+st.k+'">'+st.t+'</span></div>'+
+      '<div class="iui-card-summary">'+r.f+' · '+r.cap+' 人 · '+line+'</div>'+
+      '<div class="tl" aria-label="8:00–20:00 预订情况">'+bars+'<b style="left:'+((NOW-8)/12*100)+'%"></b></div>'+
+      '<div class="ticks"><span>8:00</span><span>14:00</span><span>20:00</span></div>'+
+      '<button type="button" class="iui-card-foot'+(st.k==='busy'?' secondary':' primary')+'" data-i="'+i+'">'+(st.k==='busy'?'查看日程':'预订')+'</button>';
+    grid.appendChild(el);
+  });
+}
+document.getElementById('rooms').onclick=function(e){
+  var b=e.target.closest('button[data-i]');if(!b)return;
+  var r=rooms[+b.dataset.i];
+  window.iuiSandbox.action('book_room',{room:r.n,floor:r.f,capacity:r.cap});
+};
+document.getElementById('flt').onclick=function(e){
+  var b=e.target.closest('button[data-f]');if(!b)return;
+  filter=b.dataset.f;
+  this.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false');});
+  render();
+};
+render();
+`.trim()
+
 export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   {
     id: 'itinerary-coast',
@@ -87,7 +210,7 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
     spec: {
       title: '加州海岸三日',
       height: 560,
-      css: '.disclaimer{font-size:11px;color:var(--color-text-tertiary);margin-top:4px}',
+      css: '.disclaimer{font-size:12px;color:var(--color-text-tertiary);margin-top:4px}',
       html: '<div class="iui-itinerary" id="trip"><div class="iui-itinerary-head"><div><div class="iui-itinerary-title">加州海岸 · 三日</div><div class="iui-itinerary-sub">SF → Monterey → Big Sur</div></div><div class="iui-chip">3 天</div><div class="iui-chip">3 站</div></div><div class="iui-map-wrap"><div id="map" style="height:100%;width:100%"></div><div class="iui-map-chrome"><button type="button" id="pause">Pause</button><button type="button" id="replay">Replay</button><span class="iui-chip" id="status" role="status">准备中</span></div></div><div class="iui-cards-strip" id="strip"></div><div class="iui-sandbox-card" id="sheet"><b>点针或卡片</b> 看停留 / 怎么去 / 避坑</div><p class="disclaimer">示意行程连线 — 非核实驾车路线 · © OSM</p></div>',
       js: ITINERARY_JS,
       stages: ['css', 'html', 'js'],
@@ -105,8 +228,8 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
     spec: {
       title: '上海天气',
       height: 560,
-      css: ".iui-weather{display:flex;flex-direction:column;gap:14px}.iui-weather-hero{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:18px 20px;border-radius:var(--border-radius-xl);background:linear-gradient(135deg,var(--color-background-info),var(--color-background-secondary));border:1px solid var(--color-border-tertiary)}.iui-weather-hero .temp{font-size:56px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--color-text-primary)}.iui-weather-hero .meta{display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right}.iui-weather-hero .icon{font-size:42px;line-height:1}.iui-weather-chips{display:flex;flex-wrap:wrap;gap:8px}.iui-weather-chip{padding:8px 12px;border-radius:999px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);font-size:12px;color:var(--color-text-secondary)}.iui-weather-chip strong{color:var(--color-text-primary);font-weight:600;margin-left:4px}.iui-weather-chart{height:200px;position:relative;padding:8px 4px 0}.iui-weather-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.iui-weather-day{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:var(--border-radius-lg);border:1px solid var(--color-border-tertiary);background:var(--color-background-primary);cursor:pointer;font:inherit;color:inherit}.iui-weather-day[aria-current=\"true\"]{border-color:var(--color-border-info);background:var(--color-background-info);box-shadow:0 0 0 1px var(--color-border-info)}.iui-weather-day .wd{font-size:12px;font-weight:600}.iui-weather-day .dt{font-size:10px;color:var(--color-text-tertiary)}.iui-weather-day .ic{font-size:22px;line-height:1.2}.iui-weather-day .cd{font-size:11px;color:var(--color-text-secondary)}.iui-weather-day .rg{font-size:11px;font-weight:600}@media(max-width:560px){.iui-weather-days{grid-template-columns:repeat(4,minmax(0,1fr))}.iui-weather-hero .temp{font-size:44px}}",
-      html: "<div class=\"iui-sandbox-card iui-weather\"><div class=\"iui-weather-hero\"><div><div class=\"iui-sandbox-muted\" id=\"hero-loc\">\u4e0a\u6d77 \u00b7 \u4eca\u65e5</div><div class=\"temp\" id=\"hero-temp\">26\u00b0</div><div class=\"iui-weather-chips\" style=\"margin-top:10px\"><span class=\"iui-weather-chip\">\u4f53\u611f<strong>24\u00b0</strong></span><span class=\"iui-weather-chip\">\u6e7f\u5ea6<strong>62%</strong></span><span class=\"iui-weather-chip\">\u4e1c\u5317\u98ce<strong>3 \u7ea7</strong></span><span class=\"iui-weather-chip\">\u7a7a\u6c14<strong>\u826f 68</strong></span></div></div><div class=\"meta\"><div class=\"icon\" id=\"hero-icon\">\u26c5</div><div id=\"hero-cond\" style=\"font-weight:600\">\u591a\u4e91</div><div class=\"iui-sandbox-muted\" id=\"hero-range\">26\u00b0 / 17\u00b0</div></div></div><div><div class=\"iui-sandbox-muted\" style=\"margin-bottom:6px\">\u4eca\u65e5\u9010\u65f6\u6c14\u6e29</div><div class=\"iui-weather-chart\"><canvas id=\"wxChart\"></canvas></div></div><div><div class=\"iui-sandbox-muted\" style=\"margin-bottom:8px\">\u672a\u6765 7 \u5929 \u00b7 \u70b9\u51fb\u5207\u6362</div><div class=\"iui-weather-days\" id=\"days\"></div></div><p class=\"iui-sandbox-muted\" style=\"font-size:11px\">\u793a\u4f8b\u6570\u636e \u00b7 \u672c\u5730\u5207\u6362\u4e0d\u8c03\u6a21\u578b</p></div>",
+      css: ".iui-weather{display:flex;flex-direction:column;gap:14px}.iui-weather-hero{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:18px 20px;border-radius:var(--border-radius-xl);background:linear-gradient(135deg,var(--color-background-info),var(--color-background-secondary));border:1px solid var(--color-border-tertiary)}.iui-weather-hero .temp{font-size:56px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--color-text-primary)}.iui-weather-hero .meta{display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right}.iui-weather-hero .icon{font-size:42px;line-height:1}.iui-weather-chips{display:flex;flex-wrap:wrap;gap:8px}.iui-weather-chip{padding:8px 12px;border-radius:999px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);font-size:12px;color:var(--color-text-secondary)}.iui-weather-chip strong{color:var(--color-text-primary);font-weight:600;margin-left:4px}.iui-weather-chart{height:200px;position:relative;padding:8px 4px 0}.iui-weather-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.iui-weather-day{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:var(--border-radius-lg);border:1px solid var(--color-border-tertiary);background:var(--color-background-primary);cursor:pointer;font:inherit;color:inherit}.iui-weather-day[aria-current=\"true\"]{border-color:var(--color-border-info);background:var(--color-background-info);box-shadow:0 0 0 1px var(--color-border-info)}.iui-weather-day .wd{font-size:12px;font-weight:600}.iui-weather-day .dt{font-size:12px;color:var(--color-text-tertiary)}.iui-weather-day .ic{font-size:22px;line-height:1.2}.iui-weather-day .cd{font-size:12px;color:var(--color-text-secondary)}.iui-weather-day .rg{font-size:12px;font-weight:600}@media(max-width:560px){.iui-weather-days{grid-template-columns:repeat(4,minmax(0,1fr))}.iui-weather-hero .temp{font-size:44px}}",
+      html: "<div class=\"iui-sandbox-card iui-weather\"><div class=\"iui-weather-hero\"><div><div class=\"iui-sandbox-muted\" id=\"hero-loc\">\u4e0a\u6d77 \u00b7 \u4eca\u65e5</div><div class=\"temp\" id=\"hero-temp\">26\u00b0</div><div class=\"iui-weather-chips\" style=\"margin-top:10px\"><span class=\"iui-weather-chip\">\u4f53\u611f<strong>24\u00b0</strong></span><span class=\"iui-weather-chip\">\u6e7f\u5ea6<strong>62%</strong></span><span class=\"iui-weather-chip\">\u4e1c\u5317\u98ce<strong>3 \u7ea7</strong></span><span class=\"iui-weather-chip\">\u7a7a\u6c14<strong>\u826f 68</strong></span></div></div><div class=\"meta\"><div class=\"icon\" id=\"hero-icon\">\u26c5</div><div id=\"hero-cond\" style=\"font-weight:600\">\u591a\u4e91</div><div class=\"iui-sandbox-muted\" id=\"hero-range\">26\u00b0 / 17\u00b0</div></div></div><div><div class=\"iui-sandbox-muted\" style=\"margin-bottom:6px\">\u4eca\u65e5\u9010\u65f6\u6c14\u6e29</div><div class=\"iui-weather-chart\"><canvas id=\"wxChart\"></canvas></div></div><div><div class=\"iui-sandbox-muted\" style=\"margin-bottom:8px\">\u672a\u6765 7 \u5929 \u00b7 \u70b9\u51fb\u5207\u6362</div><div class=\"iui-weather-days\" id=\"days\"></div></div><p class=\"iui-sandbox-muted\" style=\"font-size:12px\">\u793a\u4f8b\u6570\u636e \u00b7 \u672c\u5730\u5207\u6362\u4e0d\u8c03\u6a21\u578b</p></div>",
       js: "var days=[\n  {d:'\u4eca\u65e5',date:'10/11',icon:'\u26c5',cond:'\u591a\u4e91',hi:26,lo:17},\n  {d:'\u5468\u4e00',date:'10/12',icon:'\u2600\ufe0f',cond:'\u6674',hi:28,lo:18},\n  {d:'\u5468\u4e8c',date:'10/13',icon:'\u2600\ufe0f',cond:'\u6674',hi:27,lo:19},\n  {d:'\u5468\u4e09',date:'10/14',icon:'\ud83c\udf26\ufe0f',cond:'\u5c0f\u96e8',hi:24,lo:16},\n  {d:'\u5468\u56db',date:'10/15',icon:'\u26c5',cond:'\u591a\u4e91',hi:25,lo:17},\n  {d:'\u5468\u4e94',date:'10/16',icon:'\ud83c\udf27\ufe0f',cond:'\u4e2d\u96e8',hi:22,lo:15},\n  {d:'\u5468\u516d',date:'10/17',icon:'\u26c5',cond:'\u591a\u4e91',hi:23,lo:16}\n];\nvar hourly=[18,19,20,22,24,26,25,23,21];\nvar hourlyL=['08','10','12','14','16','18','20','22','24'];\nvar selected=0;\nfunction paintHero(i){\n  var x=days[i];\n  document.getElementById('hero-loc').textContent='\u4e0a\u6d77 \u00b7 '+x.date+' \u00b7 '+x.d;\n  document.getElementById('hero-temp').textContent=x.hi+'\u00b0';\n  document.getElementById('hero-cond').textContent=x.cond;\n  document.getElementById('hero-icon').textContent=x.icon;\n  document.getElementById('hero-range').textContent=x.hi+'\u00b0 / '+x.lo+'\u00b0';\n  document.querySelectorAll('.iui-weather-day').forEach(function(el,idx){\n    el.setAttribute('aria-current', idx===i?'true':'false');\n  });\n}\nfunction paintDays(){\n  var row=document.getElementById('days');\n  row.innerHTML='';\n  days.forEach(function(x,i){\n    var b=document.createElement('button');\n    b.type='button';\n    b.className='iui-weather-day';\n    b.innerHTML='<span class=\"wd\">'+x.d+'</span><span class=\"dt\">'+x.date+'</span><span class=\"ic\">'+x.icon+'</span><span class=\"cd\">'+x.cond+'</span><span class=\"rg\">'+x.hi+'\u00b0/'+x.lo+'\u00b0</span>';\n    b.onclick=function(){ selected=i; paintHero(i); window.iuiSandbox.action('weather_day',{i:i,day:x.d}); };\n    row.appendChild(b);\n  });\n  paintHero(selected);\n}\npaintDays();\n(function paintChart(){\n  var ctx=document.getElementById('wxChart');\n  if(!ctx) return;\n  var Chart=window.Chart;\n  if(!Chart){ setTimeout(paintChart, 40); return; }\n  if(window.iuiCreateChart){\n    window.iuiCreateChart(ctx,{\n      type:'line',\n      data:{labels:hourlyL,datasets:[{label:'\u6c14\u6e29',data:hourly,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,.12)',fill:true,tension:.35,pointRadius:2,borderWidth:2}]},\n      options:{plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#5f5e58'}},y:{beginAtZero:false,grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:11},color:'#5f5e58',callback:function(v){return v+'\u00b0'}}}}}\n    });\n  } else {\n    new Chart(ctx,{type:'line',data:{labels:hourlyL,datasets:[{label:'\u6c14\u6e29',data:hourly,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,.12)',fill:true,tension:.35,pointRadius:2,borderWidth:2}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:false}}}});\n  }\n  ctx.__iuiChartOk=true;\n  window.iuiSandbox&&window.iuiSandbox.resize();\n})();",
       stages: ['css', 'html', 'js'],
       partial: false,
@@ -177,6 +300,40 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
       html: '<div class="iui-sandbox-card" style="display:grid;gap:10px"><h3>产品结构</h3><pre class="mermaid iui-mindmap">mindmap\n  root((IUI))\n    地图\n    天气\n    表格\n    脑图</pre></div>',
       js: "if(window.mermaid&&mermaid.run)mermaid.run({querySelector:'.mermaid'});",
       stages: ['html', 'js'],
+      partial: false,
+      cssComplete: true,
+      htmlComplete: true,
+      jsComplete: true,
+    },
+  },
+  {
+    id: 'scene-3d',
+    title: '3D 展示台',
+    summary: '三点光源 + 阴影 + 自动取景 + OrbitControls 阻尼 + 加载占位',
+    spec: {
+      title: '3D 展示台',
+      height: 440,
+      css: '',
+      html: "<div class=\"iui-sandbox-stack\"><div><h2 style=\"margin:0\">3D 展示台</h2><div class=\"iui-sandbox-muted\">三点光源 + 柔和阴影，物体自动居中占画面约 70%</div></div><div class=\"iui-3d-wrap\" id=\"stage\"><div class=\"iui-3d-loading\">正在加载 3D 场景…</div></div><div class=\"iui-sandbox-row\"><button type=\"button\" id=\"reset\" class=\"secondary\">重置视角</button><button type=\"button\" id=\"spin\" class=\"secondary\" aria-pressed=\"true\">暂停旋转</button><span class=\"iui-sandbox-muted\">拖动旋转 · 滚轮或双指缩放</span></div></div>",
+      js: SCENE_3D_JS,
+      stages: ['html', 'js'],
+      partial: false,
+      cssComplete: true,
+      htmlComplete: true,
+      jsComplete: true,
+    },
+  },
+  {
+    id: 'meeting-rooms',
+    title: '会议室看板',
+    summary: '数据型风格 + 上下两层数字 + 等高卡片 + 时间轴',
+    spec: {
+      title: '会议室看板',
+      height: 620,
+      css: ".head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}.room{gap:8px;padding:14px;border-radius:var(--border-radius-lg);background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary)}.room .top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.st{flex:none;font-size:var(--fs-xs);font-weight:600;padding:2px 8px;border-radius:999px}.st.free{background:var(--color-background-success);color:var(--color-text-success)}.st.busy{background:var(--color-background-danger);color:var(--color-text-danger)}.st.soon{background:var(--color-background-warning);color:var(--color-text-warning)}.tl{position:relative;height:8px;border-radius:4px;background:var(--color-background-tertiary);margin-top:4px}.tl i{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--accent-fill)}.tl b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--color-text-danger);border-radius:1px}.ticks{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--color-text-tertiary)}.room button{width:100%}#rooms{margin-top:12px}",
+      html: "<div data-iui-style=\"data\"><div class=\"head\"><div><h2 style=\"margin:0\">会议室看板</h2><div class=\"iui-sandbox-muted\">今天 · 当前 10:30（示例数据）</div></div><div class=\"iui-sandbox-tabbar\" id=\"flt\" role=\"tablist\"><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"all\" aria-selected=\"true\">全部</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"free\" aria-selected=\"false\">可用</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"busy\" aria-selected=\"false\">使用中</button></div></div><div class=\"iui-stats\"><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sFree\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">现在可用</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sBusy\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">使用中</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sTotal\">0<span class=\"unit\">场</span></div><div class=\"iui-stat-label\">今日预订</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sUse\">0<span class=\"unit\">%</span></div><div class=\"iui-stat-label\">今日利用率（8:00–20:00）</div></div></div><div class=\"iui-card-grid\" id=\"rooms\"></div></div>",
+      js: MEETING_ROOMS_JS,
+      stages: ['css', 'html', 'js'],
       partial: false,
       cssComplete: true,
       htmlComplete: true,

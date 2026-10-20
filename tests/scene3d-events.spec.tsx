@@ -45,7 +45,12 @@ vi.mock('three', () => {
     DirectionalLight: class {
       position = { set() {} }
     },
-    GridHelper: class {},
+    GridHelper: class {
+      position = { set() {} }
+    },
+    PlaneGeometry: FakeGeometry,
+    ShadowMaterial: FakeMaterial,
+    PCFSoftShadowMap: 2,
     BoxGeometry: FakeGeometry,
     SphereGeometry: FakeGeometry,
     ConeGeometry: FakeGeometry,

@@ -49,6 +49,7 @@ import {
 } from './theme/apply-theme.ts'
 import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
+import { SandboxSkeleton, sandboxStreamProgress } from './sandbox-skeleton.tsx'
 import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
@@ -702,6 +703,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         void insertIntoComposer(prompt.slice(0, 2000))
         return
       }
+      if (event.data.type === 'copyText') {
+        // D8: only on a real click inside the frame (user activation propagates to the host).
+        const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation
+        if (activation !== undefined && !activation.isActive) return
+        try { void navigator.clipboard?.writeText(event.data.text).catch(() => {}) } catch { /* ignore */ }
+        return
+      }
       if (event.data.type === 'openLink') {
         const url = event.data.url.trim()
         if (!isAllowedSandboxOpenUrl(url)) {
@@ -812,6 +820,16 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           },
         ]}
       />
+    )
+  }
+
+  // D10: a fence that is still streaming shows a skeleton + stage progress, never a blank box.
+  if (isSandboxSpecEmpty(parsed) && starterOverride === null && parsed.partial) {
+    const prog = sandboxStreamProgress(parsed)
+    return (
+      <div style={SHELL_STYLE} data-iui-html-sandbox="empty">
+        <SandboxSkeleton label={t(`sandbox.skeleton.${prog.phase}`)} pct={prog.pct} height={clampHeight(baseHeight, 220)} />
+      </div>
     )
   }
 
@@ -1080,7 +1098,11 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
             if (!parsed.partial) setReady(true)
           }}
         />}
-        {!storageReady && <div style={{ ...FRAME_STYLE, height: fullscreen ? '100%' : height }} aria-busy="true" />}
+        {!storageReady && <SandboxSkeleton label={t('sandbox.skeleton.loading')} height={fullscreen ? '100%' : height} showProgress={false} />}
+        {storageReady && parsed.partial && !stopped && parsed.html.trim() === '' && (() => {
+          const prog = sandboxStreamProgress(parsed)
+          return <SandboxSkeleton overlay label={t(`sandbox.skeleton.${prog.phase}`)} pct={prog.pct} />
+        })()}
         {hung && !stopped && (
           <div
             data-iui-sandbox-hung="1"

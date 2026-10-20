@@ -24,7 +24,9 @@ describe('OIU design-system port', () => {
     expect(css).toContain('fadeSlideIn')
     expect(css).not.toContain('.iui-itinerary .iui-pin-dot { opacity: 0; }')
     expect(css).toMatch(/\.iui-pin-dot \{[\s\S]*opacity: 1;/)
-    expect(css).toMatch(/\.leaflet-container \{[\s\S]*grayscale/)
+    // D6: colored basemap by default; grayscale only behind data-iui-map-style="mono".
+    expect(css).not.toMatch(/\.leaflet-container \{[^}]*grayscale/)
+    expect(css).toMatch(/\[data-iui-map-style="mono"\] \.leaflet-tile-pane[^{]*\{[^}]*grayscale/)
     expect(css).toContain('.iui-gallery .photo img')
     expect(css).toMatch(/\.iui-gallery \.photo img[\s\S]*max-height: min\(70vh, 640px\)/)
     expect(css).toMatch(/\.iui-gallery \.photo img[\s\S]*object-fit: contain !important/)

@@ -28,12 +28,20 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 - CDN 仅 HTTPS：cdn.jsdelivr.net / cdnjs.cloudflare.com / esm.sh / unpkg.com。
 - 交互本地完成；跟宿主通信用 `window.iuiSandbox.sendPrompt / openLink / action`。
 
+## 设计规则（宿主已注入对应样式）
+- **字号只用 12 / 14 / 16 / 20 / 28 / 40**（`--fs-xs` `--fs-sm` `--fs-md` `--fs-lg` `--fs-xl` `--fs-2xl`），任何文字不小于 12px；正文对比度 ≥ 4.5:1。
+- **页面性格**：在页面根元素写 `data-iui-style="tool|content|data|toy"`（工具型简洁 / 内容型杂志 / 数据型看板 / 玩具型活泼），宿主据此给主色 `--accent`、背景、圆角和密度。每页只有**一个视觉主角**（一张大图、一个大数字、一张图表或一个可玩的物体），其他元素都退后。
+- **数字**：`.iui-stat` > `.iui-stat-value`（大号数字，单位放 `<span class="unit">`）+ `.iui-stat-label`（小号说明在下面）；多个放 `.iui-stats`。数字和说明不要写在同一行。
+- **卡片**：并列卡片用 `.iui-card-grid`（自动等高），标题 `.iui-card-title` 最多 2 行，摘要 `.iui-card-summary` 最多 3 行，底部按钮加 `.iui-card-foot`。
+- 横向滚动区域、代码块（`<pre>`）宿主会自动加渐隐提示和「换行 / 复制」按钮，不用自己做。
+- **3D**：画布放 `.iui-3d-wrap`（内放 `.iui-3d-loading` 占位，就绪后给 wrap 设 `data-iui-3d-ready`）；三点光源 + 阴影，相机按物体包围球自动取景（物体占画面 ≥ 40%），`three/addons/controls/OrbitControls.js` 开阻尼。
+
 ## 关键模式
 
 ### 地图 / 多站（南京密度，不是冻成某一城的模版）
 2 站及以上（行程、探店、一日游、景点详解）必须同时有：
-1. 真 Leaflet（`.iui-map-wrap` 高 300px）+ Pause/Replay
-2. 编号针 + `createTripAnimator`（`pinElements` 先丢掉 `getElement()` 的 null）
+1. 真 Leaflet（`.iui-map-wrap` 高 300px，默认彩色底图）+ Pause/Replay
+2. 编号针 `.iui-pin-dot`（按类别加 `data-cat="food|sight|hotel|shop|nature|culture|transport"` 着色，选中项加 `.active` 会放大置顶；宿主自动把挤在一起的针错开）+ `createTripAnimator`（`pinElements` 先丢掉 `getElement()` 的 null）
 3. 横滑 `.iui-cards-strip` + `.iui-stop-card`（多卡在第一次圆角框里滚，不要撑破边框）
 4. **点针或卡 → 页内详解**：停留 / 票或预约 / 怎么去 / 避坑（加一句为何排这一站）
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。

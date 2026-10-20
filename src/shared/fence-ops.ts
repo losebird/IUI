@@ -17,6 +17,7 @@ export type FenceOpKind =
   | 'validated_ok'
   | 'gateway_repair'
   | 'gateway_reject'
+  | 'design_lint'
 
 export type FenceOpsSnapshot = {
   readonly startedAt: string

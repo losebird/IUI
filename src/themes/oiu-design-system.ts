@@ -45,6 +45,20 @@ export const OIU_THEME_CSS = `
   --border-radius-lg: 12px;
   --border-radius-xl: 16px;
 
+  /* D1 type scale — the ONLY sizes pages should use (floor 12px). */
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 28px;
+  --fs-2xl: 40px;
+
+  /* D2 page accent (personality presets override it). */
+  --accent: var(--color-text-info);
+  --accent-soft: var(--color-background-info);
+  --accent-fill: #185FA5;
+  --on-accent: #ffffff;
+
   --p: var(--color-text-primary);
   --s: var(--color-text-secondary);
   --t: var(--color-text-tertiary);
@@ -57,7 +71,7 @@ export const OIU_THEME_CSS = `
   --iui-pack-fg: var(--color-text-primary);
   --iui-pack-muted-fg: var(--color-text-secondary);
   --iui-pack-border: var(--color-border-tertiary);
-  --iui-pack-accent: var(--color-text-info);
+  --iui-pack-accent: var(--accent, var(--color-text-info));
   --iui-pack-on-accent: #ffffff;
   --iui-pack-ok: var(--color-text-success);
   --iui-pack-warn: var(--color-text-warning);
@@ -335,10 +349,17 @@ a:hover { text-decoration: underline; }
   overflow: hidden; border: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-secondary);
 }
+/* D6: colored, slightly muted basemap by default; data-iui-map-style="mono" keeps the old grayscale look. */
 .iui-map-wrap .leaflet-container,
 .leaflet-container {
   height: 100%; width: 100%; min-height: 280px;
+}
+.leaflet-container .leaflet-tile-pane { filter: saturate(0.82) contrast(1.02); }
+[data-iui-map-style="mono"] .leaflet-tile-pane, .leaflet-container[data-iui-map-style="mono"] .leaflet-tile-pane {
   filter: grayscale(1) contrast(1.12) brightness(1.02);
+}
+@media (prefers-color-scheme: dark) {
+  .leaflet-container .leaflet-tile-pane { filter: saturate(0.7) brightness(0.86) contrast(1.05); }
 }
 .iui-map-chrome {
   position: absolute; z-index: 500; left: 12px; bottom: 12px;
@@ -370,7 +391,7 @@ a:hover { text-decoration: underline; }
 .iui-stop-card .body { padding: 10px 12px; }
 .iui-stop-card .num {
   display: inline-flex; width: 20px; height: 20px; border-radius: 50%;
-  align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
   background: var(--color-text-primary); color: var(--color-background-primary); margin-right: 6px;
 }
 .iui-stop-card .name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
@@ -426,7 +447,7 @@ a:hover { text-decoration: underline; }
   width: 100%; height: auto !important; max-height: min(70vh, 640px); object-fit: contain !important; display: block;
 }
 .iui-photo-credit {
-  font-size: 11px; line-height: 1.35; padding: 4px 10px 8px;
+  font-size: 12px; line-height: 1.35; padding: 4px 10px 8px;
   color: var(--color-text-tertiary, #9ca3af);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -435,13 +456,26 @@ a:hover { text-decoration: underline; }
 .iui-pin-dot {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 50%;
-  background: #fff; color: #111; font: 600 12px var(--font-sans);
-  border: 2px solid #111; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  opacity: 1;
+  background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: #fff; font: 600 12px var(--font-sans);
+  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  opacity: 1; transition: scale 0.18s ease, box-shadow 0.18s ease;
 }
-/* Pins stay visible even if createTripAnimator never gets the DOM.
-   Drop animation uses inline opacity only while playing. */
-.iui-pin-dot.active, .iui-itinerary .iui-pin-dot.active { background: #111; color: #fff; }
+/* D6: category colors (data-cat on the pin or its card), numbered, selected = bigger + ring + on top.
+   Pins stay visible even if createTripAnimator never gets the DOM (inline opacity only while playing). */
+.iui-pin-dot[data-cat="food"], .iui-pin-dot[data-cat="restaurant"], .iui-pin-dot[data-cat="cafe"] { --iui-pin-color: #C2410C; }
+.iui-pin-dot[data-cat="sight"], .iui-pin-dot[data-cat="landmark"], .iui-pin-dot[data-cat="attraction"] { --iui-pin-color: #185FA5; }
+.iui-pin-dot[data-cat="hotel"], .iui-pin-dot[data-cat="lodging"] { --iui-pin-color: #6D28D9; }
+.iui-pin-dot[data-cat="shop"], .iui-pin-dot[data-cat="shopping"] { --iui-pin-color: #BE185D; }
+.iui-pin-dot[data-cat="nature"], .iui-pin-dot[data-cat="park"] { --iui-pin-color: #15803D; }
+.iui-pin-dot[data-cat="culture"], .iui-pin-dot[data-cat="museum"] { --iui-pin-color: #A16207; }
+.iui-pin-dot[data-cat="transport"], .iui-pin-dot[data-cat="station"] { --iui-pin-color: #334155; }
+.iui-pin-dot.active, .iui-pin-dot[aria-current="true"], .iui-itinerary .iui-pin-dot.active {
+  scale: 1.25;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iui-pin-color, var(--accent-fill, #185FA5)) 35%, transparent), 0 2px 8px rgba(0,0,0,0.35);
+}
+.leaflet-marker-icon:has(.iui-pin-dot.active), .leaflet-marker-icon:has(.iui-pin-dot[aria-current="true"]) { z-index: 1000 !important; }
+.leaflet-marker-icon[data-iui-declutter] { transition: translate 0.18s ease; }
+@media (prefers-reduced-motion: reduce) { .iui-pin-dot, .leaflet-marker-icon[data-iui-declutter] { transition: none; } }
 
 .ag-theme-iui, .ag-theme-quartz.ag-theme-iui {
   --ag-background-color: var(--color-background-primary);
@@ -503,10 +537,10 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 1px var(--color-border-info);
 }
 .iui-weather-day .wd { font-size: 12px; font-weight: 600; }
-.iui-weather-day .dt { font-size: 10px; color: var(--color-text-tertiary); }
+.iui-weather-day .dt { font-size: 12px; color: var(--color-text-tertiary); }
 .iui-weather-day .ic { font-size: 22px; line-height: 1.2; }
-.iui-weather-day .cd { font-size: 11px; color: var(--color-text-secondary); }
-.iui-weather-day .rg { font-size: 11px; font-weight: 600; }
+.iui-weather-day .cd { font-size: 12px; color: var(--color-text-secondary); }
+.iui-weather-day .rg { font-size: 12px; font-weight: 600; }
 @media (max-width: 560px) {
   .iui-weather-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .iui-weather-hero .temp { font-size: 44px; }
@@ -584,9 +618,186 @@ a:hover { text-decoration: underline; }
 }
 `.trim()
 
+/** D1–D8 design kit: type scale, page personalities, stat, scroll hints, equal-height cards, code tools, 3D stage. */
+export const OIU_DESIGN_KIT_CSS = `
+/* D1 type scale: 12 / 14 / 16 / 20 / 28 / 40 — nothing below 12px. */
+h1 { font-size: var(--fs-lg); font-weight: 750; }
+h2 { font-size: var(--fs-md); font-weight: 700; }
+h3 { font-size: var(--fs-sm); font-weight: 650; }
+h4 { font-size: var(--fs-xs); font-weight: 650; }
+table { font-size: var(--fs-sm); }
+.iui-sandbox-title, .iui-itinerary-title { font-size: var(--fs-lg); }
+.iui-sandbox-sub, .iui-itinerary-sub, .iui-kanban-card, .iui-tier li, .iui-tier .price small { font-size: var(--fs-sm); }
+.iui-sandbox-badge { font-size: var(--fs-xs); }
+.iui-text-xs { font-size: var(--fs-xs); } .iui-text-sm { font-size: var(--fs-sm); }
+.iui-text-md { font-size: var(--fs-md); } .iui-text-lg { font-size: var(--fs-lg); }
+.iui-text-xl { font-size: var(--fs-xl); } .iui-text-2xl { font-size: var(--fs-2xl); }
+
+/* D2 page personalities: put data-iui-style on the page root.
+   tool 工具型/简洁 · content 内容型/杂志 · data 数据型/看板 · toy 玩具型/活泼 */
+[data-iui-style] {
+  color: var(--color-text-primary);
+  background: var(--iui-style-bg, transparent);
+  border-radius: var(--border-radius-xl);
+  padding: var(--iui-style-pad, 12px);
+  --iui-pack-accent: var(--accent);
+  --iui-pack-tint: var(--accent-soft);
+  --iui-pack-radius: var(--border-radius-lg);
+  --iui-pack-radius-sm: var(--border-radius-md);
+  --iui-pack-radius-control: var(--border-radius-md);
+  --iui-pack-gap: var(--iui-gap, 12px);
+}
+[data-iui-style] a { color: var(--accent); }
+[data-iui-style] input[type="checkbox"], [data-iui-style] input[type="radio"], [data-iui-style] input[type="range"] { accent-color: var(--accent-fill); }
+[data-iui-style] button.primary, [data-iui-style] button[data-variant="primary"] {
+  background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent);
+}
+[data-iui-style="tool"] {
+  --accent: #185FA5; --accent-fill: #185FA5; --accent-soft: #E6F1FB;
+  --iui-style-bg: var(--color-background-primary); --iui-style-pad: 12px; --iui-gap: 8px;
+  --border-radius-md: 6px; --border-radius-lg: 8px; --border-radius-xl: 10px;
+  line-height: 1.55;
+}
+[data-iui-style="content"] {
+  --accent: #9A3412; --accent-fill: #9A3412; --accent-soft: #FBEDE3;
+  --iui-style-bg: #FBF8F3; --iui-style-pad: 24px; --iui-gap: 20px;
+  --border-radius-md: 4px; --border-radius-lg: 6px; --border-radius-xl: 8px;
+  line-height: 1.75;
+}
+[data-iui-style="content"] h1, [data-iui-style="content"] h2, [data-iui-style="content"] h3 { font-family: var(--font-serif); letter-spacing: -0.01em; }
+[data-iui-style="content"] h1 { font-size: var(--fs-xl); }
+[data-iui-style="content"] p { max-width: 68ch; }
+[data-iui-style="data"] {
+  --accent: #4338CA; --accent-fill: #4338CA; --accent-soft: #EEF0FF;
+  --iui-style-bg: var(--color-background-secondary); --iui-style-pad: 16px; --iui-gap: 12px;
+  --border-radius-md: 8px; --border-radius-lg: 10px; --border-radius-xl: 12px;
+  font-variant-numeric: tabular-nums; line-height: 1.5;
+}
+[data-iui-style="toy"] {
+  --accent: #C2185B; --accent-fill: #D6336C; --accent-soft: #FDE7EF;
+  --iui-style-bg: linear-gradient(160deg, #FFF4E6, #FDE7EF); --iui-style-pad: 20px; --iui-gap: 16px;
+  --border-radius-md: 14px; --border-radius-lg: 20px; --border-radius-xl: 28px;
+}
+[data-iui-style="toy"] button { border-radius: 999px; }
+@media (prefers-color-scheme: dark) {
+  [data-iui-style="tool"] { --accent: #85B7EB; --accent-soft: #0C447C; }
+  [data-iui-style="content"] { --accent: #F0A27A; --accent-fill: #C2410C; --accent-soft: #4A2412; --iui-style-bg: #201D19; }
+  [data-iui-style="data"] { --accent: #A5B4FC; --accent-fill: #4F46E5; --accent-soft: #26245A; }
+  [data-iui-style="toy"] { --accent: #F48FB1; --accent-soft: #4A1A2E; --iui-style-bg: linear-gradient(160deg, #2A1F17, #2C1822); }
+}
+
+/* D3 stat: big number on top, small caption below (never one line). */
+.iui-stats { display: grid; gap: var(--iui-gap, 12px); grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr)); }
+.iui-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.iui-stats > .iui-stat {
+  padding: 12px 14px; border-radius: var(--border-radius-lg);
+  background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary);
+}
+.iui-stat-value {
+  font-size: var(--fs-xl); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--color-text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.iui-stat-value .unit, .iui-stat .unit, .iui-sandbox-kpi .value .unit {
+  font-size: 0.5em; font-weight: 600; opacity: 0.6; margin-left: 0.15em; letter-spacing: 0;
+}
+.iui-stat-label { font-size: var(--fs-xs); line-height: 1.4; color: var(--color-text-secondary); }
+.iui-stat-delta { font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-success); }
+.iui-stat-delta.down, .iui-stat-delta[data-dir="down"] { color: var(--color-text-danger); }
+.iui-stat.lg .iui-stat-value { font-size: var(--fs-2xl); }
+.iui-stat.sm .iui-stat-value { font-size: var(--fs-lg); }
+.iui-sandbox-kpi .value { font-variant-numeric: tabular-nums; }
+
+/* D4 horizontal scroll hints (bridge sets data-iui-scroll-fade="l r" + indicator vars). */
+[data-iui-scroll-fade] {
+  --iui-fade-l: 0px; --iui-fade-r: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--iui-fade-l), #000 calc(100% - var(--iui-fade-r)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--iui-fade-l), #000 calc(100% - var(--iui-fade-r)), transparent 100%);
+}
+[data-iui-scroll-fade~="l"] { --iui-fade-l: 28px; }
+[data-iui-scroll-fade~="r"] { --iui-fade-r: 28px; }
+[data-iui-scroll-ind] {
+  background-image: linear-gradient(var(--iui-scroll-ind-color, color-mix(in srgb, var(--accent-fill, #185FA5) 55%, transparent)), var(--iui-scroll-ind-color, color-mix(in srgb, var(--accent-fill, #185FA5) 55%, transparent)));
+  background-repeat: no-repeat;
+  background-size: var(--iui-scroll-w, 0%) 3px;
+  background-position: var(--iui-scroll-x, 0%) 100%;
+}
+
+/* D5 equal-height card grids + line clamps. */
+.iui-card-grid {
+  display: grid; gap: var(--iui-gap, 12px); align-items: stretch;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+}
+.iui-card-grid > * { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.iui-card-foot, .iui-card-grid > * > .cta, .iui-tier > button:last-child, .iui-tier > .cta { margin-top: auto; }
+.iui-clamp-1, .iui-clamp-2, .iui-clamp-3,
+.iui-card-title,
+.iui-hotel-card .name, .iui-product-card .name, .iui-place-card .name, .iui-cover-card .name,
+.iui-card-summary,
+.iui-hotel-card .summary, .iui-product-card .summary, .iui-place-card .summary, .iui-cover-card .summary,
+.iui-hotel-card .desc, .iui-product-card .desc, .iui-place-card .desc, .iui-cover-card .desc,
+.iui-stop-card .meta {
+  display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+}
+.iui-clamp-1, .iui-stop-card .meta { -webkit-line-clamp: 1; line-clamp: 1; }
+.iui-clamp-2, .iui-card-title,
+.iui-hotel-card .name, .iui-product-card .name, .iui-place-card .name, .iui-cover-card .name { -webkit-line-clamp: 2; line-clamp: 2; }
+.iui-clamp-3, .iui-card-summary,
+.iui-hotel-card .summary, .iui-product-card .summary, .iui-place-card .summary, .iui-cover-card .summary,
+.iui-hotel-card .desc, .iui-product-card .desc, .iui-place-card .desc, .iui-cover-card .desc { -webkit-line-clamp: 3; line-clamp: 3; }
+.iui-card-title { font-size: var(--fs-md); font-weight: 600; line-height: 1.35; }
+.iui-card-summary { font-size: var(--fs-sm); line-height: 1.5; color: var(--color-text-secondary); }
+
+/* D6: card numbers match the pin colors. */
+.iui-stop-card .num { background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: #fff; }
+
+/* D8 code blocks: wrap toggle + copy (bridge wraps <pre> in .iui-code-wrap). */
+:where(pre:not(.mermaid)) {
+  font: 13px/1.55 var(--font-mono); tab-size: 2;
+  background: var(--color-background-secondary); color: var(--color-text-primary);
+  border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg);
+  padding: 12px 14px; overflow: auto; margin: 0 0 8px;
+}
+.iui-code-wrap { position: relative; margin: 0 0 8px; min-width: 0; max-width: 100%; }
+.iui-code-wrap > pre { margin: 0; }
+.iui-code-wrap[data-wrap="1"] > pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+.iui-code-tools {
+  display: flex; justify-content: flex-end; gap: 4px; margin: 0 0 4px;
+}
+.iui-code-tools > button {
+  min-height: 26px; padding: 2px 10px; font: 500 12px/1.4 var(--font-sans);
+  border-radius: 6px; background: var(--color-background-primary); color: var(--color-text-secondary);
+  border: 0.5px solid var(--color-border-secondary); box-shadow: none; transform: none;
+}
+.iui-code-tools > button:hover { background: var(--color-background-secondary); color: var(--color-text-primary); transform: none; box-shadow: none; }
+.iui-code-tools > button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+
+/* D7 3D stage: fixed-height frame + loading placeholder until data-iui-3d-ready. */
+.iui-3d-wrap {
+  position: relative; height: 320px; border-radius: var(--border-radius-xl); overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 20%, var(--color-background-primary), var(--color-background-tertiary));
+  border: 0.5px solid var(--color-border-tertiary);
+}
+.iui-3d-wrap canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+.iui-3d-loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+  align-items: center; justify-content: center; font-size: var(--fs-xs); color: var(--color-text-secondary);
+  pointer-events: none; transition: opacity 0.25s ease;
+}
+.iui-3d-loading::before {
+  content: ""; width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--color-border-tertiary); border-top-color: var(--accent-fill, #185FA5);
+  animation: iuiSpin 0.9s linear infinite;
+}
+.iui-3d-wrap[data-iui-3d-ready] .iui-3d-loading { opacity: 0; }
+.iui-3d-wrap[data-iui-3d-error] .iui-3d-loading::before { display: none; }
+@keyframes iuiSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .iui-3d-loading::before { animation: none; } }
+`.trim()
+
 /** Full injected design-system CSS block. */
 export function buildOiuDesignSystemCss(): string {
-  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}`
+  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}`
 }
 
 /** CDN import map for common libs (pinned; see vendor-registry). Leaflet = UMD auto-inject. */
@@ -762,6 +973,21 @@ Colors (ALWAYS use CSS variables — never hardcode hex for text/backgrounds):
 
 Form controls (button, input, textarea, select, range, checkbox, radio) are pre-styled — do not restyle basics.
 
+Type scale (ONLY these sizes; nothing below 12px): --fs-xs 12 / --fs-sm 14 / --fs-md 16 / --fs-lg 20 / --fs-xl 28 / --fs-2xl 40.
+Body text contrast ≥ 4.5:1 (large ≥ 3:1) — use --color-text-* on --color-background-*.
+
+Page personality (put on the page root): data-iui-style="tool" (工具型·简洁) | "content" (内容型·杂志) | "data" (数据型·看板) | "toy" (玩具型·活泼).
+It sets --accent / --accent-fill / --accent-soft, background, radii and density. Use var(--accent) for highlights instead of a hardcoded brand color.
+ONE visual hero per page (a lead photo, one big number, one chart, or the playable object) — everything else is quieter.
+
+Stats: <div class="iui-stat"><div class="iui-stat-value">128<span class="unit">ms</span></div><div class="iui-stat-label">P95 延迟</div></div>
+(.iui-stats grid for several; .iui-stat.lg / .sm; optional .iui-stat-delta[.down]). Number on top, caption below — never "128 次访问" in one line.
+Cards side by side: .iui-card-grid (equal height); .iui-card-title clamps to 2 lines, .iui-card-summary to 3; .iui-card-foot sticks to the bottom; .iui-clamp-1/2/3 helpers.
+Host auto-adds: edge fades + indicator on horizontal scrollers; 换行/复制 tools on <pre> (opt out: data-iui-no-tools).
+3D: canvas inside .iui-3d-wrap with a .iui-3d-loading placeholder; set data-iui-3d-ready on the wrap when the first frame renders.
+Three-point light (key casts soft shadow + fill + rim) + ShadowMaterial ground; fit the camera to the object's bounding sphere so it fills ≥ 40% of the frame;
+OrbitControls from 'three/addons/controls/OrbitControls.js' with enableDamping. Starter: scene-3d.
+
 SVG diagrams: use .c-purple .c-teal .c-coral .c-pink .c-gray .c-blue .c-green .c-amber .c-red plus .box .node .arr .leader and text .t .ts .th.
 
 Layout helpers already injected:
@@ -777,8 +1003,8 @@ Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat).
 
 ## Pattern — maps / multi-stop (Nanjing density, not a frozen city template)
 Lock DENSITY, not copy. Any map with 2+ places (trip, 探店, 一日游, 景点详解) MUST ship:
-1) REAL Leaflet in .iui-map-wrap (height 300px, grayscale). Pause/Replay chrome.
-2) Numbered L.divIcon pins (.iui-pin-dot). createTripAnimator — do not invent timers. Filter null getElement() before pinElements.
+1) REAL Leaflet in .iui-map-wrap (height 300px, colored muted basemap; data-iui-map-style="mono" only if asked). Pause/Replay chrome.
+2) Numbered L.divIcon pins (.iui-pin-dot, data-cat="food|sight|hotel|shop|nature|culture|transport" colors them; .active = selected → bigger, ringed, on top). Host spreads overlapping pins apart. createTripAnimator — do not invent timers. Filter null getElement() before pinElements.
 3) Horizontal .iui-cards-strip + .iui-stop-card (photo 110px + number + name + one-line). Extra cards SCROLL inside the first rounded frame (host sets min-width:0).
 4) Click pin OR card opens an in-page detail sheet: 停留 / 票或预约 / 怎么去 / 避坑 (plus a why line). Do not leave the map as pins-only.
 Single-place maps may skip the strip/animator; still real Leaflet + one marker + that place's detail.
@@ -788,7 +1014,7 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
   → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles.
 - On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
-- Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
+- Map tiles (REQUIRED): Esri World Street Map (host mutes saturation slightly) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
 - Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):
   1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...], coordinates: [{lat,lng}...] }) BEFORE the fence
      for ANY destination / hotel / cover. Only photos that demonstrably show the place come back (Commons file/description/
