@@ -11,7 +11,7 @@ import { writeFileSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getLatestSnapshot, getSessionSnapshot, subscribeSessionBindings } from './binding-bridge.ts'
+import { getSessionSnapshot, subscribeSessionBindings } from './binding-bridge.ts'
 import { installFenceFeedback } from './fence-feedback.ts'
 import type { IuiPluginConfig } from '../config/types.ts'
 import { DEFAULT_THEME_ID } from '../config/defaults.ts'
@@ -84,6 +84,7 @@ let runtimeConfig: RuntimeConfigPayload = buildRuntimeConfig({
   themeId: DEFAULT_THEME_ID,
   fenceFeedback: true,
   formatReferee: true,
+  strictImagePolicy: false,
   customTokensJson: '',
   userTemplatesJson: '',
   jevEnabled: false,
@@ -107,6 +108,16 @@ function publishRuntimeConfig(live: IuiConfigResolved): void {
     }).then(() => {
       runtimeConfig = buildRuntimeConfig(live)
     }).catch(() => { /* soft */ })
+  }
+}
+
+/** F4: the `session` query parameter of a bindings request ('' when absent/invalid). */
+function bindingSessionOf(url: string | undefined): string {
+  try {
+    const value = (new URL(url ?? '/', 'http://x').searchParams.get('session') ?? '').trim()
+    return value.length > 0 && value.length <= 200 ? value : ''
+  } catch {
+    return ''
   }
 }
 
@@ -211,13 +222,25 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
     return
   }
 
+  if (file === 'bindings.json' || file === 'bindings.sse') {
+    // F4: session is REQUIRED (no "latest" fallback), and cross-site pages may
+    // not read bindings even if the host ever adds permissive CORS.
+    const fetchSite = String(req.headers?.['sec-fetch-site'] ?? '')
+    if (fetchSite === 'cross-site') {
+      res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('cross-site bindings request refused')
+      return
+    }
+    if (bindingSessionOf(req.url) === '') {
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('missing session parameter')
+      return
+    }
+  }
+
   if (file === 'bindings.json') {
-    let sessionId = ''
-    try {
-      const u = new URL(req.url ?? '/', 'http://x')
-      sessionId = u.searchParams.get('session') ?? ''
-    } catch { /* ignore */ }
-    const snap = sessionId !== '' ? getSessionSnapshot(sessionId) : getLatestSnapshot()
+    const sessionId = bindingSessionOf(req.url)
+    const snap = getSessionSnapshot(sessionId)
     const body = Buffer.from(JSON.stringify({ bindings: snap.bindings, appData: snap.appData, sessionId }), 'utf8')
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
@@ -229,11 +252,7 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
   }
 
   if (file === 'bindings.sse') {
-    let sessionId = ''
-    try {
-      const u = new URL(req.url ?? '/', 'http://x')
-      sessionId = u.searchParams.get('session') ?? ''
-    } catch { /* ignore */ }
+    const sessionId = bindingSessionOf(req.url)
     res.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
@@ -244,7 +263,7 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
       map: Record<string, string | number>,
       meta?: { appData?: Record<string, unknown> },
     ): void => {
-      if (sessionId !== '' && sid !== sessionId) return
+      if (sid !== sessionId) return
       const payload = JSON.stringify({
         bindings: map,
         appData: meta?.appData ?? {},
@@ -252,7 +271,7 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
       })
       res.write(`data: ${payload}\n\n`)
     }
-    const initial = sessionId !== '' ? getSessionSnapshot(sessionId) : getLatestSnapshot()
+    const initial = getSessionSnapshot(sessionId)
     send(sessionId, initial.bindings, { appData: initial.appData })
     const unsub = subscribeSessionBindings((sid, map, meta) => send(sid, map, meta))
     const heartbeat = setInterval(() => {

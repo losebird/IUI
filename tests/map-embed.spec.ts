@@ -69,3 +69,21 @@ describe('map-embed', () => {
   })
 
 })
+
+describe('F5 map embed allowlist', () => {
+  it('only exact known providers are embeddable', async () => {
+    const { safeMapEmbedUrl, resolveMapSurface: resolve } = await import('../src/shared/map-embed.ts')
+    expect(safeMapEmbedUrl('https://evil.example/maps/x')).toBeUndefined()
+    expect(safeMapEmbedUrl('https://maps.evil.example/')).toBeUndefined()
+    expect(safeMapEmbedUrl('https://evil.www.openstreetmap.org/export/embed.html')).toBeUndefined()
+    expect(safeMapEmbedUrl('https://www.openstreetmap.org/user/x')).toBeUndefined()
+    expect(safeMapEmbedUrl('http://www.openstreetmap.org/export/embed.html')).toBeUndefined()
+    expect(safeMapEmbedUrl('https://www.google.com/search?q=x')).toBeUndefined()
+    expect(safeMapEmbedUrl('https://www.openstreetmap.org/export/embed.html?bbox=1,2,3,4')).toBeDefined()
+    expect(safeMapEmbedUrl('https://www.google.com/maps/embed?pb=1')).toBeDefined()
+    expect(safeMapEmbedUrl('https://uri.amap.com/marker?position=1,2')).toBeDefined()
+    // A rejected embed never falls back to "any https".
+    const s = resolve({ embed: 'https://evil.example/maps/x', lat: 1, lng: 2 })
+    expect(s.kind === 'iframe-src' && s.src.includes('evil.example')).toBe(false)
+  })
+})

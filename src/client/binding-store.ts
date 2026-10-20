@@ -55,9 +55,20 @@ export function subscribeBindings(listener: () => void): () => void {
   return () => { listeners.delete(listener) }
 }
 
-/** Hint the active session so bindings.json / SSE can scope (optional). */
+/**
+ * F4: scope bindings.json / SSE to the viewed session. Switching sessions
+ * drops the previous session's map so frames never see another session's data;
+ * an empty hint (no resolvable session) means "fetch nothing".
+ */
 export function setBindingSessionHint(sessionId: string): void {
-  sessionHint = sessionId.trim()
+  const next = sessionId.trim()
+  if (next === sessionHint) return
+  sessionHint = next
+  publish({}, {})
+}
+
+export function getBindingSessionHint(): string {
+  return sessionHint
 }
 
 /** Tell the watcher a live fence still needs `$bind` resolution. */
@@ -65,25 +76,28 @@ export function setBindingsNeedTightPoll(need: boolean): void {
   needsTightPoll = need
 }
 
-function scopedUrl(file: string): string {
+function scopedUrl(file: string, session = sessionHint): string {
   const base = bindingsAssetUrl(file)
   const join = base.includes('?') ? '&' : '?'
-  return sessionHint !== ''
-    ? `${base}${join}session=${encodeURIComponent(sessionHint)}`
-    : base
+  return `${base}${join}session=${encodeURIComponent(session)}`
 }
 
 export async function refreshBindings(): Promise<ClientBindingMap> {
   if (typeof fetch === 'undefined') return bindings
+  // F4: the server requires a session; never ask for "latest / all".
+  if (sessionHint === '') return bindings
   if (inflight) {
     await inflight
     return bindings
   }
   inflight = (async () => {
     try {
-      const res = await fetch(scopedUrl('bindings.json'), { cache: 'no-store' })
+      const requested = sessionHint
+      const res = await fetch(scopedUrl('bindings.json', requested), { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json() as { bindings?: ClientBindingMap; appData?: AppDataMap }
+      // A session switch while in flight: drop the stale session's payload.
+      if (requested !== sessionHint) return
       if (data && typeof data.bindings === 'object' && data.bindings !== null) {
         const typed = data.appData && typeof data.appData === 'object' && data.appData !== null
           ? { ...data.appData }
@@ -128,10 +142,15 @@ export function startBindingWatch(): () => void {
     if (typeof EventSource === 'undefined') return
     try {
       es?.close()
-      es = new EventSource(scopedUrl('bindings.sse'))
+      es = undefined
+      if (sessionHint === '') return
+      const scoped = sessionHint
+      es = new EventSource(scopedUrl('bindings.sse', scoped))
       es.onmessage = (ev) => {
         try {
-          const data = JSON.parse(String(ev.data)) as { bindings?: ClientBindingMap; appData?: AppDataMap }
+          const data = JSON.parse(String(ev.data)) as { bindings?: ClientBindingMap; appData?: AppDataMap; sessionId?: string }
+          if (scoped !== sessionHint) return
+          if (typeof data?.sessionId === 'string' && data.sessionId !== '' && data.sessionId !== scoped) return
           if (data && typeof data.bindings === 'object' && data.bindings !== null) {
             const typed = data.appData && typeof data.appData === 'object' && data.appData !== null
               ? { ...data.appData }

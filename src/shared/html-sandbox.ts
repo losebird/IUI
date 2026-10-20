@@ -101,6 +101,8 @@ export type HtmlSandboxSpec = {
 }
 
 export type HtmlSandboxBuildOptions = {
+  /** F4: strict image policy — img-src/font-src drop the `https:` wildcard. */
+  strictImages?: boolean
   /** CSS custom properties injected as :root (active IUI theme). */
   designTokens?: Readonly<Record<string, string>>
   /** Extra base CSS after design tokens, before author css. */
@@ -177,6 +179,8 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'ready'; frameId: string }
   | { source: 'iui-html'; type: 'bridgeReady'; frameId: string }
   | { source: 'iui-html'; type: 'libsReady'; frameId: string }
+  /** F6: 1s watchdog heartbeat from the bridge. */
+  | { source: 'iui-html'; type: 'heartbeat'; frameId: string }
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
@@ -260,7 +264,7 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   if (record.type === 'openLink') {
     return typeof record.url === 'string' && record.url.length > 0 && record.url.length <= 2000
   }
-  if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady') return true
+  if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady' || record.type === 'heartbeat') return true
   if (record.type === 'authorSettled') {
     return typeof record.ok === 'boolean'
   }
@@ -1025,14 +1029,53 @@ export function prepareAuthorJs(source: string): string {
 }
 
 
-/** Strip dangerous CSS constructs (@import, expression, javascript urls). */
+/** data: images that are safe in <img src> and CSS url(): raster + SVG (no script runs in image context). */
+const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif|svg\+xml)[;,]/i
+/** Per-URL cap for inline data images (F8). */
+export const SANDBOX_MAX_DATA_IMAGE_BYTES = 1024 * 1024
+
+export function isSafeDataImageUrl(value: string): boolean {
+  const v = value.trim()
+  return SAFE_DATA_IMAGE.test(v) && v.length <= SANDBOX_MAX_DATA_IMAGE_BYTES
+}
+
+/**
+ * Strip dangerous CSS constructs (@import, expression, javascript urls).
+ * F8: a blocked url(...) is replaced WHOLE by url(about:invalid) so no stray
+ * quote is left behind (the old `url(blocked:` rewrite broke every later rule).
+ * Safe data: images (≤1MB) are kept.
+ */
 export function sanitizeSandboxCss(css: string): string {
   return css
     .replace(/@import\b[^;\n]*/gi, '/* blocked import */')
     .replace(/expression\s*\(/gi, 'blocked(')
-    .replace(/url\s*\(\s*[\'"]?\s*(?:javascript|vbscript|data)\s*:/gi, 'url(blocked:')
+    .replace(
+      /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"]*))\s*\)/gi,
+      (full, dq: string | undefined, sq: string | undefined, bare: string | undefined) => {
+        const value = (dq ?? sq ?? bare ?? '').trim()
+        if (/^(?:javascript|vbscript):/i.test(value)) return 'url(about:invalid)'
+        if (/^data:/i.test(value)) return isSafeDataImageUrl(value) ? full : 'url(about:invalid)'
+        return full
+      },
+    )
     .replace(/-moz-binding\s*:/gi, '/* blocked binding */:')
     .replace(/behavior\s*:/gi, '/* blocked behavior */:')
+}
+
+/** Raw-text regions where author whitespace / backslashes are content, not junk. */
+const RAW_TEXT_REGION = /<(pre|code|textarea|script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi
+
+/** Apply `fn` to HTML outside <pre>/<code>/<textarea>/<script>/<style> (F8). */
+export function mapOutsideRawText(html: string, fn: (chunk: string) => string): string {
+  let out = ''
+  let last = 0
+  RAW_TEXT_REGION.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = RAW_TEXT_REGION.exec(html)) !== null) {
+    out += fn(html.slice(last, m.index)) + m[0]
+    last = m.index + m[0].length
+  }
+  return out + fn(html.slice(last))
 }
 
 function truncateAuthor(source: string, kind: 'css' | 'js' | 'html'): string {
@@ -1052,10 +1095,12 @@ function truncationBanner(parts: Array<'css' | 'js' | 'html'>): string {
 
 /** Strip disallowed external resources and inline event handlers. */
 export function sanitizeSandboxMarkup(html: string): string {
-  return html
+  // Model JSON-escape junk cleanup only outside raw-text regions: inside
+  // <pre>/<code> a literal `\n` is real content (F8: "a\n b" became "a b").
+  return mapOutsideRawText(html, (chunk) => chunk
     .replace(/\\p>/g, '<p>')
     .replace(/(?<=[>\n])\\(?=\s)/g, '') // stray model backslash junk
-    .replace(/\\n(?=\s|[\u4e00-\u9fff])/g, '') // visible '\\n' leaked into text
+    .replace(/\\n(?=\s|[\u4e00-\u9fff])/g, '')) // visible '\\n' leaked into text
     // Keep simple author handlers (fn / fn() / fn(event)) as data-iui-on-* for bridge delegation.
     // Anything else (alert(1), inline statements) is still stripped below.
     .replace(
@@ -1102,7 +1147,11 @@ export function sanitizeSandboxMarkup(html: string): string {
       }
       return full
     })
-    .replace(/\b(?:href|src)\s*=\s*["']\s*(?:javascript|data|vbscript):[^"']*["']/gi, 'data-blocked=""')
+    .replace(/\b(href|src)\s*=\s*(["'])\s*((?:javascript|data|vbscript):(?:(?!\2)[\s\S])*)\2/gi, (full, attr: string, _q: string, value: string) => {
+      // F8: <img src="data:image/png…"> is a normal inline image; keep safe ones.
+      if (attr.toLowerCase() === 'src' && isSafeDataImageUrl(value)) return full
+      return 'data-blocked=""'
+    })
 }
 
 const SECTION_META = /^(title|height|placeholder)\s*[:：]\s*(.+)$/iu
@@ -1494,6 +1543,36 @@ export function buildSandboxBridgeScript(frameId: string): string {
   function post(msg) {
     try { parent.postMessage(Object.assign({ source: 'iui-html', frameId: FRAME_ID }, msg), '*'); } catch (e) {}
   }
+  // F6: no allow-modals — native dialogs become a non-blocking in-page toast
+  // (an alert() loop can no longer lock the host behind system dialogs).
+  (function () {
+    var toastEl = null, toastTimer = 0, warned = false;
+    function toast(text) {
+      try {
+        if (!warned) { warned = true; try { console.warn('[iui] alert/confirm/prompt are disabled in the sandbox; use in-page UI instead.'); } catch (e) {} }
+        var root = document.body || document.documentElement;
+        if (!root) return;
+        if (!toastEl || !toastEl.isConnected) {
+          toastEl = document.createElement('div');
+          toastEl.setAttribute('data-iui-toast', '');
+          toastEl.setAttribute('role', 'status');
+          toastEl.style.cssText = 'position:fixed;left:50%;bottom:12px;transform:translateX(-50%);max-width:min(92vw,480px);padding:8px 14px;border-radius:8px;background:rgba(30,30,34,.92);color:#fff;font:13px/1.45 system-ui,sans-serif;z-index:2147483647;box-shadow:0 6px 24px rgba(0,0,0,.25);white-space:pre-wrap;word-break:break-word;pointer-events:none';
+          root.appendChild(toastEl);
+        }
+        toastEl.textContent = String(text == null ? '' : text).slice(0, 400);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { try { toastEl && toastEl.remove(); } catch (e) {} }, 3200);
+      } catch (e) {}
+    }
+    try {
+      window.alert = function (m) { toast(m); };
+      window.confirm = function (m) { toast(m); return false; };
+      window.prompt = function (m) { toast(m); return null; };
+      window.print = function () {};
+    } catch (e) {}
+  })();
+  // F6: watchdog heartbeat — the host shows「页面无响应」after 5s of silence.
+  try { setInterval(function () { post({ type: 'heartbeat' }); }, 1000); post({ type: 'heartbeat' }); } catch (e) {}
   function measure() {
     var doc = document.documentElement;
     var body = document.body;
@@ -1937,9 +2016,9 @@ function mapConnectOrigins(): string {
   ].join(' ')
 }
 
-function mapImgOrigins(): string {
+function mapImgOrigins(strict = false): string {
   return [
-    'https:',
+    ...(strict ? [] : ['https:']),
     'data:',
     'blob:',
     'https://*.basemaps.cartocdn.com',
@@ -2773,7 +2852,7 @@ export function buildHtmlSandboxSrcdoc(
   const photoFill = buildTripPhotoFillScript()
   // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
-  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src https: data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}

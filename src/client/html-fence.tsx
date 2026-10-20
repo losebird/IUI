@@ -49,6 +49,7 @@ import {
 import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
 import { getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
+import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
 
@@ -59,6 +60,22 @@ function fenceStateKey(raw: string): string {
   const body = raw.trim()
   if (body.length <= 160) return body
   return `${body.slice(0, 80)}|${body.length}|${body.slice(-80)}`
+}
+
+/** F4: does this page read host bindings / appData at all? */
+export function usesHostData(raw: string): boolean {
+  return /\$bind|\$appData|data-iui-bind|__iuiBindings|__iuiAppData|iui-bindings|iui-appdata|\bappData\b|\bbindings\b/.test(raw)
+}
+
+const readStrictImages = (): boolean => getRuntimeConfigSnapshot().strictImagePolicy === true
+
+/** F6: silence longer than this marks the frame「无响应」. */
+const SANDBOX_HUNG_MS = 5000
+
+/** F6:「停止」swaps in an inert document, which tears down the old one's scripts. */
+function stoppedSrcdoc(message: string): string {
+  const text = message.replace(/[&<>]/g, ch => (ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : '&gt;'))
+  return `<!doctype html><meta charset="utf-8"><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font:13px system-ui,sans-serif;color:#77756f">${text}</body>`
 }
 
 const FRAME_STYLE: CSSProperties = {
@@ -287,6 +304,7 @@ function showStreamingStageChrome(parsed: HtmlSandboxSpec, ready: boolean): bool
 export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; streaming?: boolean }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
+  const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
   const reactId = useId().replace(/:/g, '')
   const frameId = useMemo(() => `iui-html-${reactId}`, [reactId])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -307,6 +325,10 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
     return false
   }
   const [reloadToken, setReloadToken] = useState(0)
+  /** F6 watchdog: last bridge message time (0 = none yet for this frame). */
+  const lastBeatRef = useRef(0)
+  const [hung, setHung] = useState(false)
+  const [stopped, setStopped] = useState(false)
   const [autoHeight, setAutoHeight] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -360,13 +382,15 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
       frameId,
       brandId: getActivePackId(),
       mergePackTokens: false, // already merged above
+      // F4: opt-in strict image policy (Settings → IUI).
+      strictImages,
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
       // C6: libraries from the plugin's own asset route first, CDNs as fallback.
       ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
-    [srcdocRebuildKey, designTokens, frameId],
+    [srcdocRebuildKey, designTokens, frameId, strictImages],
   )
   const baseHeight = parsed?.height ?? (parsed?.partial ? 280 : 360)
 
@@ -461,8 +485,10 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
   }, [ready, parsed, cssComplete, jsComplete, frameId, forceFinalSrcdoc, starterOverride, srcdocRebuildKey])
 
   // Keep sandbox in sync when host bindings / appData change.
+  // F4: only frames whose source actually reads host data get it.
+  const wantsHostData = usesHostData(effectiveRaw)
   useEffect(() => {
-    if (!ready) return
+    if (!ready || !wantsHostData) return
     const push = () => {
       try {
         const snap = getAppDataSnapshot()
@@ -476,7 +502,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
     }
     push()
     return subscribeBindings(push)
-  }, [ready, frameId])
+  }, [ready, frameId, wantsHostData])
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -488,6 +514,10 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
       if (event.source !== frame.contentWindow) return
       if (!isIuiSandboxHostMessage(event.data)) return
       if (event.data.frameId !== frameId) return
+      // F6: any bridge message is proof of life.
+      lastBeatRef.current = Date.now()
+      setHung(prev => (prev ? false : prev))
+      if (event.data.type === 'heartbeat') return
       if (event.data.type === 'resize') {
         setAutoHeight(clampHeight(event.data.height, baseHeight))
         return
@@ -500,10 +530,12 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           const snap = getAppDataSnapshot()
           const win = iframeRef.current?.contentWindow
           if (win) {
-            const flat: Record<string, string> = {}
-            for (const [k, v] of Object.entries(snap.bindings)) flat[k] = String(v)
-            win.postMessage({ source: 'iui-html-host', type: 'bindings', frameId, values: flat }, '*')
-            win.postMessage({ source: 'iui-html-host', type: 'appData', frameId, data: snap.appData }, '*')
+            if (usesHostData(effectiveRaw)) {
+              const flat: Record<string, string> = {}
+              for (const [k, v] of Object.entries(snap.bindings)) flat[k] = String(v)
+              win.postMessage({ source: 'iui-html-host', type: 'bindings', frameId, values: flat }, '*')
+              win.postMessage({ source: 'iui-html-host', type: 'appData', frameId, data: snap.appData }, '*')
+            }
             win.postMessage({ source: 'iui-html-host', type: 'theme', frameId, tokens: readDesignTokens() }, '*')
             const saved = localStateByFence.get(fenceStateKey(effectiveRaw))
             if (saved) {
@@ -579,6 +611,25 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [frameId, baseHeight, onAction, t, effectiveRaw])
+
+  // F6 watchdog: a frame that stops beating for 5s gets a「页面无响应」overlay.
+  // Hidden tabs throttle timers in both documents, so they never count.
+  useEffect(() => {
+    lastBeatRef.current = 0
+    setHung(false)
+  }, [srcdocRebuildKey])
+  useEffect(() => {
+    if (stopped) return
+    const timer = window.setInterval(() => {
+      if (lastBeatRef.current === 0) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        lastBeatRef.current = Date.now()
+        return
+      }
+      if (Date.now() - lastBeatRef.current > SANDBOX_HUNG_MS) setHung(true)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [stopped])
 
   if (parsed === null || srcdoc === null) {
     return (
@@ -688,6 +739,8 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           type="button"
           style={TOOLBAR_BTN}
           onClick={() => {
+            setStopped(false)
+            setHung(false)
             setReloadToken((n) => n + 1)
             setError(null)
             setErrorKind(null)
@@ -764,7 +817,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
             ...(jsComplete
               ? [{ label: t('sandbox.rerunAuthorJs'), onClick: () => rerunAuthorJsOnly() }]
               : []),
-            { label: t('sandbox.reload'), onClick: () => { setReloadToken((n) => n + 1); setError(null); setErrorKind(null) } },
+            { label: t('sandbox.reload'), onClick: () => { setStopped(false); setHung(false); setReloadToken((n) => n + 1); setError(null); setErrorKind(null) } },
             {
               label: t('sandbox.reask'),
               onClick: () => {
@@ -775,20 +828,44 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           ]}
         />
       )}
-      <iframe
-        ref={iframeRef}
-        key={srcdocRebuildKey}
-        title={parsed.title ?? 'IUI sandbox'}
-        srcDoc={srcdoc}
-        sandbox="allow-scripts allow-modals"
-        referrerPolicy="no-referrer"
-        style={{ ...FRAME_STYLE, height }}
-        onLoad={() => {
-          requestMeasure()
-          // Handshake fallback: complete fences should not stay on 加载中 if ready postMessage is lost.
-          if (!parsed.partial) setReady(true)
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <iframe
+          ref={iframeRef}
+          key={stopped ? `${srcdocRebuildKey}:stopped` : srcdocRebuildKey}
+          title={parsed.title ?? 'IUI sandbox'}
+          // F6: no allow-modals — the bridge turns alert/confirm/prompt into an in-page toast.
+          srcDoc={stopped ? stoppedSrcdoc(t('sandbox.stopped')) : srcdoc}
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+          style={{ ...FRAME_STYLE, height }}
+          onLoad={() => {
+            if (stopped) return
+            requestMeasure()
+            // Handshake fallback: complete fences should not stay on 加载中 if ready postMessage is lost.
+            if (!parsed.partial) setReady(true)
+          }}
+        />
+        {hung && !stopped && (
+          <div
+            data-iui-sandbox-hung="1"
+            role="alert"
+            style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+              background: 'rgba(250,250,249,.88)', color: 'var(--color-text-primary, #1f1e1b)', fontSize: 13, borderRadius: 8, backdropFilter: 'blur(2px)',
+            }}
+          >
+            <span>{t('sandbox.hung')}</span>
+            <span style={{ display: 'flex', gap: 8 }}>
+              <button type="button" style={TOOLBAR_BTN} data-iui-sandbox-stop="1" onClick={() => { setStopped(true); setHung(false); lastBeatRef.current = 0 }}>
+                {t('sandbox.stop')}
+              </button>
+              <button type="button" style={TOOLBAR_BTN} onClick={() => { setHung(false); setStopped(false); lastBeatRef.current = 0; setReloadToken((n) => n + 1) }}>
+                {t('sandbox.reload')}
+              </button>
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

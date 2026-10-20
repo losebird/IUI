@@ -62,7 +62,7 @@ import css from './GenuiBlock.module.css'
 import { renderSvgFence } from './svg-fence.tsx'
 import { renderHtmlFence } from './html-fence.tsx'
 import { repairFenceJson, trimToBalancedRoot } from '../shared/fence-repair.ts'
-import { isJsonMasqueradingAsIui, looksLikeHtmlSandboxBody } from '../shared/genui-shape.ts'
+import { isJsonFenceLang, isJsonMasqueradingAsIui, isStrictSandboxJson, isStrictSandboxValue, looksLikeHtmlSandboxBody } from '../shared/genui-shape.ts'
 import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
 import { resolveViewedSessionId } from './session-resolver.ts'
 import { sourceFencesOfAssistant, sourceLanguageAt } from './source-fence.ts'
@@ -334,12 +334,25 @@ function isGenericGenuiFence(block: Element, raw: string): boolean {
       return false
     }
   }
-  // Sandbox-first: host hides ```iui-html as localized「代码块」; accept css/html/js only.
-  // Catalog GenUI trees are removed — do not take over generic blocks as legacy cards.
-  if (looksLikeHtmlSandboxBody(typeof value === 'string' ? value : JSON.stringify(value))) return true
-  if (value !== null && typeof value === 'object') {
-    const rec = value as Record<string, unknown>
-    if (typeof rec.html === 'string' || typeof rec.css === 'string' || typeof rec.js === 'string') return true
+  // Sandbox-first: host hides ```iui-html as localized「代码块」.
+  // F7: only a STRICT page object (whitelisted keys + html with a real tag) —
+  // a config JSON that merely has an html/css field stays a code block.
+  return isStrictSandboxValue(value)
+}
+
+/** F7: strict page check tolerant of the same tier-1 punctuation repair the
+ * takeover path applies (weak models leave unescaped quotes in html). */
+function isStrictSandboxRaw(raw: string): boolean {
+  if (isStrictSandboxJson(raw)) return true
+  const repaired = repairFenceJson(raw)
+  const candidates = [repaired?.text, trimToBalancedRoot(repaired?.text ?? raw)]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    try {
+      if (isStrictSandboxValue(JSON.parse(candidate))) return true
+    } catch {
+      // try the next candidate
+    }
   }
   return false
 }
@@ -904,6 +917,45 @@ export function installDomFenceRenderer(
   /** One-time-per-block diagnostics: silent returns must be diagnosable
    * (the 1s sweep would otherwise spam the console every pass). */
   const warned = new WeakSet<Element>()
+
+  /** F7: blocks the user explicitly asked to render via「▶ 渲染为页面」. */
+  const forcedRender = new WeakSet<Element>()
+  const offers = new Map<HTMLElement, HTMLElement>()
+
+  function clearOffer(block: HTMLElement): void {
+    const offer = offers.get(block)
+    if (offer === undefined) return
+    offers.delete(block)
+    offer.remove()
+  }
+
+  /** Idempotent: re-attaches a host-detached bar, never duplicates it. */
+  function offerRender(block: HTMLElement): void {
+    const existing = offers.get(block)
+    if (existing !== undefined) {
+      if (existing.nextElementSibling !== block) block.before(existing)
+      return
+    }
+    const bar = document.createElement('div')
+    bar.className = 'iui-render-offer'
+    bar.setAttribute('data-iui-render-offer', '')
+    bar.style.cssText = 'display:flex;justify-content:flex-end;margin:4px 0 -2px'
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = '▶ 渲染为页面'
+    button.title = '这个代码块看起来是一个 IUI 页面，点击后在沙箱中渲染'
+    button.style.cssText = 'font:12px/1.4 system-ui,sans-serif;padding:2px 10px;border-radius:6px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;cursor:pointer;opacity:.85'
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      forcedRender.add(block)
+      clearOffer(block)
+      renderBlock(block)
+    })
+    bar.append(button)
+    block.before(bar)
+    offers.set(block, bar)
+  }
   function warnOnce(block: Element, message: string): void {
     if (warned.has(block)) return
     warned.add(block)
@@ -938,22 +990,30 @@ export function installDomFenceRenderer(
     // 内容识别只在 source 暂不可用且 assistant 已结束时兜底，不覆盖已确认的 language 或无 language fence。
     // Sandbox-first: detect css/html/js BEFORE the accept gate — host often strips `iui-html`
     // to a localized「代码块」banner, and legacy genericGenui still validated catalog GenUI only.
-    const jsonAsIui = isJsonAsIui(language, raw)
-    // Only rescue sandbox-shaped bodies when the host hid the lang (null/undefined),
-    // or the fence is already an IUI/json language — never hijack python/ts/etc.
-    const sandboxRescueLang = (
-      language === undefined
-      || language === null
-      || isHtmlFenceLang(language)
-      || isUiFenceLang(language)
-      || jsonAsIui
-      || (typeof language === 'string' && ['json', 'json5', 'jsonc'].includes(language.toLowerCase()))
-    )
-    const sandboxShaped = language !== 'svg' && sandboxRescueLang && looksLikeHtmlSandboxBody(raw)
-    const genericGenui = (language === undefined || language === null) && settled && isGenericGenuiFence(block, raw)
-    if (!isUiFenceLang(language) && language !== 'svg' && !isHtmlFenceLang(language) && !genericGenui && !jsonAsIui && !sandboxShaped) return
-    // Streaming: allow ```iui/dsh-ui/iui-html OR sandbox/GenUI-shaped ```json (weak model without prime).
-    if (!settled && !isUiFenceLang(language) && !isHtmlFenceLang(language) && !jsonAsIui && !sandboxShaped) return
+    // F7: only explicit ```iui-html / ```iui / ```dsh-ui fences auto-render.
+    // A host-hidden language (undefined: snapshot unavailable) auto-renders
+    // only when the settled body is STRICTLY a page; ```json / no-language
+    // fences never auto-render — they get a「▶ 渲染为页面」button instead.
+    const forced = forcedRender.has(block)
+    const explicitLang = isUiFenceLang(language) || isHtmlFenceLang(language)
+    const looseShaped = language !== 'svg' && looksLikeHtmlSandboxBody(raw)
+    const sandboxShaped = forced
+      || (explicitLang && looseShaped)
+      || (language === undefined && looseShaped && (!settled || isStrictSandboxRaw(raw)))
+    const genericGenui = !forced && language === undefined && settled && isGenericGenuiFence(block, raw)
+    if (
+      !forced && settled && !sandboxShaped && !genericGenui && !explicitLang && looseShaped
+      && (language === null || isJsonFenceLang(language))
+      && isStrictSandboxRaw(raw)
+      && block.closest(ASSISTANT_FLOW_ROW) !== null
+    ) {
+      offerRender(block)
+      return
+    }
+    clearOffer(block)
+    if (!isUiFenceLang(language) && language !== 'svg' && !isHtmlFenceLang(language) && !genericGenui && !sandboxShaped) return
+    // Streaming: allow explicit ```iui/dsh-ui/iui-html, or a host-hidden sandbox body.
+    if (!settled && !isUiFenceLang(language) && !isHtmlFenceLang(language) && !sandboxShaped) return
     if (raw.trim() === '') {
       if (settled) warnOnce(block, `settled ${language ?? 'iui'} fence has an empty body; keeping the code block`)
       return
@@ -961,7 +1021,7 @@ export function installDomFenceRenderer(
     const { key, context } = contextOf(row, block, settled)
     const acceptedLanguage: 'iui' | 'dsh-ui' | 'svg' | 'iui-html' = language === 'svg'
       ? 'svg'
-      : language === 'iui-html' || sandboxShaped
+      : language === 'iui-html' || sandboxShaped || genericGenui
         ? 'iui-html'
         : (language === 'dsh-ui' ? 'dsh-ui' : 'iui')
     const parkKey = `${String(key)}:${acceptedLanguage}:${fenceParkFingerprint(raw)}`
@@ -1196,6 +1256,9 @@ export function installDomFenceRenderer(
       }
       rebuildWipedDiagnostic(block, diagnostic.raw)
     }
+    for (const block of Array.from(offers.keys())) {
+      if (!block.isConnected || block.hasAttribute(PROCESSED)) clearOffer(block)
+    }
     for (const block of findFenceCandidates()) {
       renderBlock(block)
     }
@@ -1262,6 +1325,7 @@ export function installDomFenceRenderer(
       rafId = null
     }
     for (const block of Array.from(mounts.keys())) unmountBlock(block)
+    for (const block of Array.from(offers.keys())) clearOffer(block)
     for (const leftover of parked.values()) destroyMount(leftover)
     parked.clear()
     document.getElementById(PARK_LOT_ID)?.remove()

@@ -10,6 +10,7 @@ export const Config = Schema.object({
   themeId: themeIdField().volatile(),
   fenceFeedback: Schema.boolean().default(true).volatile(),
   formatReferee: Schema.boolean().default(true).volatile(),
+  strictImagePolicy: Schema.boolean().default(false).volatile(),
   customTokensJson: Schema.string().default('').volatile(),
   userTemplatesJson: Schema.string().default('').volatile(),
   jevEnabled: Schema.boolean().default(false).volatile(),
@@ -25,6 +26,8 @@ export type IuiConfigResolved = {
   themeId: string
   fenceFeedback: boolean
   formatReferee: boolean
+  /** F4: sandbox img-src only data:/blob: + allowlisted image hosts. */
+  strictImagePolicy: boolean
   customTokensJson: string
   userTemplatesJson: string
   jevEnabled: boolean
@@ -53,6 +56,7 @@ export function resolveLiveConfig(config: unknown): IuiConfigResolved {
     themeId: String(readConfigValue(row.themeId, DEFAULT_THEME_ID)),
     fenceFeedback: Boolean(readConfigValue(row.fenceFeedback, true)),
     formatReferee: Boolean(readConfigValue(row.formatReferee, true)),
+    strictImagePolicy: Boolean(readConfigValue(row.strictImagePolicy, false)),
     customTokensJson: String(readConfigValue(row.customTokensJson, '')),
     userTemplatesJson: String(readConfigValue(row.userTemplatesJson, '')),
     jevEnabled: Boolean(readConfigValue(row.jevEnabled, false)),

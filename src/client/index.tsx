@@ -42,7 +42,8 @@ import { bridgeHostLocale } from './i18n/index.ts'
 import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { assetUrl } from './asset-loader.ts'
 import { startRuntimeConfigWatch } from './runtime-config.ts'
-import { startBindingWatch } from './binding-store.ts'
+import { setBindingSessionHint, startBindingWatch } from './binding-store.ts'
+import { resolveViewedSessionId } from './session-resolver.ts'
 import { installIuiSettings } from './settings/index.ts'
 import { installMarkdownRescue } from './markdown-rescue.tsx'
 import { registerComposerDraftSetter, writeComposerEditable, findComposerEditable } from './composer-bridge.ts'
@@ -161,6 +162,26 @@ function forcedDomChannel(): boolean {
   return (globalThis as { __DSH_GENUI_E2E__?: boolean }).__DSH_GENUI_E2E__ === true
 }
 
+/** F4: keep the binding store scoped to the session in the main view. */
+function trackBindingSession(ctx: Context): () => void {
+  const sync = (): void => {
+    try {
+      setBindingSessionHint(resolveViewedSessionId(ctx.sessions.list.getSnapshot()) ?? '')
+    } catch {
+      /* host without a session list: keep the previous hint */
+    }
+  }
+  sync()
+  const list = ctx.sessions?.list as { subscribe?: (listener: () => void) => () => void } | undefined
+  const unsubscribe = typeof list?.subscribe === 'function' ? list.subscribe(sync) : undefined
+  // Safety net for hosts whose list does not notify on main-view switches.
+  const timer = window.setInterval(sync, 1000)
+  return () => {
+    unsubscribe?.()
+    window.clearInterval(timer)
+  }
+}
+
 /** Cordis client entry: register the fence renderer on boot, the keyed
  * toolview for the render_ui tool, and the session panel dock; returning the
  * disposers lets cordis tear all registrations down on plugin unload. */
@@ -204,6 +225,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   disposers.push(stopSettings)
   disposers.push(stopRuntimeWatch)
   disposers.push(stopBindingWatch)
+  disposers.push(trackBindingSession(ctx))
   disposers.push(stopComposerFallback)
   // Keyed toolview: the harness dispatches 'tool.call.toolview' by wire tool
   // name; registering under 'render_ui' gives the tool's result card the

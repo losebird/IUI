@@ -41,6 +41,7 @@ export type IuiSettingsSectionValue = {
   packId?: string
   fenceFeedback?: boolean
   formatReferee?: boolean
+  strictImagePolicy?: boolean
   customTokensJson?: string
   userTemplatesJson?: string
   gatewayMode?: 'in-process' | 'sidecar' | 'off'
@@ -62,6 +63,7 @@ type CardSnapshot = SettingsFormShell & {
   packId: SettingsFieldState
   fenceFeedback: SettingsFieldState
   formatReferee: SettingsFieldState
+  strictImagePolicy: SettingsFieldState
   customTokensJson: SettingsFieldState
   userTemplatesJson: SettingsFieldState
   gatewayMode: SettingsFieldState
@@ -321,6 +323,18 @@ export function IuiSettingsSection(props: {
               disabled={!state.writable}
               label={t('formatReferee')}
               onChange={(checked) => props.edit('formatReferee', checked ? 'true' : 'false')}
+            />
+          </div>
+          <div className={styles.switchCard}>
+            <div className={styles.switchCopy}>
+              <div className={styles.switchTitle}>{t('strictImagePolicy')}</div>
+              <p className={styles.switchHint}>{t('strictImagePolicyHint')}</p>
+            </div>
+            <Switch
+              checked={state.strictImagePolicy.text === 'true'}
+              disabled={!state.writable}
+              label={t('strictImagePolicy')}
+              onChange={(checked) => props.edit('strictImagePolicy', checked ? 'true' : 'false')}
             />
           </div>
         </section>
@@ -765,6 +779,7 @@ export class IuiSettingsCardController {
       enumField('packId', packIds),
       boolField('fenceFeedback'),
       boolField('formatReferee'),
+      boolField('strictImagePolicy'),
       enumField('gatewayMode', ['in-process', 'sidecar', 'off']),
       settingsTextField('gatewaySidecarUrl'),
       boolField('instanceStorePersist'),
@@ -786,6 +801,7 @@ export class IuiSettingsCardController {
       packId: this.form.field('packId'),
       fenceFeedback: this.form.field('fenceFeedback'),
       formatReferee: this.form.field('formatReferee'),
+      strictImagePolicy: this.form.field('strictImagePolicy'),
       gatewayMode: this.form.field('gatewayMode'),
       gatewaySidecarUrl: this.form.field('gatewaySidecarUrl'),
       instanceStorePersist: this.form.field('instanceStorePersist'),

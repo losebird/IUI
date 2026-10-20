@@ -309,14 +309,42 @@ export type ResolveMapSurfaceInput = {
   safeEmbedUrl?: (raw: string | undefined) => string | undefined
 }
 
+/**
+ * F5: exact host + path allowlist for author-supplied map embeds. No regex
+ * fallback (`evil.example/maps/x` used to pass) and no subdomain wildcard.
+ */
+const MAP_EMBED_RULES: ReadonlyArray<{ host: string; path?: RegExp }> = [
+  { host: 'www.openstreetmap.org', path: /^\/export\/embed\.html$/ },
+  { host: 'openstreetmap.org', path: /^\/export\/embed\.html$/ },
+  { host: 'www.google.com', path: /^\/maps\/embed(?:\/|$)/ },
+  { host: 'maps.google.com' },
+  { host: 'www.bing.com', path: /^\/maps\/embed(?:\/|$)/ },
+  { host: 'uri.amap.com' },
+  { host: 'map.baidu.com' },
+]
+
+/** F5: returns the normalized URL only for a known map provider embed. */
+export function safeMapEmbedUrl(raw: string | undefined): string | undefined {
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined
+  try {
+    const u = new URL(raw.trim())
+    if (u.protocol !== 'https:' || u.username !== '' || u.password !== '' || (u.port !== '' && u.port !== '443')) return undefined
+    const host = u.hostname.toLowerCase()
+    const ok = MAP_EMBED_RULES.some(rule => rule.host === host && (rule.path === undefined || rule.path.test(u.pathname)))
+    return ok ? u.toString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function resolveMapSurface(input: ResolveMapSurfaceInput): MapSurface {
   const coords = finiteCoords(input.lat, input.lng)
   const zoom = clampZoom(input.zoom)
   const markers = normalizeMapMarkers(input.markers)
   const query = (input.query ?? input.address ?? input.title ?? '').trim()
-  const safe =
-    input.safeEmbedUrl?.(input.embed) ??
-    (typeof input.embed === 'string' && /^https:\/\//i.test(input.embed) ? input.embed : undefined)
+  // F5: an embed is honored only when it passes the allowlist — a rejected
+  // URL must never fall back to "any https" (the caller shows it as a link).
+  const safe = (input.safeEmbedUrl ?? safeMapEmbedUrl)(input.embed)
   if (safe) return { kind: 'iframe-src', src: safe, mode: 'embed' }
 
   // Default interactive Leaflet (real map). osm export only when explicitly requested.

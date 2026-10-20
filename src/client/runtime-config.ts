@@ -12,6 +12,8 @@ export type RuntimeConfigSnapshot = {
   packId: string
   fenceFeedback: boolean
   formatReferee: boolean
+  /** F4: strict sandbox image policy (img-src data:/blob: + allowlist). */
+  strictImagePolicy?: boolean
   customTokensJson: string
   userTemplatesJson: string
   frameChannelMount?: boolean
@@ -70,6 +72,7 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         packId: 'sandbox',
         fenceFeedback: data.fenceFeedback !== false,
         formatReferee: data.formatReferee !== false,
+        strictImagePolicy: data.strictImagePolicy === true,
         customTokensJson: typeof data.customTokensJson === 'string' ? data.customTokensJson : '',
         userTemplatesJson: typeof data.userTemplatesJson === 'string' ? data.userTemplatesJson : '',
         frameChannelMount: false,

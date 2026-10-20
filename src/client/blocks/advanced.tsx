@@ -17,6 +17,7 @@ import { EmptyState } from '../ui/StatusBlock.tsx'
 import {
   buildDefaultMapLinks,
   resolveMapSurface,
+  safeMapEmbedUrl,
 } from '../../shared/map-embed.ts'
 import type { AnswersState, GenuiBlockProps } from './state.ts'
 import type {
@@ -625,31 +626,8 @@ export const BreadcrumbNode = memo(function BreadcrumbNode({ node }: { node: Gen
  */
 
 
-const MAP_EMBED_HOSTS = new Set([
-  'www.openstreetmap.org',
-  'openstreetmap.org',
-  'maps.google.com',
-  'www.google.com',
-  'www.bing.com',
-  'uri.amap.com',
-  'map.baidu.com',
-  'nominatim.openstreetmap.org',
-])
-
-function safeEmbedUrl(raw: string | undefined): string | undefined {
-  if (raw === undefined || raw.trim() === '') return undefined
-  try {
-    const u = new URL(raw)
-    if (u.protocol !== 'https:') return undefined
-    const host = u.hostname.toLowerCase()
-    if (![...MAP_EMBED_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))) {
-      if (!/(map|maps|osm|leaflet)/i.test(host + u.pathname)) return undefined
-    }
-    return u.toString()
-  } catch {
-    return undefined
-  }
-}
+/** F5: exact provider allowlist lives in shared/map-embed.ts. */
+const safeEmbedUrl = safeMapEmbedUrl
 
 /** Entity chip — person/place/thing with optional href/action. */
 export function EntityNode({ node, onAction }: {
@@ -732,7 +710,12 @@ export function MapNode({ node }: {
 }) {
   const query = (node.query ?? node.address ?? node.title ?? '').trim()
   const linksRaw = (node.links ?? []).filter((l) => typeof l?.href === 'string' && /^https?:\/\//i.test(l.href))
-  const links = (linksRaw.length > 0 ? linksRaw : buildDefaultMapLinks(query)).slice(0, 4)
+  const baseLinks = linksRaw.length > 0 ? linksRaw : buildDefaultMapLinks(query)
+  // F5: a non-allowlisted embed URL is shown as a plain external link card.
+  const rejectedEmbed = typeof node.embed === 'string' && /^https?:\/\//i.test(node.embed.trim()) && safeEmbedUrl(node.embed) === undefined
+    ? node.embed.trim()
+    : undefined
+  const links = (rejectedEmbed !== undefined ? [{ label: '打开外部地图', href: rejectedEmbed }, ...baseLinks] : baseLinks).slice(0, 4)
   const facts = (node.facts ?? []).slice(0, 8)
   const needsGeocode = node.lat === undefined && node.lng === undefined
     && ((node.query ?? node.address ?? node.title ?? '').trim() !== '')
@@ -809,7 +792,7 @@ export function MapNode({ node }: {
             title={node.title ?? '地图'}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-popups"
           />
         </div>
       )}
@@ -821,7 +804,7 @@ export function MapNode({ node }: {
             title={node.title ?? '地图'}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-popups"
           />
         </div>
       )}

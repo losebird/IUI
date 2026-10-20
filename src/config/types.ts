@@ -16,6 +16,7 @@ export interface IuiPluginConfig {
   themeId?: string
   fenceFeedback?: boolean
   formatReferee?: boolean
+  strictImagePolicy?: boolean
   customTokensJson?: string
   userTemplatesJson?: string
   /** Optional TypeSafe Jev format router. */
