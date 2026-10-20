@@ -18,8 +18,8 @@ describe('0.13.0-iui.25 failure-visible author JS', () => {
     expect(src).toContain('rerunAuthorJs')
     expect(src).toContain('data-iui-rerun-author')
     expect(src).toContain('clearFailureStrips')
-    expect(src).toContain('模型作者 JS')
-    expect(src).toContain('Model author JS chunk')
+    expect(src).toContain('页面脚本第 ')
+    expect(src).toContain('Page script part')
     expect(src).toContain("kind: 'author'")
     expect(src).toContain("kind: 'host'")
     // Soft-repair must not be the main failure path (harden helpers may still exist elsewhere).
@@ -115,7 +115,7 @@ document.getElementById('add').onclick = addSub;`,
       expect(EN[key]).toBeTruthy()
       expect(ZH[key]).toBeTruthy()
     }
-    expect(ZH['sandbox.rerunAuthorJs']).toContain('重跑作者 JS')
-    expect(EN['sandbox.rerunAuthorJs']).toContain('Re-run author JS')
+    expect(ZH['sandbox.rerunAuthorJs']).toContain('重跑页面脚本')
+    expect(EN['sandbox.rerunAuthorJs']).toContain('Re-run page script')
   })
 })

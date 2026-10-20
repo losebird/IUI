@@ -183,6 +183,8 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'libsReady'; frameId: string }
   /** F6: 1s watchdog heartbeat from the bridge. */
   | { source: 'iui-html'; type: 'heartbeat'; frameId: string }
+  /** F11: Escape pressed inside the page (host exits overlay fullscreen). */
+  | { source: 'iui-html'; type: 'escape'; frameId: string }
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
@@ -276,7 +278,7 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   if (record.type === 'openLink') {
     return typeof record.url === 'string' && record.url.length > 0 && record.url.length <= 2000
   }
-  if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady' || record.type === 'heartbeat') return true
+  if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady' || record.type === 'heartbeat' || record.type === 'escape') return true
   if (record.type === 'authorSettled') {
     return typeof record.ok === 'boolean'
   }
@@ -1588,6 +1590,12 @@ export function buildSandboxBridgeScript(frameId: string): string {
   })();
   // F6: watchdog heartbeat — the host shows「页面无响应」after 5s of silence.
   try { setInterval(function () { post({ type: 'heartbeat' }); }, 1000); post({ type: 'heartbeat' }); } catch (e) {}
+  // F11: forward Escape so overlay fullscreen can close while the page has focus.
+  try {
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !e.defaultPrevented) post({ type: 'escape' });
+    });
+  } catch (e) {}
   function measure() {
     var doc = document.documentElement;
     var body = document.body;

@@ -14,6 +14,7 @@ import {
   type Key,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   buildHtmlSandboxSrcdoc,
   buildSandboxDownloadHtml,
@@ -112,6 +113,54 @@ const CHIP: CSSProperties = {
   fontWeight: 600,
   letterSpacing: '0.04em',
   textTransform: 'uppercase',
+}
+
+type FullscreenMode = 'off' | 'native' | 'overlay' | 'portal'
+
+/**
+ * F11: `position: fixed` is trapped by an ancestor that forms a containing
+ * block (transform / filter / perspective / contain / container-type …).
+ */
+export function needsBodyPortal(el: Element): boolean {
+  const view = el.ownerDocument.defaultView
+  if (!view) return false
+  for (let node = el.parentElement; node !== null && node !== el.ownerDocument.body; node = node.parentElement) {
+    const cs = view.getComputedStyle(node)
+    if ((cs.transform && cs.transform !== 'none')
+      || (cs.filter && cs.filter !== 'none')
+      || (cs.perspective && cs.perspective !== 'none')
+      || (cs.backdropFilter && cs.backdropFilter !== 'none')
+      || /paint|layout|strict|content/.test(cs.contain || '')
+      || /transform|filter|perspective/.test(cs.willChange || '')
+      || (cs.containerType && cs.containerType !== 'normal')) return true
+  }
+  return false
+}
+
+const MENU_STYLE: CSSProperties = {
+  position: 'absolute',
+  right: 0,
+  top: 'calc(100% + 4px)',
+  zIndex: 10,
+  minWidth: 132,
+  display: 'flex',
+  flexDirection: 'column',
+  padding: 4,
+  borderRadius: 10,
+  border: '1px solid var(--dsl-g-border-surface, hsl(240 6% 90%))',
+  background: 'var(--dsw-alias-bg-base, #fff)',
+  boxShadow: '0 8px 24px rgba(15,23,42,.12)',
+}
+
+const MENU_ITEM: CSSProperties = {
+  textAlign: 'left',
+  fontSize: 13,
+  padding: '7px 10px',
+  border: 'none',
+  borderRadius: 6,
+  background: 'transparent',
+  color: 'var(--dsw-alias-label-primary, #1f2937)',
+  cursor: 'pointer',
 }
 
 const TOOLBAR_BTN: CSSProperties = {
@@ -363,7 +412,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<SandboxFailKind | null>(null)
   const [copied, setCopied] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+  /** F11: native = Fullscreen API; overlay = fixed in place; portal = fixed under body (transformed ancestor). */
+  const [fsMode, setFsMode] = useState<FullscreenMode>('off')
+  const fullscreen = fsMode !== 'off'
+  const fsButtonRef = useRef<HTMLButtonElement | null>(null)
+  const prevFsModeRef = useRef<FullscreenMode>('off')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const [starterOverride, setStarterOverride] = useState<string | null>(null)
   /** P1-STATE: prefer injecting author JS into frozen preview (no srcdoc rebuild). */
   const authorJsRanRef = useRef(false)
@@ -439,7 +494,6 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     // preview-shell / author-js locks here — that switches to a final
     // srcdoc on the last token and flashes the iframe.
     setStarterOverride(null)
-    setFullscreen(false)
   }, [raw])
 
   useEffect(() => {
@@ -548,6 +602,17 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       lastBeatRef.current = Date.now()
       setHung(prev => (prev ? false : prev))
       if (event.data.type === 'heartbeat') return
+      if (event.data.type === 'escape') {
+        setMenuOpen(false)
+        setFsMode((m) => {
+          if (m === 'native') {
+            const doc = frame.ownerDocument
+            if (doc.fullscreenElement !== null && typeof doc.exitFullscreen === 'function') void doc.exitFullscreen().catch(() => {})
+          }
+          return m === 'off' ? m : 'off'
+        })
+        return
+      }
       if (event.data.type === 'resize') {
         setAutoHeight(clampHeight(event.data.height, baseHeight))
         return
@@ -671,6 +736,66 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     return () => window.clearInterval(timer)
   }, [stopped])
 
+  // F11: leave native mode when the browser exits it (Esc / F11 / tab switch).
+  useEffect(() => {
+    if (fsMode !== 'native') return
+    const doc = shellRef.current?.ownerDocument ?? document
+    const onChange = (): void => {
+      if (doc.fullscreenElement !== shellRef.current) setFsMode('off')
+    }
+    doc.addEventListener('fullscreenchange', onChange)
+    return () => doc.removeEventListener('fullscreenchange', onChange)
+  }, [fsMode])
+
+  // F11: overlay modes lock background scroll and close on Escape.
+  useEffect(() => {
+    if (fsMode !== 'overlay' && fsMode !== 'portal') return
+    const doc = shellRef.current?.ownerDocument ?? document
+    const root = doc.documentElement
+    const prevRoot = root.style.overflow
+    const prevBody = doc.body.style.overflow
+    root.style.overflow = 'hidden'
+    doc.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') { e.preventDefault(); setFsMode('off') }
+    }
+    doc.addEventListener('keydown', onKey)
+    return () => {
+      root.style.overflow = prevRoot
+      doc.body.style.overflow = prevBody
+      doc.removeEventListener('keydown', onKey)
+    }
+  }, [fsMode])
+
+  // F11: focus returns to the toggle after exit; portal exit rebuilds in place.
+  useEffect(() => {
+    const prev = prevFsModeRef.current
+    prevFsModeRef.current = fsMode
+    if (prev !== 'off' && fsMode === 'off') {
+      const id = setTimeout(() => fsButtonRef.current?.focus({ preventScroll: true }), 0)
+      return () => clearTimeout(id)
+    }
+    return undefined
+  }, [fsMode])
+
+  // D9: ⋯ menu closes on outside click / Escape.
+  useEffect(() => {
+    if (!menuOpen) return
+    const doc = menuRef.current?.ownerDocument ?? document
+    const onDown = (e: Event): void => {
+      if (menuRef.current && e.target instanceof Node && !menuRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false) }
+    }
+    doc.addEventListener('pointerdown', onDown, true)
+    doc.addEventListener('keydown', onKey, true)
+    return () => {
+      doc.removeEventListener('pointerdown', onDown, true)
+      doc.removeEventListener('keydown', onKey, true)
+    }
+  }, [menuOpen])
+
   if (parsed === null || srcdoc === null) {
     return (
       <EmptyState
@@ -754,89 +879,157 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     }
   }
 
-  const shellStyle: CSSProperties = fullscreen
+  const enterFullscreen = () => {
+    const shell = shellRef.current
+    if (shell === null) return
+    const fallback = (): void => {
+      if (needsBodyPortal(shell)) {
+        // Re-parenting reloads the iframe: rebuild with author JS; F10 restores state.
+        setReloadToken((n) => n + 1)
+        setFsMode('portal')
+      } else {
+        setFsMode('overlay')
+      }
+    }
+    const doc = shell.ownerDocument
+    if (typeof shell.requestFullscreen === 'function' && doc.fullscreenEnabled !== false) {
+      shell.requestFullscreen({ navigationUI: 'hide' }).then(() => setFsMode('native'), fallback)
+      return
+    }
+    fallback()
+  }
+
+  const exitFullscreen = () => {
+    const doc = shellRef.current?.ownerDocument ?? document
+    if (fsMode === 'native' && doc.fullscreenElement !== null && typeof doc.exitFullscreen === 'function') {
+      void doc.exitFullscreen().catch(() => {})
+    }
+    setFsMode('off')
+  }
+
+  const toolbar = (
+    <div style={STAGE_ROW} aria-live="polite">
+      {showStreamingStageChrome(parsed, ready) && stages.map((stage) => (
+        <span key={stage} style={CHIP}>{stageLabel(stage, t)}</span>
+      ))}
+      {showStreamingStageChrome(parsed, ready) && <span>{statusLabel(parsed, ready, t)}</span>}
+      {parsed.partial && !ready && <span>{t('sandbox.partialHint')}</span>}
+      <span style={{ flex: 1 }} />
+      {/* D9: only 全屏 + ⋯ ; 重跑页面脚本 lives in the error strip. */}
+      <button
+        ref={fsButtonRef}
+        type="button"
+        style={TOOLBAR_BTN}
+        data-iui-fullscreen-toggle="1"
+        aria-pressed={fullscreen}
+        onClick={() => (fullscreen ? exitFullscreen() : enterFullscreen())}
+      >
+        {fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
+      </button>
+      <div ref={menuRef} style={{ position: 'relative' }}>
+        <button
+          type="button"
+          style={{ ...TOOLBAR_BTN, padding: '5px 9px', letterSpacing: 1 }}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label={t('sandbox.more')}
+          title={t('sandbox.more')}
+          data-iui-sandbox-menu="1"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <div role="menu" style={MENU_STYLE}>
+            <button
+              type="button"
+              role="menuitem"
+              style={MENU_ITEM}
+              onClick={() => {
+                setMenuOpen(false)
+                setStopped(false)
+                setHung(false)
+                setReloadToken((n) => n + 1)
+                setError(null)
+                setErrorKind(null)
+              }}
+            >
+              {t('sandbox.reload')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={MENU_ITEM}
+              onClick={() => {
+                setMenuOpen(false)
+                void (async () => {
+                  const snap = await requestSandboxSnapshot(iframeRef.current, frameId)
+                  const html = buildSandboxDownloadHtml(parsed, {
+                    designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
+                    frameId: 'download',
+                    brandId: getActivePackId(),
+                    mergePackTokens: false,
+                    ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
+                  })
+                  const name = `${(parsed.title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'}.html`
+                  downloadText(name, html)
+                })()
+              }}
+            >
+              {t('sandbox.download')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={MENU_ITEM}
+              onClick={async () => {
+                const ok = await copyText(effectiveRaw)
+                setCopied(ok)
+                if (ok) setTimeout(() => { setCopied(false); setMenuOpen(false) }, 900)
+                else setMenuOpen(false)
+              }}
+            >
+              {copied ? t('sandbox.copied') : t('sandbox.copy')}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  const shellStyle: CSSProperties = fsMode === 'native'
     ? {
         ...SHELL_STYLE,
-        position: 'fixed',
-        inset: 12,
-        zIndex: 9999,
-        maxHeight: 'calc(100vh - 24px)',
-        overflow: 'auto',
-        boxShadow: '0 16px 48px rgba(15,23,42,.18)',
+        height: '100vh',
+        padding: 12,
+        background: 'var(--dsw-alias-bg-base, #fff)',
+        overflow: 'hidden',
       }
-    : SHELL_STYLE
+    : fsMode === 'overlay' || fsMode === 'portal'
+      ? {
+          ...SHELL_STYLE,
+          position: 'fixed',
+          inset: 12,
+          width: 'auto',
+          height: 'calc(100vh - 24px)',
+          zIndex: fsMode === 'portal' ? 2147483000 : 9999,
+          padding: 12,
+          borderRadius: 12,
+          background: 'var(--dsw-alias-bg-base, #fff)',
+          overflow: 'hidden',
+          boxShadow: '0 0 0 100vmax rgba(15,23,42,.42), 0 16px 48px rgba(15,23,42,.18)',
+        }
+      : SHELL_STYLE
 
-  return (
-    <div ref={shellRef} style={shellStyle} data-iui-html-sandbox={parsed.partial ? 'partial' : ready ? 'ready' : 'loading'} data-iui-fullscreen={fullscreen ? '1' : '0'}>
-      <div style={STAGE_ROW} aria-live="polite">
-        {showStreamingStageChrome(parsed, ready) && stages.map((stage) => (
-          <span key={stage} style={CHIP}>{stageLabel(stage, t)}</span>
-        ))}
-        {showStreamingStageChrome(parsed, ready) && <span>{statusLabel(parsed, ready, t)}</span>}
-        {parsed.partial && !ready && <span>{t('sandbox.partialHint')}</span>}
-        <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          style={TOOLBAR_BTN}
-          onClick={() => {
-            setStopped(false)
-            setHung(false)
-            setReloadToken((n) => n + 1)
-            setError(null)
-            setErrorKind(null)
-          }}
-        >
-          {t('sandbox.reload')}
-        </button>
-        {jsComplete && (
-          <button
-            type="button"
-            style={TOOLBAR_BTN}
-            title={t('sandbox.authorFailHint')}
-            onClick={() => rerunAuthorJsOnly()}
-          >
-            {t('sandbox.rerunAuthorJs')}
-          </button>
-        )}
-        <button
-          type="button"
-          style={TOOLBAR_BTN}
-          onClick={() => {
-            void (async () => {
-              const snap = await requestSandboxSnapshot(iframeRef.current, frameId)
-              const html = buildSandboxDownloadHtml(parsed, {
-                designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
-                frameId: 'download',
-                brandId: getActivePackId(),
-                mergePackTokens: false,
-                ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
-              })
-              const name = `${(parsed.title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'}.html`
-              downloadText(name, html)
-            })()
-          }}
-        >
-          {t('sandbox.download')}
-        </button>
-        <button
-          type="button"
-          style={TOOLBAR_BTN}
-          onClick={async () => {
-            const ok = await copyText(effectiveRaw)
-            setCopied(ok)
-            if (ok) setTimeout(() => setCopied(false), 1500)
-          }}
-        >
-          {copied ? t('sandbox.copied') : t('sandbox.copy')}
-        </button>
-        <button
-          type="button"
-          style={TOOLBAR_BTN}
-          onClick={() => setFullscreen((v) => !v)}
-        >
-          {fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
-        </button>
-      </div>
+  const content = (
+    <div
+      ref={shellRef}
+      style={shellStyle}
+      data-iui-html-sandbox={parsed.partial ? 'partial' : ready ? 'ready' : 'loading'}
+      data-iui-fullscreen={fullscreen ? fsMode : '0'}
+      {...(fsMode === 'overlay' || fsMode === 'portal' ? { role: 'dialog', 'aria-modal': true, 'aria-label': parsed.title ?? 'IUI sandbox' } : {})}
+    >
+      {toolbar}
       {actionsPaused && (
         <div data-iui-actions-paused="1" role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0', fontSize: 13, color: 'var(--color-text-secondary, #5f5e58)' }}>
           <span>{t('sandbox.actionsPaused')}</span>
@@ -868,7 +1061,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           ]}
         />
       )}
-      <div style={{ position: 'relative' }}>
+      <div style={fullscreen ? { position: 'relative', flex: 1, minHeight: 0 } : { position: 'relative' }}>
         {storageReady && <iframe
           ref={iframeRef}
           key={stopped ? `${srcdocRebuildKey}:stopped` : srcdocRebuildKey}
@@ -877,7 +1070,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           srcDoc={stopped ? stoppedSrcdoc(t('sandbox.stopped')) : srcdoc}
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
-          style={{ ...FRAME_STYLE, height }}
+          style={{ ...FRAME_STYLE, height: fullscreen ? '100%' : height }}
           onLoad={() => {
             if (stopped) return
             requestMeasure()
@@ -885,7 +1078,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
             if (!parsed.partial) setReady(true)
           }}
         />}
-        {!storageReady && <div style={{ ...FRAME_STYLE, height }} aria-busy="true" />}
+        {!storageReady && <div style={{ ...FRAME_STYLE, height: fullscreen ? '100%' : height }} aria-busy="true" />}
         {hung && !stopped && (
           <div
             data-iui-sandbox-hung="1"
@@ -909,6 +1102,17 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       </div>
     </div>
   )
+
+  if (fsMode === 'portal' && typeof document !== 'undefined') {
+    // Keep the chat layout still while the page lives under <body>.
+    return (
+      <>
+        <div aria-hidden="true" style={{ ...SHELL_STYLE, height: height + 36 }} />
+        {createPortal(content, document.body)}
+      </>
+    )
+  }
+  return content
 }
 
 /** Registry-channel fence renderer for language `iui-html`. */

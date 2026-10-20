@@ -564,14 +564,14 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     title.className = 'iui-fail-title';
     if (kind === 'host') {
       title.textContent = zh
-        ? '宿主 / 插件失败（不是模型作者 JS）'
-        : 'Host / plugin failure (not model author JS)';
+        ? '插件出错（不是页面脚本的问题）'
+        : 'Plugin error (not the page script)';
     } else if (index >= 0 && total > 0) {
       title.textContent = zh
-        ? ('模型作者 JS 第 ' + (index + 1) + '/' + total + ' 片失败')
-        : ('Model author JS chunk ' + (index + 1) + '/' + total + ' failed');
+        ? ('页面脚本第 ' + (index + 1) + '/' + total + ' 段出错')
+        : ('Page script part ' + (index + 1) + '/' + total + ' failed');
     } else {
-      title.textContent = zh ? '模型作者 JS 失败' : 'Model author JS failed';
+      title.textContent = zh ? '页面脚本出错' : 'Page script failed';
     }
     var detail = document.createElement('div');
     detail.textContent = (name ? name + ': ' : '') + msg;
@@ -584,11 +584,11 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         : 'Page script could not find an element: an id/selector in the JS does not match the HTML. Regenerate to let the model fix it.')
       : zh
       ? (kind === 'host'
-        ? '这是 IUI 沙箱宿主问题。可点「重新加载」整页，或「重跑作者 JS」再试。'
-        : '这是模型写出的脚本问题。其它分片仍可能已执行；可只重跑作者 JS，无需整页刷新。')
+        ? '这是 IUI 插件的问题。可点「重新加载」整页，或「重跑页面脚本」再试。'
+        : '这是页面里的脚本问题。其它部分可能已正常运行；可只重跑页面脚本，无需整页刷新。')
       : (kind === 'host'
-        ? 'This is an IUI host/plugin issue. Reload the page, or re-run author JS.'
-        : 'This is model-authored script. Other chunks may still have run; re-run author JS without a full reload.');
+        ? 'This is an IUI plugin issue. Reload the page, or re-run the page script.'
+        : 'This is a problem in the page script. Other parts may still have run; re-run the page script without a full reload.');
     body.appendChild(title);
     body.appendChild(detail);
     body.appendChild(meta);
@@ -598,7 +598,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.setAttribute('data-iui-rerun-author', '1');
-      btn.textContent = zh ? '重跑作者 JS' : 'Re-run author JS';
+      btn.textContent = zh ? '重跑页面脚本' : 'Re-run page script';
       btn.addEventListener('click', function (ev) {
         try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
         try { api.rerunAuthorJs(); } catch (e2) {
