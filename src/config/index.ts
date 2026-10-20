@@ -18,6 +18,7 @@ export {
   askNeedsUi,
   isPlainAsk,
   isKnowledgeAsk,
+  isExplicitUiAsk,
 } from './referee-rules.ts'
 export {
   STREAM_HEURISTICS,

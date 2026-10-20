@@ -23,10 +23,14 @@ const sandboxFence = (title = '页面') =>
 
 describe('classifyAsk', () => {
   it('classifies resource / weather / form / compare as must_fence', () => {
-    expect(classifyAsk('看看本机 CPU 和内存')?.id).toBe('resource')
-    expect(classifyAsk('今天北京天气')?.id).toBe('weather')
+    // Enforcement needs an explicit page request; bare topics are the model's call.
+    expect(classifyAsk('看看本机 CPU 和内存')).toBeNull()
+    expect(classifyAsk('今天北京天气')).toBeNull()
+    expect(classifyAsk('对比方案 A 和 B')).toBeNull()
+    expect(classifyAsk('用卡片展示这台电脑现在的资源使用情况')?.id).toBe('resource')
+    expect(classifyAsk('画一个北京今天的天气卡片')?.id).toBe('weather')
     expect(classifyAsk('帮我做个报名表单')?.id).toBe('form')
-    expect(classifyAsk('对比方案 A 和 B')?.id).toBe('compare')
+    expect(classifyAsk('做一张方案 A/B 对比卡')?.id).toBe('compare')
   })
 
   it('leaves short facts unclassified (plain text OK)', () => {
@@ -68,7 +72,7 @@ describe('success shape (sandbox-first)', () => {
 describe('planFormatRefereeCorrection', () => {
   it('steers when a resource ask gets Markdown only', () => {
     const plan = planFormatRefereeCorrection({
-      ask: '告诉我这台电脑现在的资源使用情况',
+      ask: '用卡片展示这台电脑现在的资源使用情况',
       reply: '- CPU: 34%\n- 内存: 8 GiB\n- 磁盘: 62%\n- 负载: 1.2\n',
       turn: 1,
       aborted: false,
@@ -152,8 +156,8 @@ describe('fence-first / mid-turn nudge', () => {
 
 describe('manual / map / booking / visual', () => {
   it('classifies 说明书 / 安装 as manual', () => {
-    expect(classifyAsk('自行车说明书')?.id).toBe('manual')
-    expect(classifyAsk('怎么安装这个架子')?.id).toBe('manual')
+    expect(classifyAsk('做一页自行车安装说明书')?.id).toBe('manual')
+    expect(classifyAsk('怎么安装这个架子')).toBeNull()
   })
 
   it('rejects catalog callout-only for manual; accepts sandbox', () => {
@@ -166,7 +170,8 @@ describe('manual / map / booking / visual', () => {
 
   it('classifies map / booking / visual fallback', () => {
     expect(classifyAsk('给我一张南京地图')?.id).toBe('map')
-    expect(classifyAsk('帮我订一张高铁票')?.id).toBe('booking')
+    expect(classifyAsk('做一个高铁票预订表单')?.id).toBe('booking')
+    expect(classifyAsk('帮我订一张高铁票')).toBeNull()
     expect(classifyAsk('把今日菜单给我看看')?.id).toBe('visual')
     const map = getIntentRule('map')!
     expect(map.repairHint).toMatch(/详解/)

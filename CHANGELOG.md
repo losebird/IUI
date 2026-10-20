@@ -17,6 +17,9 @@
 - **Build passes type-check (F14):** dev dependency `@deepseek-ai/dsh-client-ui-primitives` → `0.2.0-rc.2` (matches dsh 0.2.x hosts and the settings API); `pnpm-workspace.yaml` declares the runtime deps that package omits so tests import it. `pnpm run check` is green.
 - **No orphan `else` between chunks:** a brace-less `if (x) a(); else {…}` at top level was cut after `;`, so the `else` chunk threw `Unexpected token 'else'` (seen in a real dsh 0.2.1 session). Chunks starting with `else` / `catch` / `finally` are re-joined. Across 159 stored pages, chunk-only syntax errors 3 → 0.
 - **Coding questions stay plain text:** "Python 里怎么把一个列表反转？简单说一下" matched the UI word 列表, so the referee threw away a correct plain answer and forced a sandbox page (6 s → 33 s). Coding / brief knowledge questions without a build-or-show verb (做 / 画 / 可视化 / 看板 / 地图 …) now classify as plain.
+- **Referee steps in only on explicit page requests:** host format enforcement (fence-first prime, end-of-turn steer, next-turn reminder, Markdown rescue) now requires the user to clearly ask for a page — a build/show verb plus a visual artifact (做一个看板 / 画一张地图 / 可视化… / 把菜单给我看看), not a topic word such as 天气 / 对比 / 安装 / 资源. Otherwise the model decides plain text vs page. "不要做页面 / 纯文字" opts out. A previous ask's reminder no longer leaks into an unrelated next turn.
+- **No re-steer of a delivered page:** a valid fence is never sent back for "weak shape" (that doubled turn time and overrode the model).
+- **No premature mid-turn nudge:** the "HARD STOP … placeholders OK" nudge fired on every live dsh page turn right after the model loaded the skill. It now fires only after a real tools-first failure (bash / search before any fence); loading the skill or photo tools is fine.
 - **Install docs:** `lib/` is a build artifact not tracked in git; INSTALL.md now says so and gives the local-path install fallback.
 
 Also in this release (previously unreleased):

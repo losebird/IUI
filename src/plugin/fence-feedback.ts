@@ -58,7 +58,7 @@ import {
   looksLikeJsonMasqueradeOpen,
   matchesForbiddenFirstPrefix,
 } from '../config/stream-heuristics.ts'
-import { getIntentRule } from '../config/referee-rules.ts'
+import { getIntentRule, isExplicitUiAsk } from '../config/referee-rules.ts'
 import { recordFenceOp } from '../shared/fence-ops.ts'
 import { ingestToolResultBindings } from './binding-bridge.ts'
 
@@ -616,6 +616,8 @@ export function installFenceFeedback(
 
   /** Prefer turn-cached format route (rules or optional Jev); else sync rules. */
   const resolveAskRule = (ask: string, state: SessionFeedback) => {
+    // First principles: the host only enforces when a page was explicitly asked for.
+    if (!isExplicitUiAsk(ask)) return null
     if (state.routedFormatId === 'none') return null
     if (state.routedFormatId) {
       const byId = getIntentRule(state.routedFormatId)
@@ -870,7 +872,13 @@ export function installFenceFeedback(
 
     if (step === 0) {
       const reminder = state.pendingNextTurnReminder
-      if (reminder !== null && reminder !== undefined) {
+      const askNow = state.lastUserAsk.trim() !== ''
+        ? state.lastUserAsk
+        : latestUserAskFromSession(agent.session)
+      // A reminder from the previous ask only applies if THIS ask also wants a page.
+      const reminderApplies = reminder !== null && reminder !== undefined && isExplicitUiAsk(askNow)
+      if (!reminderApplies) state.pendingNextTurnReminder = null
+      if (reminderApplies) {
         state.pendingNextTurnReminder = null
         extras.push(createFeedbackMessage(reminder, agent.session.header.version))
         state.primedThisTurn = true
@@ -894,7 +902,7 @@ export function installFenceFeedback(
               `iui: format-router jev format=${routed.formatId} confidence=${routed.confidence.toFixed(2)}`,
             )
           }
-          const rule = routed.rule
+          const rule = isExplicitUiAsk(ask) ? routed.rule : null
           if (rule !== null && rule.mode === 'must_fence') {
             // Contract first (short HARD), then full recipe prime — weak models see FIRST_CHARS first.
             extras.push(createFeedbackMessage(buildFirstTokenContract(rule), agent.session.header.version))
@@ -909,7 +917,11 @@ export function installFenceFeedback(
       // Weak models: ignore prime, burn bash/search, apology prose, or Markdown-as-UI.
       // HARD: any must_fence turn without a valid fence by midNudgeAfterSteps gets ONE mid-nudge.
       // Prefer tool-before-fence abort when the model already called tools.
-      if (!replyHasValidFence(state.text)) {
+      // Only a real tools-first failure (bash/search/file writes before any
+      // fence) earns a mid-turn nudge. Loading the skill or photo tools is the
+      // model doing its job — nudging then ("HARD STOP … placeholders OK")
+      // fired on every live dsh page turn and rushed the page.
+      if (!replyHasValidFence(state.text) && (state.toolsBeforeFence || state.pendingToolAbortNudge)) {
         const ask = state.lastUserAsk.trim() !== ''
           ? state.lastUserAsk
           : latestUserAskFromSession(agent.session)

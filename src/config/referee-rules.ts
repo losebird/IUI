@@ -461,23 +461,47 @@ export function isPlainAsk(ask: string): boolean {
   return false
 }
 
-const EXPLICIT_UI_ASK =
-  /做[一个张份款套]?|画[一个张份]?|生成.{0,8}(页|卡|图|表|看板)|给我看|可视化|看板|仪表盘|地图|计算器|图表|界面|页面|卡片|组件|交互|表单|问卷|报名|预订|订票|买票|查票|dashboard|chart|visuali[sz]e|interactive|widget|\bui\b|show\s+me|make\s+(a|me)|build\s+(a|me)|draw\s+(a|me)|iui(?:-html)?/iu
+/** Unambiguous "I want something to look at / play with" phrasing. */
+const STRONG_UI_ASK =
+  /可视化|交互式|可交互|能交互|用卡片|做成(?:页面|网页|卡片|看板|图表)|做个页面|画(?:一[个张幅]|个|张)|visuali[sz]e|interactive|iui(?:-html)?/iu
+/** Build / show verbs. "写" is excluded on purpose: 写个函数 / 写个工具 are coding asks. */
+const UI_VERB = '给我[一个张份幅]|做|画|生成|制作|创建|设计|搭|弄|来[一个张份]|整[一个个]|展示|显示|呈现|给我看|make|build|create|draw|design|generate|render|show'
+/** Things that are pages / visuals, not prose. */
+const UI_ARTIFACT =
+  '可视化|看板|仪表盘|驾驶舱|地图|计算器|图表|折线|柱状|饼图|曲线|图|界面|页面|网页|页|卡片|卡|组件|小工具|表单|问卷|动画|游戏|小游戏|模拟器|仿真|番茄钟|计时器|倒计时|转盘|抽奖|时间线|行程|日程|攻略|食谱|菜单|课表|日历|清单|报表|表格|明细表|数据表|汇总表|对照表|海报|demo|dashboard|chart|map|calculator|widget|page|\\bui\\b|form|diagram|timeline|脑图|思维导图|流程图|甘特图'
+const VERB_THEN_ARTIFACT = new RegExp(`(?:${UI_VERB}).{0,24}?(?:${UI_ARTIFACT})`, 'iu')
+/** "把今日菜单给我看看 / 地图给我" — artifact first, then hand it over. */
+const ARTIFACT_THEN_SHOW = new RegExp(`(?:${UI_ARTIFACT}).{0,6}?给我(?:看|瞧)?`, 'iu')
+/** "不要做页面 / 纯文字回答" — the user opted out. */
+const OPT_OUT_UI = /(?:不要|别|无需|不用|不必)(?:做|画|生成|出)?.{0,4}(?:页面|网页|图|卡片|界面|沙箱|围栏)|纯文字|文字(?:回答|说明)就[行好可]|plain\s+text|no\s+(?:ui|page|chart)/iu
 const CODE_TOPIC =
-  /python|javascript|typescript|\bjs\b|\bts\b|\bjava\b|golang|\bgo\b|rust|c\+\+|c#|\bsql\b|shell|bash|\bgit\b|\bnpm\b|pnpm|node(?:\.js)?|react|vue|正则|代码|函数|方法|变量|数组|字典|列表|元组|字符串|报错|异常|编译|语法|\bapi\b|docker|linux|命令/iu
+  /python|javascript|typescript|\bjs\b|\bts\b|\bjava\b|golang|\bgo\b|rust|c\+\+|c#|\bsql\b|shell|bash|\bgit\b|\bnpm\b|pnpm|node(?:\.js)?|react|vue|css|html|正则|代码|函数|方法|变量|数组|字典|列表|元组|字符串|报错|异常|编译|语法|\bapi\b|docker|linux|命令/iu
 const QUESTION_ASK =
-  /怎么|怎样|如何|为什么|为啥|是什么|什么是|有什么|区别|差别|用法|写法|意思|原理|解释|讲讲|说说|吗[?？]?$|how\s+(do|to|can)|what|why|difference|explain/iu
+  /怎么|怎样|如何|为什么|为啥|是什么|什么是|有什么|区别|差别|用法|写法|意思|原理|解释|讲讲|说说|吗[?？]?$|how\s+(?:do|to|can)|what|why|difference|explain/iu
 const BRIEF_ASK = /简单说|简单讲|简要|简短|一句话|大概说|快速说|briefly|in\s+short|tl;?dr|quick\s+question/iu
+
+/**
+ * The user explicitly asked for a page / visual (做一个看板、画一张地图、可视化…).
+ * This is the ONLY gate for host format enforcement: without it the model
+ * decides plain text vs page on its own (first principles: the host steps in
+ * only when a page was clearly requested and none was delivered).
+ * Coding questions ("React 里怎么显示表单") are not page requests.
+ */
+export function isExplicitUiAsk(ask: string): boolean {
+  const text = ask.trim()
+  if (text.length === 0 || OPT_OUT_UI.test(text)) return false
+  if (STRONG_UI_ASK.test(text)) return true
+  if (CODE_TOPIC.test(text) && QUESTION_ASK.test(text)) return false
+  return VERB_THEN_ARTIFACT.test(text) || ARTIFACT_THEN_SHOW.test(text)
+}
 
 /**
  * Knowledge / coding Q&A ("Python 里怎么把列表反转？简单说一下") — plain text is
  * the right answer even when it mentions a UI-ish noun (列表/流程/安装…).
- * Seen live: the referee forced a sandbox page after a correct plain answer.
- * An explicit build/show verb (做/画/可视化/看板/地图…) still wins.
  */
 export function isKnowledgeAsk(ask: string): boolean {
   const text = ask.trim()
-  if (text.length === 0 || EXPLICIT_UI_ASK.test(text)) return false
+  if (text.length === 0 || isExplicitUiAsk(text)) return false
   if (BRIEF_ASK.test(text)) return true
   return CODE_TOPIC.test(text) && QUESTION_ASK.test(text)
 }
@@ -509,22 +533,19 @@ export function askNeedsUi(ask: string): boolean {
 }
 
 /**
- * Classify ask: named intent first (quality recipes), else visual fallback when
- * UI-worthy, else null (plain OK).
+ * Classify ask for host enforcement: null unless the user explicitly asked for
+ * a page (isExplicitUiAsk); then named intent (quality recipe) or visual fallback.
  */
 export function classifyIntentAsk(ask: string): IntentRule | null {
   const text = ask.trim()
   if (text.length === 0) return null
-  if (isKnowledgeAsk(text)) return null
+  // Enforcement gate: only explicit page requests get a must_fence rule.
+  if (!isExplicitUiAsk(text)) return null
   for (const rule of INTENT_RULES) {
     if (rule.id === 'visual') continue
     if (rule.askPatterns.some((source) => safeRegExpTest(source, 'iu', text))) {
       return rule
     }
   }
-  if (isPlainAsk(text)) return null
-  if (askNeedsUi(text)) {
-    return INTENT_RULES.find((rule) => rule.id === 'visual') ?? null
-  }
-  return null
+  return INTENT_RULES.find((rule) => rule.id === 'visual') ?? null
 }

@@ -17,16 +17,18 @@ describe('format-router', () => {
   })
 
   it('routeFormatSync matches rules for resource asks', () => {
-    const routed = routeFormatSync('告诉我这台电脑现在的资源使用情况')
+    const routed = routeFormatSync('用卡片展示这台电脑现在的资源使用情况')
     expect(routed.source).toBe('rules')
     expect(routed.formatId).toBe('resource')
     expect(routed.rule?.mode).toBe('must_fence')
   })
 
   it('routeFormat without key stays on rules', async () => {
-    const routed = await routeFormat('北京今天天气怎么样', { jevEnabled: true, jevApiKey: '' })
+    const routed = await routeFormat('画一个北京今天的天气卡片', { jevEnabled: true, jevApiKey: '' })
     expect(routed.source).toBe('rules')
     expect(routed.formatId).toBe('weather')
+    // No explicit page request → plain text is the model's call.
+    expect((await routeFormat('北京今天天气怎么样', { jevEnabled: true, jevApiKey: '' })).formatId).toBe('none')
   })
 
   it('routeFormat uses Jev when configured and confidence ok', async () => {

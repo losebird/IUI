@@ -404,9 +404,8 @@ export function replyHasValidFence(text: string): boolean {
 
 /**
  * Decide whether this turn should steer a format correction.
- * Fires for any classified must_fence ask (named OR visual fallback) when the
- * reply lacks a fence. Whitelist recipes tighten weak_fence checks; they do
- * not decide whether fencing is required.
+ * Fires only when the user explicitly asked for a page (classifyAsk gate) and
+ * the reply has no valid fence. A delivered page is never re-steered.
  * Hard stop: at most one steer per turn; never after a valid fence or validate OK.
  */
 export function planFormatRefereeCorrection(input: FormatRefereePlanInput): FormatRefereePlan | null {
@@ -421,20 +420,9 @@ export function planFormatRefereeCorrection(input: FormatRefereePlanInput): Form
   const rule = classifyAsk(input.ask)
   if (rule === null || rule.mode !== 'must_fence') return null
 
-  // Closed fence that fails successShape still fails format — steer once.
-  // manual/steps: callout-only / leftover compare; booking: missing fields;
-  // visual: empty generic card without actionable structure (weak-model trap).
-  const hardenWeakShape =
-    rule.id === 'manual' ||
-    rule.id === 'steps' ||
-    rule.id === 'booking' ||
-    rule.id === 'visual' ||
-    rule.id === 'form' ||
-    rule.id === 'map'
-  if (replyHasValidFence(input.reply)) {
-    if (!hardenWeakShape) return null
-    if (replyMeetsSuccessShape(input.reply, rule)) return null
-  }
+  // First principles: a delivered page is the model's call. Re-steering a
+  // valid fence for "weak shape" doubled turn time and overrode the model.
+  if (replyHasValidFence(input.reply)) return null
 
   let reason: FormatFailReason | null = null
   if (!replyHasFence(input.reply)) {
@@ -445,8 +433,6 @@ export function planFormatRefereeCorrection(input: FormatRefereePlanInput): Form
         replyLooksLikeMarkdownUi(input.reply, rule) || replyLooksLikeApologyInsteadOfUi(input.reply)
       ) ? 'markdown_as_ui' : 'missing_fence'
     }
-  } else if (replyHasValidFence(input.reply) && hardenWeakShape && !replyMeetsSuccessShape(input.reply, rule)) {
-    reason = 'weak_fence'
   } else {
     // Fence opener present but not yet a closed valid tree — treat as missing
     // only when nothing parseable closed; otherwise stay silent (handled above).
@@ -497,7 +483,7 @@ export function formatCorrectionText(rule: IntentRule, reason: FormatFailReason)
 export function buildRefereePromptBlock(): string {
   return [
     '**Format referee (sandbox-first):**',
-    '- Short facts / yes-no / greetings → plain text only.',
+    '- Short facts / yes-no / greetings / coding or how-to questions → plain text only (unless the user asks for a page).',
     '- Any visual / interactive ask (图表、可视化、看板、表单、地图、对比、小工具、动画、游戏…) → ONE closed ```iui-html fence in the reply body THIS turn. Do NOT write files, do NOT call bash/shell/search to build the page — the fence IS the page. Exception: get_trip_stop_images (itinerary photos) is allowed once before the fence.',
     '- Body = `title:` / `height:` lines, then `---css`, `---html`, `---js` sections with raw code (no JSON escaping). Write real, polished CSS + HTML + JS (local interactivity, animations, CDN libs allowed).',
     '- Never emit legacy ```iui component trees ({"type":"hero"...}) or ```json for UI. Never use Markdown tables/lists as the UI.',

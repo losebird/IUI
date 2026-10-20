@@ -27,7 +27,7 @@ const LINES: readonly string[] = [
   "",
   "Each `---css` / `---html` / `---js` marker sits alone on its own line, in that order. Never write ``` inside the block.",
   "",
-  "**When:** any visual / interactive ask (图表、看板、表单、地图、计算器、对比、小工具、游戏…) → 1 short sentence → the fence → optional 1 sentence. Short facts / greetings → plain text. Never Markdown tables as UI, never legacy ```iui component trees or ```json, never write the page to files or call tools to build it.",
+  "**When:** any visual / interactive ask (图表、看板、表单、地图、计算器、对比、小工具、游戏…) → 1 short sentence → the fence → optional 1 sentence. Short facts, greetings, coding / how-to / knowledge questions → plain text (code blocks OK) unless the user asks for a page. Never Markdown tables as UI, never legacy ```iui component trees or ```json, never write the page to files or call tools to build it.",
   "",
   "**Host-provided runtime (do not re-load or re-implement):**",
   "- Design tokens (ALWAYS use, never hardcode hex for text/surfaces; dark mode is automatic): --color-background-primary|secondary|tertiary, --color-text-primary|secondary|tertiary, semantic --color-background-|--color-text-|--color-border- info|danger|success|warning, --font-sans|serif|mono, --border-radius-md|lg|xl. Form controls are pre-styled. css = widget-specific styles only.",
