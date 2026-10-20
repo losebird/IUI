@@ -371,6 +371,8 @@ export const EN = {
   'sandbox.stage.css': 'CSS',
   'sandbox.stage.html': 'HTML',
   'sandbox.stage.js': 'JS',
+  'fence.renderAsPage': '▶ Render as page',
+  'fence.renderAsPageHint': 'This code block looks like an IUI page — click to render it in the sandbox',
   'sandbox.skeleton.waiting': 'Generating the page…',
   'sandbox.skeleton.css': 'Writing styles…',
   'sandbox.skeleton.html': 'Building the layout…',

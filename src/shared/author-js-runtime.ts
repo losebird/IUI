@@ -336,6 +336,129 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
 
   function setPhase(p) { state.phase = p; }
 
+  // F2 step 5 / F15: rerun hygiene. Timers, animation frames and
+  // window/document/body/root listeners created while author code runs (or
+  // inside callbacks it scheduled) are tracked, so a re-run first tears them
+  // down and restores the delivered HTML — 3 re-runs leave the same DOM and
+  // no duplicate intervals. Host code (depth 0) is never tracked.
+  var zone = window.__iuiAuthorZone || (function () {
+    var z = { depth: 0, timeouts: {}, intervals: {}, rafs: {}, listeners: [] };
+    var nST = window.setTimeout, nCT = window.clearTimeout;
+    var nSI = window.setInterval, nCI = window.clearInterval;
+    var nRAF = window.requestAnimationFrame, nCAF = window.cancelAnimationFrame;
+    function run(fn, self, args) { z.depth++; try { return fn.apply(self, args); } finally { z.depth--; } }
+    z.run = run;
+    function rest(args, from) { var out = []; for (var i = from; i < args.length; i++) out.push(args[i]); return out; }
+    window.setTimeout = function (cb, ms) {
+      if (!z.depth || typeof cb !== 'function') return nST.apply(window, arguments);
+      var extra = rest(arguments, 2);
+      var id = nST.call(window, function () { delete z.timeouts[id]; run(cb, window, extra); }, ms);
+      z.timeouts[id] = 1;
+      return id;
+    };
+    window.clearTimeout = function (id) { delete z.timeouts[id]; return nCT.call(window, id); };
+    window.setInterval = function (cb, ms) {
+      if (!z.depth || typeof cb !== 'function') return nSI.apply(window, arguments);
+      var extra = rest(arguments, 2);
+      var id = nSI.call(window, function () { run(cb, window, extra); }, ms);
+      z.intervals[id] = 1;
+      return id;
+    };
+    window.clearInterval = function (id) { delete z.intervals[id]; return nCI.call(window, id); };
+    if (typeof nRAF === 'function') {
+      window.requestAnimationFrame = function (cb) {
+        if (!z.depth || typeof cb !== 'function') return nRAF.call(window, cb);
+        var id = nRAF.call(window, function (t) { delete z.rafs[id]; run(cb, window, [t]); });
+        z.rafs[id] = 1;
+        return id;
+      };
+      window.cancelAnimationFrame = function (id) { delete z.rafs[id]; return nCAF.call(window, id); };
+    }
+    var ET = window.EventTarget && window.EventTarget.prototype;
+    var nAdd = ET && ET.addEventListener, nRem = ET && ET.removeEventListener;
+    var wrapped = typeof WeakMap === 'function' ? new WeakMap() : null;
+    function persistentTarget(t) {
+      return t === window || t === document || t === document.documentElement || t === document.body
+        || (t && t.id === 'iui-preview-root');
+    }
+    if (ET && nAdd && nRem && wrapped) {
+      ET.addEventListener = function (type, listener, opts) {
+        if (!z.depth || !listener || (typeof listener !== 'function' && typeof listener.handleEvent !== 'function')) {
+          return nAdd.call(this, type, listener, opts);
+        }
+        var w = wrapped.get(listener);
+        if (!w) {
+          w = function (ev) {
+            return typeof listener === 'function' ? run(listener, this, [ev]) : run(listener.handleEvent, listener, [ev]);
+          };
+          wrapped.set(listener, w);
+        }
+        if (persistentTarget(this)) z.listeners.push([this, type, w, opts]);
+        return nAdd.call(this, type, w, opts);
+      };
+      ET.removeEventListener = function (type, listener, opts) {
+        var w = listener && wrapped.get(listener);
+        if (w) nRem.call(this, type, w, opts);
+        return nRem.call(this, type, listener, opts);
+      };
+    }
+    // Nodes author code appends straight to <body> (toasts, overlays, canvases)
+    // live outside #iui-preview-root, so restoring the root alone would leave
+    // one extra copy per re-run.
+    z.bodyNodes = [];
+    var NP = window.Node && window.Node.prototype;
+    function trackBody(parent, node) {
+      if (!z.depth || parent !== document.body || !node) return;
+      if (node.nodeType === 11) {
+        for (var c = node.firstChild; c; c = c.nextSibling) z.bodyNodes.push(c);
+      } else z.bodyNodes.push(node);
+    }
+    if (NP && NP.appendChild && NP.insertBefore) {
+      var nAppend = NP.appendChild, nInsert = NP.insertBefore;
+      NP.appendChild = function (node) { trackBody(this, node); return nAppend.call(this, node); };
+      NP.insertBefore = function (node, ref) { trackBody(this, node); return nInsert.call(this, node, ref); };
+    }
+    var EP = window.Element && window.Element.prototype;
+    ['append', 'prepend'].forEach(function (m) {
+      var native = EP && EP[m];
+      if (typeof native !== 'function') return;
+      EP[m] = function () {
+        if (z.depth && this === document.body) {
+          for (var a = 0; a < arguments.length; a++) if (arguments[a] && typeof arguments[a] === 'object') trackBody(this, arguments[a]);
+        }
+        return native.apply(this, arguments);
+      };
+    });
+    z.reset = function () {
+      for (var b = 0; b < z.bodyNodes.length; b++) {
+        var nd = z.bodyNodes[b];
+        try { if (nd.parentNode === document.body) document.body.removeChild(nd); } catch (eN) {}
+      }
+      z.bodyNodes = [];
+      var k;
+      for (k in z.timeouts) { try { nCT.call(window, Number(k)); } catch (e) {} }
+      for (k in z.intervals) { try { nCI.call(window, Number(k)); } catch (e) {} }
+      if (typeof nCAF === 'function') for (k in z.rafs) { try { nCAF.call(window, Number(k)); } catch (e) {} }
+      z.timeouts = {}; z.intervals = {}; z.rafs = {};
+      for (var i = 0; i < z.listeners.length; i++) {
+        var l = z.listeners[i];
+        try { nRem.call(l[0], l[1], l[2], l[3]); } catch (e) {}
+      }
+      z.listeners = [];
+    };
+    z.stats = function () {
+      return {
+        timeouts: Object.keys(z.timeouts).length,
+        intervals: Object.keys(z.intervals).length,
+        rafs: Object.keys(z.rafs).length,
+        listeners: z.listeners.length,
+        bodyNodes: z.bodyNodes.length
+      };
+    };
+    window.__iuiAuthorZone = z;
+    return z;
+  })();
+
   function isSingleSmart(ch) {
     return ch === '\u2018' || ch === '\u2019' || ch === '\u2032';
   }
@@ -607,6 +730,22 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       });
       strip.appendChild(btn);
     }
+    // F17: the strip is the ONLY error surface (host chrome stays quiet), so
+    // it carries the reload / regenerate actions the meta text refers to.
+    var stripDetail = ((name ? name + ': ' : '') + msg).slice(0, 2000);
+    var addStripAction = function (action, label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('data-iui-strip-action', action);
+      b.textContent = label;
+      b.addEventListener('click', function (ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+        try { post({ type: 'stripAction', action: action, detail: stripDetail }); } catch (e2) {}
+      });
+      strip.appendChild(b);
+    };
+    addStripAction('reload', zh ? '重新加载' : 'Reload');
+    addStripAction('reask', zh ? '重新生成' : 'Regenerate');
 
     try {
       var root = document.getElementById('iui-preview-root');
@@ -622,7 +761,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         message: (kind === 'host' ? '[host] ' : '[author] ')
           + (index >= 0 && total > 0 ? ('chunk ' + (index + 1) + '/' + total + ': ') : '')
           + msg,
-        kind: kind
+        kind: kind,
+        strip: true
       };
       if (index >= 0) payload.chunkIndex = index;
       if (total > 0) payload.chunkTotal = total;
@@ -656,7 +796,10 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   function runChunkList(parts, exprs) {
     setPhase('authorRunning');
     var failed = 0;
-    withDomReplay(function () {
+    var rootEl = document.getElementById('iui-preview-root');
+    if (rootEl && typeof state.baseHtml !== 'string') state.baseHtml = rootEl.innerHTML;
+    zone.depth++;
+    try { withDomReplay(function () {
       var total = parts.length;
       for (var p = 0; p < parts.length; p++) {
         try { (0, eval)(parts[p]); }
@@ -675,7 +818,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
           showFailureStrip({ kind: 'author', index: total + e, total: total + list.length, err: err2 });
         }
       }
-    });
+    }); } finally { zone.depth--; }
     setPhase('authorSettled');
     try {
       post({ type: 'authorSettled', ok: failed === 0, failedChunks: failed });
@@ -868,6 +1011,13 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       return false;
     }
     clearFailureStrips();
+    // Rerun hygiene: tear down timers/listeners the previous run created and
+    // restore the delivered markup so N re-runs converge to the same DOM.
+    try { zone.reset(); } catch (e0) {}
+    try {
+      var rootEl = document.getElementById('iui-preview-root');
+      if (rootEl && typeof state.baseHtml === 'string') rootEl.innerHTML = state.baseHtml;
+    } catch (e1) {}
     state.ran = false;
     window.__iuiAuthorJsRan = false;
     ensureLibsThenRun({
@@ -888,6 +1038,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     get phase() { return state.phase; },
     ensureLibsThenRun: ensureLibsThenRun,
     rerunAuthorJs: rerunAuthorJs,
+    setBaseHtml: function (html) { if (typeof html === 'string') state.baseHtml = html; },
     clearFailureStrips: clearFailureStrips,
     reportHostFailure: reportHostFailure,
     softHarden: softHarden,

@@ -14,6 +14,8 @@ export type RuntimeConfigSnapshot = {
   formatReferee: boolean
   /** F4: strict sandbox image policy (img-src data:/blob: + allowlist). */
   strictImagePolicy?: boolean
+  /** F16: deprecated ```iui / ```dsh-ui fences still render (default off). */
+  legacyFences?: boolean
   customTokensJson: string
   userTemplatesJson: string
   frameChannelMount?: boolean
@@ -51,6 +53,17 @@ export function getRuntimeConfigSnapshot(): RuntimeConfigSnapshot {
   return snapshot
 }
 
+/** F16: deprecated ```iui / ```dsh-ui fences render only with the compat switch on. */
+export function isLegacyFencesEnabled(): boolean {
+  return snapshot.legacyFences === true
+}
+
+/** Test seam: overlay fields on the current snapshot (no fetch, no theme apply). */
+export function patchRuntimeConfigForTest(patch: Partial<RuntimeConfigSnapshot>): void {
+  snapshot = { ...snapshot, ...patch }
+  for (const listener of listeners) listener()
+}
+
 export function subscribeRuntimeConfig(listener: () => void): () => void {
   listeners.add(listener)
   return () => { listeners.delete(listener) }
@@ -73,6 +86,7 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         fenceFeedback: data.fenceFeedback !== false,
         formatReferee: data.formatReferee !== false,
         strictImagePolicy: data.strictImagePolicy === true,
+        legacyFences: data.legacyFences === true,
         customTokensJson: typeof data.customTokensJson === 'string' ? data.customTokensJson : '',
         userTemplatesJson: typeof data.userTemplatesJson === 'string' ? data.userTemplatesJson : '',
         frameChannelMount: false,

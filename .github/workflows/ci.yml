@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'hotfix/**', 'release/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm exec tsc --noEmit -p tsconfig.json
+      - name: Unit tests
+        run: pnpm exec vitest run
+      - name: Build
+        run: pnpm run build && node scripts/check-standalone.mjs
+      # Playwright stays out of the lockfile: install it on the side and point
+      # the browser regression at it.
+      - name: Install Playwright (chromium)
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Browser regression (chromium)
+        env:
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
+        run: pnpm run test:browser

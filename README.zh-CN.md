@@ -76,6 +76,11 @@ npx @deepseek-ai/dsh web
 
 写作说明：[SKILL.md](./SKILL.md)
 
+### 隐私
+
+- 页面运行在沙箱 iframe 中（访问不到 dsh、你的文件或 Cookie）；页面脚本只能访问白名单里的 CDN、地图瓦片和图床。
+- 可选的 **Jev 格式路由**（设置 → IUI → 格式路由）**默认关闭**。开启并填写 TypeSafe Key 后，每条用户消息的文字会发送给第三方 TypeSafe System One 服务来选择回复格式；关闭时只用本地规则判断。
+
 ---
 
 ## 文档

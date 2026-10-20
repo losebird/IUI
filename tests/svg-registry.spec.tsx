@@ -30,7 +30,7 @@ describe('SVG registry integration', () => {
     try {
       expect([...registry.keys()].sort()).toEqual(['dsh-ui', 'iui', 'iui-html', 'svg'])
       const renderer = registry.get('svg')!
-      const { getByRole } = render(<>{renderer('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"/>', 'svg')}</>)
+      const { getByRole } = render(<>{renderer('<svg xmlns="http://www.w3.org/2000/svg" data-iui="1" viewBox="0 0 100 50"/>', 'svg')}</>)
       expect(getByRole('img')).not.toBeNull()
       expect(getByRole('button', { name: '源码', exact: true })).not.toBeNull()
     } finally { dispose() }

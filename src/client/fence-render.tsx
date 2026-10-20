@@ -15,12 +15,13 @@
  * Structural types are declared locally on purpose: the context contract is
  * a data shape, and pristine hosts do not export the host-side type names.
  */
-import { useLayoutEffect, useRef, useState, type CSSProperties, type Key, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type Key, type ReactNode } from 'react'
 import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import { codeBlockLabels } from './primitive-labels.ts'
 import { t, useT } from './i18n/index.ts'
 import { parseHtmlSandboxFence } from '../shared/html-sandbox.ts'
 import { renderHtmlFence } from './html-fence.tsx'
+import { isLegacyFencesEnabled, subscribeRuntimeConfig } from './runtime-config.ts'
 import type { GenuiSpec } from './spec.ts'
 import { describeJsonFailure } from '../shared/fence-repair.ts'
 import { resolveFence, type FenceResolution } from '../shared/fence-resolve.ts'
@@ -222,10 +223,44 @@ export function renderResolvedFenceNode(raw: string, key: Key, context?: GenuiFe
  * diagnostic — the host replaced its own block with our output — and an
  * unpublishable `panel:true` fence renders `null` (nothing in the flow).
  */
-export function renderGenuiFence(raw: string, key: Key, context?: GenuiFenceContext): ReactNode {
+export function renderGenuiFence(raw: string, key: Key, context?: GenuiFenceContext, lang: 'iui' | 'dsh-ui' = 'iui'): ReactNode {
+  return <LegacyFenceGate key={key} raw={raw} fenceKey={key} lang={lang} {...(context !== undefined ? { context } : {})} />
+}
+
+function renderLegacyFence(raw: string, key: Key, context?: GenuiFenceContext): ReactNode {
   // Sandbox-first: legacy ```iui / dsh-ui bodies that look like html sandbox mount here.
   if (parseHtmlSandboxFence(raw) !== null) {
     return renderHtmlFence(raw, key, context)
   }
   return renderLegacyCatalogTip(key)
+}
+
+const RENDER_OFFER_STYLE: CSSProperties = {
+  font: '12px/1.4 system-ui,sans-serif', padding: '2px 10px', borderRadius: 6,
+  border: '1px solid rgba(127,127,127,.35)', background: 'transparent', color: 'inherit', cursor: 'pointer', opacity: 0.85,
+}
+
+/**
+ * F16: deprecated ```iui / ```dsh-ui fences. With the compat switch off they
+ * are ordinary code; a settled page body offers「▶ 渲染为页面」.
+ */
+function LegacyFenceGate({ raw, fenceKey, context, lang }: { raw: string; fenceKey: Key; context?: GenuiFenceContext; lang: 'iui' | 'dsh-ui' }): ReactNode {
+  useT()
+  const enabled = useSyncExternalStore(subscribeRuntimeConfig, isLegacyFencesEnabled, isLegacyFencesEnabled)
+  const [forced, setForced] = useState(false)
+  if (enabled || forced) return renderLegacyFence(raw, fenceKey, context)
+  const settled = context?.source !== undefined
+  const page = settled && parseHtmlSandboxFence(raw) !== null
+  return (
+    <div data-iui-legacy-fence="code">
+      {page && (
+        <div data-iui-render-offer="" style={{ display: 'flex', justifyContent: 'flex-end', margin: '4px 0 -2px' }}>
+          <button type="button" style={RENDER_OFFER_STYLE} title={t('fence.renderAsPageHint')} onClick={() => { setForced(true) }}>
+            {t('fence.renderAsPage')}
+          </button>
+        </div>
+      )}
+      <CodeBlock {...codeBlockLabels()} code={`${raw}\n`} lang={lang} />
+    </div>
+  )
 }

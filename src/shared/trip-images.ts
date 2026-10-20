@@ -792,7 +792,7 @@ const TRIP_PHOTO_RUNTIME_JS = String.raw`
   var CACHE = Object.create(null);
   var INFLIGHT = Object.create(null);
   var ZH_UI = false;
-  try { ZH_UI = /^zh/i.test(String(navigator.language || '')) || /^zh/i.test(String(document.documentElement.lang || '')); } catch (eLang) {}
+  try { var docLang = String(document.documentElement.lang || ''); ZH_UI = docLang ? /^zh/i.test(docLang) : /^zh/i.test(String(navigator.language || '')); } catch (eLang) {}
   var CARD_SEL = '.iui-stop-card, .iui-hotel-card, .iui-product-card, .iui-place-card, .iui-cover-card';
   function norm(s) {
     s = String(s || '');

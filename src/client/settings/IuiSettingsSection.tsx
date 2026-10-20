@@ -43,6 +43,7 @@ export type IuiSettingsSectionValue = {
   fenceFeedback?: boolean
   formatReferee?: boolean
   strictImagePolicy?: boolean
+  legacyFences?: boolean
   customTokensJson?: string
   userTemplatesJson?: string
   gatewayMode?: 'in-process' | 'sidecar' | 'off'
@@ -65,6 +66,7 @@ type CardSnapshot = SettingsFormShell & {
   fenceFeedback: SettingsFieldState
   formatReferee: SettingsFieldState
   strictImagePolicy: SettingsFieldState
+  legacyFences: SettingsFieldState
   customTokensJson: SettingsFieldState
   userTemplatesJson: SettingsFieldState
   gatewayMode: SettingsFieldState
@@ -476,6 +478,18 @@ export function IuiSettingsSection(props: {
           </label>
           <div className={styles.switchCard}>
             <div className={styles.switchCopy}>
+              <div className={styles.switchTitle}>{t('legacyFences')}</div>
+              <p className={styles.groupHint}>{t('legacyFencesHint')}</p>
+            </div>
+            <Switch
+              checked={state.legacyFences?.text === 'true'}
+              disabled={!state.writable}
+              label={t('legacyFences')}
+              onChange={(checked) => props.edit('legacyFences', checked ? 'true' : 'false')}
+            />
+          </div>
+          <div className={styles.switchCard}>
+            <div className={styles.switchCopy}>
               <div className={styles.switchTitle}>{t('frameChannelMount')}</div>
               <p className={styles.groupHint}>{t('frameChannelMountHint')}</p>
             </div>
@@ -797,6 +811,7 @@ export class IuiSettingsCardController {
       boolField('fenceFeedback'),
       boolField('formatReferee'),
       boolField('strictImagePolicy'),
+      boolField('legacyFences'),
       enumField('gatewayMode', ['in-process', 'sidecar', 'off']),
       settingsTextField('gatewaySidecarUrl'),
       boolField('instanceStorePersist'),
@@ -819,6 +834,7 @@ export class IuiSettingsCardController {
       fenceFeedback: this.form.field('fenceFeedback'),
       formatReferee: this.form.field('formatReferee'),
       strictImagePolicy: this.form.field('strictImagePolicy'),
+      legacyFences: this.form.field('legacyFences'),
       gatewayMode: this.form.field('gatewayMode'),
       gatewaySidecarUrl: this.form.field('gatewaySidecarUrl'),
       instanceStorePersist: this.form.field('instanceStorePersist'),

@@ -5,11 +5,22 @@ import { codeBlockLabels } from './primitive-labels.ts'
 import { useT } from './i18n/index.ts'
 import css from './GenuiBlock.module.css'
 
+/**
+ * F16: a plain ```svg block is ordinary code — it opens on the source tab.
+ * Only an `<svg data-iui…>` root (IUI-authored) opens on the preview tab;
+ * the preview tab is always one click away.
+ */
+export function isIuiMarkedSvg(raw: string): boolean {
+  const head = raw.slice(0, 4000)
+  return /<svg\b[^>]*\sdata-iui(?:-[\w-]+)?\s*=/iu.test(head)
+    || /<svg\b[^>]*\sdata-iui[\s>/]/iu.test(head)
+}
+
 function SvgFence({ raw }: { raw: string }) {
   const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const [settled, setSettled] = useState(false)
-  const [source, setSource] = useState(false)
+  const [source, setSource] = useState(() => !isIuiMarkedSvg(raw))
   useLayoutEffect(() => {
     const node = ref.current
     if (node === null) return

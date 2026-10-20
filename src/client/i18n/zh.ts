@@ -366,6 +366,8 @@ export const ZH: Record<keyof typeof EN, string> = {
   'sandbox.stage.css': 'CSS',
   'sandbox.stage.html': 'HTML',
   'sandbox.stage.js': 'JS',
+  'fence.renderAsPage': '▶ 渲染为页面',
+  'fence.renderAsPageHint': '这个代码块看起来是一个 IUI 页面，点击后在沙箱中渲染',
   'sandbox.skeleton.waiting': '正在生成页面…',
   'sandbox.skeleton.css': '正在写样式…',
   'sandbox.skeleton.html': '正在搭建页面结构…',

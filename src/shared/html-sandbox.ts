@@ -51,7 +51,8 @@ export const HTML_SANDBOX_CDN_ALLOWLIST = [
  * Default Leaflet raster tiles (world coverage).
  * tile.openstreetmap.org often returns HTTP 200 + x-blocked stub PNGs from
  * datacenter / null-origin srcdoc sandboxes — markers render, basemap stays gray.
- * CartoCDN light_all is OSM-derived, allowlisted, and reliable in sandboxes.
+ * Esri World_Street_Map is allowlisted and reliable in sandboxes (CartoCDN
+ * now serves API-key watermark tiles, so carto URLs are rewritten to this).
  */
 export const IUI_DEFAULT_MAP_TILE_URL =
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
@@ -102,6 +103,11 @@ export type HtmlSandboxSpec = {
 }
 
 export type HtmlSandboxBuildOptions = {
+  /**
+   * F17: plugin UI language (`<html lang>`). The in-frame failure strip, code
+   * tools and photo credits follow it instead of `navigator.language`.
+   */
+  uiLang?: string
   /** F10: persisted localStorage items seeded before the bridge / author JS. */
   storageSeed?: Readonly<Record<string, string>>
   /** F4: strict image policy — img-src/font-src drop the `https:` wildcard. */
@@ -189,7 +195,8 @@ export type IuiSandboxHostMessage =
   /** F11: Escape pressed inside the page (host exits overlay fullscreen). */
   | { source: 'iui-html'; type: 'escape'; frameId: string }
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
-  | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
+  | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number; strip?: boolean }
+  | { source: 'iui-html'; type: 'stripAction'; frameId: string; action: 'reload' | 'reask'; detail?: string }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown> }
   /** F10: debounced full snapshot of the page's persistent storage items. */
@@ -293,7 +300,12 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
     if (record.kind !== undefined && record.kind !== 'author' && record.kind !== 'host') return false
     if (record.chunkIndex !== undefined && typeof record.chunkIndex !== 'number') return false
     if (record.chunkTotal !== undefined && typeof record.chunkTotal !== 'number') return false
+    if (record.strip !== undefined && typeof record.strip !== 'boolean') return false
     return true
+  }
+  if (record.type === 'stripAction') {
+    return (record.action === 'reload' || record.action === 'reask')
+      && (record.detail === undefined || (typeof record.detail === 'string' && record.detail.length <= 2000))
   }
   if (record.type === 'localState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
@@ -1747,7 +1759,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
       a.href = href || '#';
       // F12: never show a Commons file name as the credit text.
       if (label && (/\\.(jpe?g|png|gif|webp|svg|tiff?)\\b/i.test(String(label)) || /^\\s*file:/i.test(String(label)))) {
-        label = /[\\u3400-\\u9fff]/.test(String(label)) || /^zh/i.test(String(navigator.language || '')) ? 'ⓘ 图片来自 Wikimedia' : 'ⓘ Photo: Wikimedia';
+        label = /[\\u3400-\\u9fff]/.test(String(label)) || /^zh/i.test(String((document.documentElement && document.documentElement.lang) || navigator.language || '')) ? 'ⓘ 图片来自 Wikimedia' : 'ⓘ Photo: Wikimedia';
       }
       if (label) a.textContent = String(label);
       return a;
@@ -1898,7 +1910,11 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (!name || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return false;
     var fn = window[name];
     if (typeof fn !== 'function') return false;
-    try { fn.call(el, ev); } catch (err) {
+    try {
+      var zoneH = window.__iuiAuthorZone;
+      if (zoneH && typeof zoneH.run === 'function') zoneH.run(fn, el, [ev]);
+      else fn.call(el, ev);
+    } catch (err) {
       console.error('[iui-html] handler', name, err);
       try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
     }
@@ -2038,6 +2054,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
         document.body.appendChild(root);
       }
       root.innerHTML = data.html;
+      try { var pipeB = window.__iuiAuthorPipeline; if (pipeB && pipeB.setBaseHtml) pipeB.setBaseHtml(data.html); } catch (eB) {}
       measure();
       try { if (window.iuiSandbox && window.iuiSandbox.afterDomChange) window.iuiSandbox.afterDomChange('previewHtml'); } catch (eH) {}
     }
@@ -2985,7 +3002,8 @@ export function buildHtmlSandboxSrcdoc(
   const photoFill = buildTripPhotoFillScript()
   // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
-  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  const langAttr = typeof options.uiLang === 'string' && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u.test(options.uiLang) ? ` lang="${options.uiLang}"` : ''
+  let doc = `<!DOCTYPE html><html${langAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}

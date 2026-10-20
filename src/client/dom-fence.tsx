@@ -67,6 +67,8 @@ import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type Ge
 import { resolveViewedSessionId } from './session-resolver.ts'
 import { sourceFencesOfAssistant, sourceLanguageAt } from './source-fence.ts'
 import { mutationTouchesComposer } from './composer-bridge.ts'
+import { isLegacyFencesEnabled } from './runtime-config.ts'
+import { t } from './i18n/index.ts'
 
 /** Fence surfaces the channel can take over, newest host first: the shared
  * CodeBlock surface every rc.6+ markdown fence renders through
@@ -942,8 +944,8 @@ export function installDomFenceRenderer(
     bar.style.cssText = 'display:flex;justify-content:flex-end;margin:4px 0 -2px'
     const button = document.createElement('button')
     button.type = 'button'
-    button.textContent = '▶ 渲染为页面'
-    button.title = '这个代码块看起来是一个 IUI 页面，点击后在沙箱中渲染'
+    button.textContent = t('fence.renderAsPage')
+    button.title = t('fence.renderAsPageHint')
     button.style.cssText = 'font:12px/1.4 system-ui,sans-serif;padding:2px 10px;border-radius:6px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;cursor:pointer;opacity:.85'
     button.addEventListener('click', (event) => {
       event.preventDefault()
@@ -995,6 +997,14 @@ export function installDomFenceRenderer(
     // only when the settled body is STRICTLY a page; ```json / no-language
     // fences never auto-render — they get a「▶ 渲染为页面」button instead.
     const forced = forcedRender.has(block)
+    // F16: deprecated ```iui / ```dsh-ui fences stay ordinary code unless the
+    // legacy-fence compat switch is on; a settled strict page body still gets
+    // the「▶ 渲染为页面」button so old conversations remain one click away.
+    if (isUiFenceLang(language) && !forced && !isLegacyFencesEnabled()) {
+      if (settled && isStrictSandboxRaw(raw) && block.closest(ASSISTANT_FLOW_ROW) !== null) offerRender(block)
+      else clearOffer(block)
+      return
+    }
     const explicitLang = isUiFenceLang(language) || isHtmlFenceLang(language)
     const looseShaped = language !== 'svg' && looksLikeHtmlSandboxBody(raw)
     const sandboxShaped = forced

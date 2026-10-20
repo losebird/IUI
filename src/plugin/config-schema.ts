@@ -11,6 +11,7 @@ export const Config = Schema.object({
   fenceFeedback: Schema.boolean().default(true).volatile(),
   formatReferee: Schema.boolean().default(true).volatile(),
   strictImagePolicy: Schema.boolean().default(false).volatile(),
+  legacyFences: Schema.boolean().default(false).volatile(),
   customTokensJson: Schema.string().default('').volatile(),
   userTemplatesJson: Schema.string().default('').volatile(),
   jevEnabled: Schema.boolean().default(false).volatile(),
@@ -28,6 +29,8 @@ export type IuiConfigResolved = {
   formatReferee: boolean
   /** F4: sandbox img-src only data:/blob: + allowlisted image hosts. */
   strictImagePolicy: boolean
+  /** F16: render deprecated ```iui / ```dsh-ui fences (removed in 0.14). */
+  legacyFences: boolean
   customTokensJson: string
   userTemplatesJson: string
   jevEnabled: boolean
@@ -57,6 +60,7 @@ export function resolveLiveConfig(config: unknown): IuiConfigResolved {
     fenceFeedback: Boolean(readConfigValue(row.fenceFeedback, true)),
     formatReferee: Boolean(readConfigValue(row.formatReferee, true)),
     strictImagePolicy: Boolean(readConfigValue(row.strictImagePolicy, false)),
+    legacyFences: Boolean(readConfigValue(row.legacyFences, false)),
     customTokensJson: String(readConfigValue(row.customTokensJson, '')),
     userTemplatesJson: String(readConfigValue(row.userTemplatesJson, '')),
     jevEnabled: Boolean(readConfigValue(row.jevEnabled, false)),

@@ -104,7 +104,7 @@ describe('D2–D8 design kit CSS + skill', () => {
     expect(css).toContain('.iui-pin-dot.active')
   })
   it('skill text documents the rules', () => {
-    for (const s of ['nothing below 12px', '--fs-2xl 40', 'data-iui-style', '.iui-stat', '.iui-card-grid', 'scene-3d']) expect(OIU_DESIGN_SKILL).toContain(s)
+    for (const s of ['nothing below 12px', '--fs-2xl 40', 'data-iui-style', '.iui-stat', '.iui-card-grid', 'OrbitControls']) expect(OIU_DESIGN_SKILL).toContain(s)
     const skill = read('SKILL.md')
     expect(skill).toContain('设计规则')
   })

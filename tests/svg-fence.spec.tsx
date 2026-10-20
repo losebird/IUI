@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { renderSvgFence } from '../src/client/svg-fence.tsx'
 
-const raw = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><text x="2" y="20">模块图</text></svg>'
+// F16: only data-iui marked SVG opens on the preview tab.
+const raw = '<svg xmlns="http://www.w3.org/2000/svg" data-iui="1" viewBox="0 0 100 50"><text x="2" y="20">模块图</text></svg>'
+const unmarked = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="10" height="10"/></svg>'
 afterEach(cleanup)
 
 describe('SVG fence', () => {
@@ -16,8 +18,16 @@ describe('SVG fence', () => {
     expect(getByRole('img')).not.toBeNull()
   })
 
+  it('opens unmarked SVG on the source tab with preview one click away', () => {
+    const { getByRole, queryByRole, container } = render(<>{renderSvgFence(unmarked, 'svg')}</>)
+    expect(queryByRole('img')).toBeNull()
+    expect(container.querySelector('pre')?.textContent).toContain(unmarked)
+    fireEvent.click(getByRole('button', { name: '预览', exact: true }))
+    expect(getByRole('img')).not.toBeNull()
+  })
+
   it('waits for the streaming marker to disappear without requiring a React rerender', async () => {
-    const { container, queryByRole, getByRole } = render(<div data-streaming="true">{renderSvgFence('<svg', 'svg')}</div>)
+    const { container, queryByRole, getByRole } = render(<div data-streaming="true">{renderSvgFence('<svg data-iui="1"', 'svg')}</div>)
     expect(queryByRole('img')).toBeNull()
     expect(queryByRole('status')).toBeNull()
     expect(container.querySelector('pre')?.textContent).toContain('<svg')
@@ -26,9 +36,9 @@ describe('SVG fence', () => {
   })
 
   it('preserves malformed source with a visible error', () => {
-    const { getByRole, container } = render(<>{renderSvgFence('<svg><broken>', 'bad')}</>)
+    const { getByRole, container } = render(<>{renderSvgFence('<svg data-iui><broken>', 'bad')}</>)
     expect(getByRole('status').textContent).toContain('SVG')
-    expect(container.querySelector('pre')?.textContent).toBe('<svg><broken>')
+    expect(container.querySelector('pre')?.textContent).toBe('<svg data-iui><broken>')
     fireEvent.click(getByRole('button', { name: '源码', exact: true }))
     expect(getByRole('button', { name: '复制', exact: true })).not.toBeNull()
   })

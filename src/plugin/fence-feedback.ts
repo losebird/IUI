@@ -80,7 +80,7 @@ export const MAX_CORRECTIONS_PER_TURN = 1
 const LEGACY_MARKER_PREFIX = '[genui 自修 #'
 
 /** A fence opener is an info string of exactly `dsh-ui` (≤3 spaces indent). */
-const FENCE_OPEN = /^ {0,3}```[ \t]*(?:iui-html|iui|dsh-ui)[ \t]*$/u
+const FENCE_OPEN = /^ {0,3}```[ \t]*(iui-html|iui|dsh-ui)[ \t]*$/u
 /** Any fence closer (the renderer never nests fences in one body). */
 const FENCE_CLOSE = /^ {0,3}```[ \t]*$/u
 /** Upper bound on fences inspected per reply — a reply is text, not a corpus. */
@@ -94,6 +94,22 @@ export interface ExtractedFence {
   readonly closed: boolean
   /** 1-based position among this reply's fences. */
   readonly index: number
+  /** Info string of the opener. */
+  readonly lang?: 'iui-html' | 'iui' | 'dsh-ui'
+}
+
+/**
+ * F16: deprecated ```iui / ```dsh-ui fences. Off by default — the browser
+ * shows them as code, so the referee must not count them as delivered pages.
+ */
+let legacyFencesEnabled = false
+
+export function setLegacyFencesEnabled(enabled: boolean): void {
+  legacyFencesEnabled = enabled
+}
+
+export function isLegacyFencesEnabled(): boolean {
+  return legacyFencesEnabled
 }
 
 /**
@@ -105,20 +121,21 @@ export interface ExtractedFence {
 export function extractDshUiFences(text: string): ExtractedFence[] {
   const lines = text.split('\n')
   const fences: ExtractedFence[] = []
-  let open: { start: number; index: number } | null = null
+  let open: { start: number; index: number; lang: 'iui-html' | 'iui' | 'dsh-ui' } | null = null
   for (let line = 0; line < lines.length; line++) {
     const current = lines[line] ?? ''
     if (open === null) {
-      if (FENCE_OPEN.test(current)) open = { start: line + 1, index: fences.length + 1 }
+      const m = FENCE_OPEN.exec(current)
+      if (m !== null) open = { start: line + 1, index: fences.length + 1, lang: m[1] as 'iui-html' | 'iui' | 'dsh-ui' }
       continue
     }
     if (!FENCE_CLOSE.test(current)) continue
-    fences.push({ raw: lines.slice(open.start, line).join('\n'), closed: true, index: open.index })
+    fences.push({ raw: lines.slice(open.start, line).join('\n'), closed: true, index: open.index, lang: open.lang })
     open = null
     if (fences.length >= MAX_FENCES) return fences
   }
   if (open !== null && fences.length < MAX_FENCES) {
-    fences.push({ raw: lines.slice(open.start).join('\n'), closed: false, index: open.index })
+    fences.push({ raw: lines.slice(open.start).join('\n'), closed: false, index: open.index, lang: open.lang })
   }
   return fences
 }
@@ -154,6 +171,9 @@ export function fenceFailures(text: string): FenceFailure[] {
 /** `null` when this fence renders; otherwise the reason it does not. */
 function fenceFailureDetail(fence: ExtractedFence): string | null {
   if (!fence.closed) return 'error=unterminated_fence\nrequired=closing_fence'
+  if (!legacyFencesEnabled && (fence.lang === 'iui' || fence.lang === 'dsh-ui')) {
+    return `error=deprecated_fence_language\nlanguage=${fence.lang}\nrequired=\`\`\`iui-html (same body; the browser shows \`\`\`${fence.lang} as plain code)`
+  }
   try { if (parseHtmlSandboxFence(fence.raw) !== null) return null } catch { /* fall through */ }
   const resolution = resolveFence(fence.raw, { settled: true })
   if (resolution.spec !== null) return null

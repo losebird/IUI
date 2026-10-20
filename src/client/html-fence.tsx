@@ -5,7 +5,6 @@
  */
 import {
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -39,7 +38,7 @@ import { enrichPlaceMediaHtml } from '../shared/trip-images.ts'
 import { useGenuiAction } from './action-context.ts'
 import type { GenuiFenceContext } from './fence-render.tsx'
 import { sandboxAssetBase } from './asset-loader.ts'
-import { useT } from './i18n/index.ts'
+import { currentLocale, useT } from './i18n/index.ts'
 import {
   getActiveTheme,
   getCustomTokens,
@@ -208,6 +207,18 @@ async function copyText(text: string): Promise<boolean> {
   return false
 }
 
+/** F17: random frame id; `crypto.randomUUID` with a getRandomValues fallback. */
+export function newSandboxFrameId(): string {
+  const c = (globalThis as { crypto?: Crypto }).crypto
+  try {
+    if (c && typeof c.randomUUID === 'function') return `iui-html-${c.randomUUID()}`
+  } catch { /* insecure context */ }
+  const bytes = new Uint8Array(16)
+  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(bytes)
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  return `iui-html-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
+}
+
 function downloadText(filename: string, content: string): void {
   try {
     const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
@@ -219,7 +230,8 @@ function downloadText(filename: string, content: string): void {
     document.body.appendChild(a)
     a.click()
     a.remove()
-    URL.revokeObjectURL(url)
+    // F17: revoke later — an immediate revoke can cancel the download.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch { /* ignore */ }
 }
 
@@ -354,8 +366,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
-  const reactId = useId().replace(/:/g, '')
-  const frameId = useMemo(() => `iui-html-${reactId}`, [reactId])
+  // F17: unguessable per-mount id (React useId is predictable across frames).
+  const [frameId] = useState(newSandboxFrameId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const onAction = useGenuiAction()
   /** F3: every outbound action/sendPrompt from this frame passes the gate. */
@@ -412,6 +424,9 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<SandboxFailKind | null>(null)
+  // F17: an in-frame failure strip is already showing → host ErrorState stays hidden.
+  const [errorInFrame, setErrorInFrame] = useState(false)
+  useEffect(() => { if (error === null) setErrorInFrame(false) }, [error])
   const [copied, setCopied] = useState(false)
   /** F11: native = Fullscreen API; overlay = fixed in place; portal = fixed under body (transformed ancestor). */
   const [fsMode, setFsMode] = useState<FullscreenMode>('off')
@@ -465,6 +480,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     () => (parsed ? buildHtmlSandboxSrcdoc(parsed, {
       designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
       frameId,
+      // F17: in-frame strip / tools / credits speak the plugin language.
+      uiLang: currentLocale() === 'zh' ? 'zh-CN' : 'en',
       brandId: getActivePackId(),
       mergePackTokens: false, // already merged above
       // F4: opt-in strict image policy (Settings → IUI).
@@ -657,7 +674,16 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         }
         return
       }
+      if (event.data.type === 'stripAction') {
+        if (event.data.action === 'reload') {
+          setStopped(false); setHung(false); setReloadToken((n) => n + 1); setError(null); setErrorKind(null)
+        } else {
+          void insertIntoComposer(reaskPrompt(t, event.data.detail ?? null))
+        }
+        return
+      }
       if (event.data.type === 'error') {
+        if (event.data.strip === true) setErrorInFrame(true)
         const kind = classifySandboxError(event.data.message, event.data.kind)
         setErrorKind(kind)
         setError(friendlyError(
@@ -672,6 +698,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       if (event.data.type === 'authorSettled') {
         // Chunk failures already posted as error; if settled with failures and no strip yet, surface a host chrome tip.
         if (event.data.ok === false && event.data.failedChunks && event.data.failedChunks > 0) {
+          // Chunk failures always paint the in-frame strip.
+          setErrorInFrame(true)
           setErrorKind((prev) => prev ?? 'author')
           setError((prev) => prev ?? friendlyError(
             `chunk failures: ${event.data.failedChunks}`,
@@ -1062,7 +1090,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           </button>
         </div>
       )}
-      {error !== null && (
+      {error !== null && !errorInFrame && (
         <ErrorState
           kind={errorKind === 'host' ? 'sandbox-host-error' : 'sandbox-author-error'}
           detail={error}

@@ -4,7 +4,7 @@
  */
 import { useMemo, useRef, useState } from 'react'
 import { genuiTemplates, TEMPLATE_CATEGORIES, categoryLabelKey, type GenuiTemplate, type TemplateCategory } from './templates.ts'
-import { useLocaleRevision, useT } from './i18n/index.ts'
+import { currentLocale, useLocaleRevision, useT } from './i18n/index.ts'
 import { listHtmlSandboxStarters } from '../shared/html-sandbox.ts'
 import css from './TemplateDrawer.module.css'
 
@@ -42,7 +42,8 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
   const [selected, setSelected] = useState<GenuiTemplate | null>(null)
   const [copied, setCopied] = useState(false)
   const timer = useRef(0)
-  const zh = typeof navigator === 'undefined' || /zh/i.test(navigator.language || 'zh')
+  // F17: follow the plugin locale, not the browser language.
+  const zh = currentLocale() === 'zh'
 
   const items = useMemo(() => {
     const all = genuiTemplates()

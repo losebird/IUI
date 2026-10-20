@@ -222,7 +222,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   const channel = useRegistry ? 'registry' : 'dom'
   console.info(`[iui] client active; fence-channel=${channel}`)
   const disposers: Array<() => void> = useRegistry
-    ? [localeDispose, registerFn!('iui', renderGenuiFence), registerFn!('dsh-ui', renderGenuiFence), registerFn!('svg', renderSvgFence), registerFn!('iui-html', renderHtmlFence)]
+    ? [localeDispose, registerFn!('iui', (raw: string, key: Key, context?: GenuiFenceContext) => renderGenuiFence(raw, key, context, 'iui')), registerFn!('dsh-ui', (raw: string, key: Key, context?: GenuiFenceContext) => renderGenuiFence(raw, key, context, 'dsh-ui')), registerFn!('svg', renderSvgFence), registerFn!('iui-html', renderHtmlFence)]
     : [localeDispose, installDomFenceRenderer(ctx, (sessionId, action, payload) => sendInlineGenuiAction(ctx, sessionId, action, payload))]
   // Idle prefetch of the lazy engine assets: the browser downloads them at
   // LOW priority whenever the page is idle, so the first mermaid/3D node in

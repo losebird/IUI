@@ -986,7 +986,7 @@ Cards side by side: .iui-card-grid (equal height); .iui-card-title clamps to 2 l
 Host auto-adds: edge fades + indicator on horizontal scrollers; 换行/复制 tools on <pre> (opt out: data-iui-no-tools).
 3D: canvas inside .iui-3d-wrap with a .iui-3d-loading placeholder; set data-iui-3d-ready on the wrap when the first frame renders.
 Three-point light (key casts soft shadow + fill + rim) + ShadowMaterial ground; fit the camera to the object's bounding sphere so it fills ≥ 40% of the frame;
-OrbitControls from 'three/addons/controls/OrbitControls.js' with enableDamping. Starter: scene-3d.
+OrbitControls from 'three/addons/controls/OrbitControls.js' with enableDamping.
 
 SVG diagrams: use .c-purple .c-teal .c-coral .c-pink .c-gray .c-blue .c-green .c-amber .c-red plus .box .node .arr .leader and text .t .ts .th.
 

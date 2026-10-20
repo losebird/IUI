@@ -1,7 +1,7 @@
 // Issue #160：回复中的 ```dsh-ui 围栏无法渲染时，模型应能在同一 turn 内收到可执行的修正要求。
 // 这些测试固定了修正边界：精确匹配围栏、共享 correction 上限、每个 fence body 在当前回合最多一次，
 // 不处理 subagent 与已中止的 turn，并在调用 steer 前完成记账。
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createAssistantMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -19,6 +19,11 @@ import {
   FEEDBACK_PLUGIN_NAME,
   FEEDBACK_SOURCE_KIND,
 } from '../src/plugin/fence-feedback.ts'
+import { setLegacyFencesEnabled } from '../src/plugin/fence-feedback.ts'
+
+// These cases exercise the deprecated ```dsh-ui catalog path (F16 compat on).
+beforeAll(() => { setLegacyFencesEnabled(true) })
+afterAll(() => { setLegacyFencesEnabled(false) })
 
 /** A fence body that renders: one stat carrying a metric list (#172 case A). */
 const STAT_GROUP = JSON.stringify({ items: [{

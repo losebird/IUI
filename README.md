@@ -76,6 +76,11 @@ Plain text replies stay plain text. Only fences become pages.
 
 Authoring details: [SKILL.md](./SKILL.md)
 
+### Privacy
+
+- Pages run in a sandboxed iframe (no access to dsh, your files or cookies); page scripts can only reach the allowlisted CDNs, map tiles and image hosts.
+- The optional **Jev format router** (Settings → IUI → Format router) is **off by default**. When you turn it on and add a TypeSafe key, the text of each user message is sent to the third-party TypeSafe System One service to choose a reply format. With it off, format choice uses local rules only.
+
 ---
 
 ## Docs

@@ -12,7 +12,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getSessionSnapshot, subscribeSessionBindings } from './binding-bridge.ts'
-import { installFenceFeedback } from './fence-feedback.ts'
+import { installFenceFeedback, setLegacyFencesEnabled } from './fence-feedback.ts'
 import type { IuiPluginConfig } from '../config/types.ts'
 import { DEFAULT_THEME_ID } from '../config/defaults.ts'
 import { resolveThemeId } from '../config/resolve.ts'
@@ -85,6 +85,7 @@ let runtimeConfig: RuntimeConfigPayload = buildRuntimeConfig({
   fenceFeedback: true,
   formatReferee: true,
   strictImagePolicy: false,
+  legacyFences: false,
   customTokensJson: '',
   userTemplatesJson: '',
   jevEnabled: false,
@@ -411,6 +412,7 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
     publishRuntimeConfig(live)
     feedbackOptions.fenceFeedback = live.fenceFeedback !== false
     feedbackOptions.formatReferee = live.formatReferee !== false
+    setLegacyFencesEnabled(live.legacyFences === true)
     feedbackOptions.getFormatRouterConfig = () => ({
       jevEnabled: live.jevEnabled,
       jevApiKey: live.jevApiKey,
