@@ -18,7 +18,7 @@ import { parseHtmlSandboxFence } from '../shared/html-sandbox.ts'
 import { safeRegExp } from '../shared/safe-regexp.ts'
 
 /** Sandbox-first recipe used by every prime/steer (catalog recipes removed). */
-export const SANDBOX_RECIPE = '{"title":"<按当前问句起标题>","height":420,"css":".wrap{display:grid;gap:12px}.row{display:flex;gap:8px;flex-wrap:wrap}","html":"<div class=\\"iui-sandbox-card wrap\\"><h3>标题</h3><div class=\\"iui-sandbox-grid\\" id=\\"g\\"></div><div class=\\"row\\"><button class=\\"iui-sandbox-btn\\" id=\\"b\\">操作</button></div></div>","js":"document.getElementById(\'b\').onclick=function(){/* 本地交互 */}"}'
+export const SANDBOX_RECIPE = 'title: <按当前问句起标题>\nheight: 420\n---css\n.wrap{display:grid;gap:12px}.row{display:flex;gap:8px;flex-wrap:wrap}\n---html\n<div class="iui-sandbox-card wrap"><h3>标题</h3><div class="iui-sandbox-grid" id="g"></div><div class="row"><button class="iui-sandbox-btn" id="b">操作</button></div></div>\n---js\ndocument.getElementById(\'b\').onclick = function () { /* 本地交互 */ };'
 
 function isSandboxSpec(raw: string): boolean {
   try { return parseHtmlSandboxFence(raw) !== null } catch { return false }
@@ -499,10 +499,10 @@ export function buildRefereePromptBlock(): string {
     '**Format referee (sandbox-first):**',
     '- Short facts / yes-no / greetings → plain text only.',
     '- Any visual / interactive ask (图表、可视化、看板、表单、地图、对比、小工具、动画、游戏…) → ONE closed ```iui-html fence in the reply body THIS turn. Do NOT write files, do NOT call bash/shell/search to build the page — the fence IS the page. Exception: get_trip_stop_images (itinerary photos) is allowed once before the fence.',
-    '- Body = one JSON object {"title","height","css","html","js"} (JSON strings, escape quotes). Write real, polished CSS + HTML + JS (local interactivity, animations, CDN libs allowed).',
+    '- Body = `title:` / `height:` lines, then `---css`, `---html`, `---js` sections with raw code (no JSON escaping). Write real, polished CSS + HTML + JS (local interactivity, animations, CDN libs allowed).',
     '- Never emit legacy ```iui component trees ({"type":"hero"...}) or ```json for UI. Never use Markdown tables/lists as the UI.',
     '- Pattern: 1 short sentence → ```iui-html → optional 1 sentence.',
-    '- Skeleton: `' + SANDBOX_RECIPE + '`',
+    '- Skeleton:\n```iui-html\n' + SANDBOX_RECIPE + '\n```',
     '- Charts/maps: global Chart / L (host-injected). Prefer in-page controls over prompt()/alert().',
   ].join('\n')
 }

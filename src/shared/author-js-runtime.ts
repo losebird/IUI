@@ -45,7 +45,47 @@ export function splitAuthorJsChunks(input: string): string[] {
   }
   const tail = source.slice(start).trim()
   if (tail) chunks.push(tail)
-  return chunks.length > 0 ? chunks : [source.trim()]
+  if (chunks.length === 0) return [source.trim()]
+  // One script hoists every function declaration before any statement runs;
+  // isolated chunks do not ("refreshFooter is not defined" when a callback
+  // fires synchronously inside an earlier chunk). Peel each leading top-level
+  // function declaration into its own chunk and run those first — declarations
+  // have no side effects, so this restores single-script order.
+  const decls: string[] = []
+  const rest: string[] = []
+  for (const chunk of chunks) {
+    const end = functionDeclarationEnd(chunk)
+    if (end < 0) { rest.push(chunk); continue }
+    decls.push(chunk.slice(0, end).trim())
+    const tailPart = chunk.slice(end).replace(LEADING_TRIVIA, '').replace(/^;+/, '').trim()
+    if (tailPart) rest.push(tailPart)
+  }
+  if (decls.length === 0) return chunks
+  return [...decls, ...rest]
+}
+
+const LEADING_TRIVIA = /^(?:\s|\/\/[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/
+const FUNCTION_DECL_HEAD = /^(?:async\s+)?function\s*\*?\s*[A-Za-z_$][\w$]*\s*\(/
+
+/** Index just past the closing `}` when `chunk` starts with a top-level function declaration, else -1. */
+export function functionDeclarationEnd(chunk: string): number {
+  const lead = LEADING_TRIVIA.exec(chunk)?.[0].length ?? 0
+  const body = chunk.slice(lead)
+  if (!FUNCTION_DECL_HEAD.test(body)) return -1
+  let sawBody = false
+  let end = -1
+  scanTopLevel(body, (i, ch, depth) => {
+    if (end >= 0) return
+    if (ch === '{' && depth.paren === 0 && depth.brace === 1) sawBody = true
+    else if (ch === '}' && sawBody && depth.brace === 0 && depth.paren === 0) end = i
+  })
+  return end < 0 ? -1 : lead + end + 1
+}
+
+/** True when `chunk` is exactly one top-level function declaration (plus comments / `;`). */
+export function isPureFunctionDeclaration(chunk: string): boolean {
+  const end = functionDeclarationEnd(chunk)
+  return end >= 0 && chunk.slice(end).replace(LEADING_TRIVIA, '').replace(/^[;\s]*/, '').replace(LEADING_TRIVIA, '') === ''
 }
 
 /**

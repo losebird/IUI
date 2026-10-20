@@ -37,3 +37,46 @@ describe('.27 hotfix', () => {
     expect(doc).not.toContain("window.addEventListener('load', go)")
   })
 })
+
+describe('F27 function declarations hoist across chunks', () => {
+  it('moves pure function declaration chunks ahead of statements', async () => {
+    const { splitAuthorJsChunks, isPureFunctionDeclaration } = await import('../src/shared/author-js-runtime.ts')
+    const src = "var api = make({ onReady: refresh });\n/* footer */\nfunction refresh(){ var o = {a:1}; return o.a }\nfunction tail(){ }\ntail()\nconsole.log(1);"
+    const chunks = splitAuthorJsChunks(src)
+    expect(chunks[0]).toContain('function refresh')
+    expect(chunks.findIndex((c) => c.includes('make('))).toBeGreaterThan(0)
+    expect(isPureFunctionDeclaration('function a(x = {b: 1}) { if (x) { return 2 } }')).toBe(true)
+    expect(isPureFunctionDeclaration('function a(){}\nrun()')).toBe(false)
+    expect(isPureFunctionDeclaration('var a = function(){}')).toBe(false)
+    // tail() call must stay after its declaration and keep relative order
+    // a declaration followed by statements in the same chunk is peeled: decl first, statements keep their order
+    expect(chunks.findIndex((c) => c.startsWith('function tail'))).toBeLessThan(chunks.findIndex((c) => c.includes('make(')))
+    const stmt = chunks.findIndex((c) => c.startsWith('tail()'))
+    expect(chunks[stmt]).toContain('console.log')
+    expect(chunks.findIndex((c) => c.includes('make('))).toBeLessThan(stmt)
+  })
+})
+
+describe('.27 round 6: format + repair', () => {
+  it('section bodies carry title / height / placeholder preamble', () => {
+    const r = parseHtmlSandboxFence('title: 计数器\nheight: 380\n---css\n.a{color:red}\n---html\n<div id="x">hi</div>\n---js\nconst s = "a" + \'b\';')!
+    expect(r.title).toBe('计数器')
+    expect(r.height).toBe(380)
+    expect(r.html).toBe('<div id="x">hi</div>')
+    expect(r.js).toContain('const s = "a"')
+  })
+  it('F28: valid author JS is never soft-repaired', async () => {
+    const { prepareAuthorJs } = await import('../src/shared/html-sandbox.ts')
+    const js = "(function(){var m={a:1};el.innerHTML=`<b>${m.a}:00–${m.a + 1}:00</b>`;setTimeout(function(){go()},250)})()"
+    expect(prepareAuthorJs(js)).toBe(js)
+    // broken input still goes through the repair path
+    expect(prepareAuthorJs('var cfg = {a: [1, 2')).not.toBe('var cfg = {a: [1, 2')
+  })
+  it('system prompt is the compact section-format contract', async () => {
+    const { GENUI_SECTION_TEXT } = await import('../src/plugin/section-text.ts')
+    expect(GENUI_SECTION_TEXT.length).toBeLessThan(6500)
+    expect(GENUI_SECTION_TEXT).toContain('---js')
+    expect(GENUI_SECTION_TEXT).toMatch(/NO network data/)
+    expect(GENUI_SECTION_TEXT).toMatch(/never below 12px/)
+  })
+})

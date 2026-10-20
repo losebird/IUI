@@ -22,8 +22,8 @@ export const OIU_THEME_CSS = `
   --color-background-warning: #FAEEDA;
 
   --color-text-primary: #1a1a1a;
-  --color-text-secondary: #73726c;
-  --color-text-tertiary: #9c9a92;
+  --color-text-secondary: #5f5e58;
+  --color-text-tertiary: #6b6a64;
   --color-text-info: #185FA5;
   --color-text-danger: #A32D2D;
   --color-text-success: #3B6D11;
@@ -97,8 +97,8 @@ export const OIU_THEME_CSS = `
     --color-background-warning: #412402;
 
     --color-text-primary: #e8e6de;
-    --color-text-secondary: #9c9a92;
-    --color-text-tertiary: #73726c;
+    --color-text-secondary: #a8a69e;
+    --color-text-tertiary: #9a988f;
     --color-text-info: #85B7EB;
     --color-text-danger: #F09595;
     --color-text-success: #97C459;
@@ -115,7 +115,7 @@ export const OIU_THEME_CSS = `
     --iui-pack-surface-dark: #1a1a18;
     --iui-pack-surface-muted-dark: #2c2c2a;
     --iui-pack-fg-dark: #e8e6de;
-    --iui-pack-muted-fg-dark: #9c9a92;
+    --iui-pack-muted-fg-dark: #a8a69e;
     --iui-pack-border-dark: rgba(255, 255, 255, 0.15);
     --iui-pack-accent-dark: #85B7EB;
   }
@@ -181,7 +181,7 @@ svg .c-red text.ts { fill: #A32D2D; }
 
 @media (prefers-color-scheme: dark) {
   svg text.t   { fill: #e8e6de; }
-  svg text.ts  { fill: #9c9a92; }
+  svg text.ts  { fill: #a8a69e; }
   svg text.th  { fill: #e8e6de; }
   svg .c-purple > rect, svg .c-purple > circle, svg .c-purple > ellipse,
   svg rect.c-purple, svg circle.c-purple, svg ellipse.c-purple { fill: #3C3489; stroke: #AFA9EC; }

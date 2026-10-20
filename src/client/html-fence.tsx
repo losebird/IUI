@@ -274,7 +274,7 @@ function showStreamingStageChrome(parsed: HtmlSandboxSpec, ready: boolean): bool
   return parsed.partial === true
 }
 
-export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
+export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; streaming?: boolean }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
   const reactId = useId().replace(/:/g, '')
@@ -297,11 +297,30 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
   const effectiveRaw = starterOverride ?? raw
   const parsed = useMemo(() => parseHtmlSandboxFence(effectiveRaw), [effectiveRaw])
   const cssComplete = parsed?.cssComplete === true
-  const jsComplete = parsed?.jsComplete === true
+  // Section-format bodies (`---css/---html/---js`) cannot tell a finished js
+  // section from one still streaming — only JSON closes its strings. Hold the
+  // author JS until the host message settles so half-written JS never runs.
+  const sectionFormat = parsed !== null && !effectiveRaw.trimStart().startsWith('{')
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const [domStreaming, setDomStreaming] = useState(streaming)
+  useEffect(() => {
+    if (!sectionFormat) return
+    const check = () => {
+      const node = shellRef.current
+      const live = node ? node.closest('[data-streaming]') !== null : streaming
+      setDomStreaming(live)
+      return live
+    }
+    if (!check()) return
+    const timer = window.setInterval(() => { if (!check()) window.clearInterval(timer) }, 400)
+    return () => window.clearInterval(timer)
+  }, [sectionFormat, streaming, effectiveRaw])
+  const holdSectionJs = sectionFormat && starterOverride === null && (streaming || domStreaming)
+  const jsComplete = parsed?.jsComplete === true && !holdSectionJs
   // Freeze the iframe identity for the whole stream. Growing css/html/js
   // patches via postMessage — rewriting srcdoc blanks the document (flicker).
   const srcdocRebuildKey = htmlSandboxSrcdocRebuildKey({
-    parsed,
+    parsed: holdSectionJs && parsed ? { ...parsed, jsComplete: false, partial: true } : parsed,
     reloadToken,
     starterOverride,
     forceFinalSrcdoc,
@@ -633,7 +652,7 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
     : SHELL_STYLE
 
   return (
-    <div style={shellStyle} data-iui-html-sandbox={parsed.partial ? 'partial' : ready ? 'ready' : 'loading'} data-iui-fullscreen={fullscreen ? '1' : '0'}>
+    <div ref={shellRef} style={shellStyle} data-iui-html-sandbox={parsed.partial ? 'partial' : ready ? 'ready' : 'loading'} data-iui-fullscreen={fullscreen ? '1' : '0'}>
       <div style={STAGE_ROW} aria-live="polite">
         {showStreamingStageChrome(parsed, ready) && stages.map((stage) => (
           <span key={stage} style={CHIP}>{stageLabel(stage, t)}</span>
@@ -742,5 +761,5 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
 
 /** Registry-channel fence renderer for language `iui-html`. */
 export function renderHtmlFence(raw: string, key: Key, _context?: GenuiFenceContext): ReactNode {
-  return <HtmlSandboxFrame key={key} raw={raw} />
+  return <HtmlSandboxFrame key={key} raw={raw} streaming={_context?.streaming === true && _context.source === undefined} />
 }

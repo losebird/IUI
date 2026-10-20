@@ -11,10 +11,18 @@ description: "Render free, polished HTML/CSS/JS pages inline through the iui-htm
 凡「要看/要玩的东西」，在回答正文直接输出**一个闭合**围栏（不要写文件、不要先调 bash 做页面）：
 
 ```iui-html
-{"title":"加州海岸三日行程","height":560,"css":"...","html":"...","js":"..."}
+title: 加州海岸三日行程
+height: 560
+---css
+.wrap{display:grid;gap:12px}
+---html
+<div class="iui-sandbox-card wrap">…</div>
+---js
+document.getElementById('b').onclick = function () { /* 本地交互 */ };
 ```
 
-- 字段顺序：title → height → placeholder(可选) → css → html → js；字符串内引号转义，换行写 `\\n`。
+- 分段格式：先 `title:` / `height:` 两行，再 `---css` / `---html` / `---js` 各占一行，下面直接写原始代码（不需要 JSON 转义）。旧的 JSON 体 `{"title","height","css","html","js"}` 仍可解析。
+- 不要联网取数（fetch/XHR 被沙箱 CSP 拦截）：内嵌示例数据并标注「示例数据」。文字不小于 12px。
 - **宿主已注入** 设计系统：`--color-*` 主题、SVG `.c-*`、表单样式、importmap（three/gsap/d3/chart.js/leaflet）、`window.createTripAnimator`。
 - css 只写**本页特有**样式；颜色一律用 CSS 变量，禁止硬编码正文/背景色。
 - CDN 仅 HTTPS：cdn.jsdelivr.net / cdnjs.cloudflare.com / esm.sh / unpkg.com。

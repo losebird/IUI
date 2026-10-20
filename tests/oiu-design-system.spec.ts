@@ -89,7 +89,7 @@ describe('OIU design-system port', () => {
     expect(section).toContain('--color-background-primary')
     expect(section).toContain('createTripAnimator')
     expect(section).toContain('iui-compare-3')
-    expect(section).toContain('runnable author JS')
+    expect(section).toContain('Runnable author JS')
     expect(section).toContain('in-page')
     expect(section).toContain('window.iuiCreateChart')
     expect(section).toContain('typeof import')

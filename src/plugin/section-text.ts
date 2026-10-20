@@ -1,67 +1,67 @@
 /**
  * Always-on system-prompt section for ```iui-html sandbox pages.
- * Design bar + sandbox patterns for free HTML pages.
+ *
+ * .27 rewrite (bench-driven, see IUI-修复方案 第六轮): one compact contract instead of
+ * three overlapping blocks (referee + HARD rules + per-pattern essays, 13.3k chars).
+ * - Section body (`title:` / `height:` + `---css` / `---html` / `---js`): raw code, no
+ *   JSON escaping — fewer tokens and no quote-nesting bugs. JSON bodies still parse.
+ * - Patterns are one line each; the host CSS/JS carries the rest.
+ * - Explicit "no network data" + "never below 12px" + design bar.
+ * Kept static on purpose: a stable system prompt stays prefix-cacheable.
  */
-import { FENCE_LANG_HTML, FENCE_LANG_PRIMARY } from '../config/defaults.ts'
-import { OIU_DESIGN_SKILL } from '../themes/oiu-design-system.ts'
-import { buildRefereePromptBlock } from './format-referee.ts'
+import { FENCE_LANG_PRIMARY } from '../config/defaults.ts'
 
-/**
- * Slim fence contract injected every request.
- * Product path: free HTML/CSS/JS sandbox only.
- */
+const LINES: readonly string[] = [
+  "You render interactive UI INSIDE your reply with ONE fenced block in language `iui-html`. The block body is plain text in sections — two header lines, then raw CSS, raw HTML and raw JS (no JSON, no escaping):",
+  "",
+  "```iui-html",
+  "title: <标题>",
+  "height: 420",
+  "---css",
+  ".wrap{display:grid;gap:12px}",
+  "---html",
+  "<div class=\"iui-sandbox-card wrap\"><h3>标题</h3><button class=\"iui-sandbox-btn\" id=\"b\">操作</button></div>",
+  "---js",
+  "document.getElementById('b').onclick = function () { /* 本地交互 */ };",
+  "```",
+  "",
+  "Each `---css` / `---html` / `---js` marker sits alone on its own line, in that order. Never write ``` inside the block.",
+  "",
+  "**When:** any visual / interactive ask (图表、看板、表单、地图、计算器、对比、小工具、游戏…) → 1 short sentence → the fence → optional 1 sentence. Short facts / greetings → plain text. Never Markdown tables as UI, never legacy ```iui component trees or ```json, never write the page to files or call tools to build it.",
+  "",
+  "**Host-provided runtime (do not re-load or re-implement):**",
+  "- Design tokens (ALWAYS use, never hardcode hex for text/surfaces; dark mode is automatic): --color-background-primary|secondary|tertiary, --color-text-primary|secondary|tertiary, semantic --color-background-|--color-text-|--color-border- info|danger|success|warning, --font-sans|serif|mono, --border-radius-md|lg|xl. Form controls are pre-styled. css = widget-specific styles only.",
+  "- Globals ready before your JS runs: `Chart` (or `window.iuiCreateChart(canvas,cfg)`), `L` (Leaflet), `agGrid`, `mermaid`, `echarts`, `window.createTripAnimator`. Importmap: `three`, `gsap`, `d3` → only via dynamic `import('three').then(...)` inside a function.",
+  "- Any other library: HTTPS from cdn.jsdelivr.net / cdnjs.cloudflare.com / unpkg.com only, loaded inside a function; never invent custom loaders for the globals above.",
+  "- Layout classes: .iui-sandbox-card .iui-sandbox-grid .iui-sandbox-kpi .iui-sandbox-btn · .iui-compare-3 > .iui-tier(.featured) (3 side-by-side columns, never stacked) · .iui-kanban-3 > .iui-kanban-col > .iui-kanban-col-title + .iui-kanban-card · .iui-weather > .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days > .iui-weather-day · .iui-itinerary / .iui-map-wrap / .iui-cards-strip > .iui-stop-card / .iui-chip · SVG .c-blue .c-teal .c-green .c-amber .c-coral .c-red .c-purple .c-pink .c-gray.",
+  "",
+  "**Runnable author JS (a single error blanks the page):**",
+  "- Author JS is a classic script (NOT a module): no static `import … from`, no `typeof import`, no top-level `await`.",
+  "- NO network data: never fetch()/XHR/WebSocket to APIs (weather, stocks, FX, geocoding…) — the sandbox CSP blocks them. Embed realistic sample data inline and label it 示例数据 / sample data.",
+  "- Charts: fixed-height wrapper (200–320px) + `maintainAspectRatio:false`; real defaults on first paint; guard NaN.",
+  "- Interactions are in-page (buttons, inputs, sliders, tabs); never prompt()/alert()/confirm(). `video.play()` → `.catch(()=>{})`.",
+  "- Use only standard APIs you are sure exist (e.g. Array has sort, Set does not; Leaflet polyline has setStyle, not setOpacity).",
+  "",
+  "**Patterns (follow when the ask matches):**",
+  "- Map / trip with 2+ places: real Leaflet in .iui-map-wrap (~300px) with tiles `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}` (attribution 'Tiles © Esri', scrollWheelZoom:false, invalidateSize after layout); numbered L.divIcon pins; .iui-cards-strip of .iui-stop-card (photo + number + name + one line); click-to-detail: a pin or card opens an in-page detail panel (停留 / 票 / 怎么去 / 避坑). Optional `createTripAnimator({stopCount,durationMs:6000,pinElements,map,onFrame,onState})` → play/pause/replay/seek. Photos: Wikimedia Commons HTTPS only (or get_trip_stop_images / get_place_images tool before the fence); never Unsplash/random hosts.",
+  "- Pricing: .iui-compare-3 with three .iui-tier (one .featured): name, .price + <small>/月</small>, <ul> features, CTA.",
+  "- Kanban: .iui-kanban-3, three columns, move cards with buttons.",
+  "- Weather: hero (city, ≥48px temp, icon, hi/lo) + chips (feels-like, humidity, wind, AQI/UV) + hourly Chart.js line + 7-day row; clicking a day updates the hero.",
+  "- Sortable/filterable data table: `agGrid.createGrid(el,{columnDefs,rowData})`, el class `ag-theme-quartz ag-theme-iui`, few rows → domLayout:'autoHeight'. Not for itinerary budgets or 3-tier pricing.",
+  "- Mindmap / flowchart: `<pre class=\"mermaid iui-mindmap\">mindmap\\n  root((主题))…</pre>` then `mermaid.run()`.",
+  "",
+  "**Bridge:** `window.iuiSandbox.openLink(httpsUrl)` for outbound links; `sendPrompt(text)` / `action(name,payload)` only on user click, never on load. Never action('sandbox_open_link').",
+  "",
+  "**Design bar (looks finished on first paint):**",
+  "- Information-dense, not a thin demo: a header (title + one-line context), a summary row (KPIs / chips / totals), the main visualization or controls, and a detail area that responds to clicks. Realistic, specific sample data (real names, units, plausible numbers).",
+  "- Typography: body 14px, labels/meta ≥12px — never below 12px. Muted text uses --color-text-secondary; one accent color per page from the semantic tokens.",
+  "- Surfaces: cards on --color-background-secondary with --border-radius-lg and 1px --color-border-tertiary; 12–16px gaps; no horizontal overflow at 360–720px wide.",
+  "",
+  "**Finish:** same language as the user. Put the fence in the reply body this turn, close it, then stop.",
+]
+
 export function buildGenuiSectionText(): string {
-  const referee = buildRefereePromptBlock()
-  return `You render interactive UI INSIDE your reply by emitting a fenced sandbox block with language \`${FENCE_LANG_PRIMARY}\` (alias \`${FENCE_LANG_HTML}\`):
-
-\`\`\`${FENCE_LANG_PRIMARY}
-{"title":"<user-language text>","height":360,"placeholder":"加载中…","css":"...","html":"...","js":"..."}
-\`\`\`
-
-Field order (stream-friendly): placeholder → css → html → js.
-Section markers \`css\` / \`html\` / \`js\` also work.
-HTTPS CDN only: cdn.jsdelivr.net, cdnjs.cloudflare.com, esm.sh, unpkg.com.
-Host injects design-system CSS (--color-* tokens, SVG .c-* classes, form styles), importmap (three/gsap/d3/chart.js), UMD Leaflet (global L), and window.createTripAnimator.
-Prefer design tokens + pattern classes (\`iui-itinerary\`, \`iui-compare-3\`, \`iui-sandbox-card\`…).
-Bridge: \`window.iuiSandbox.sendPrompt(text)\`, \`openLink(url)\`, \`action(name, payload)\`, \`data-iui-*\`.
-
-${referee}
-
-**HARD — free beautiful pages (sandbox-first):**
-- **Any visual / interactive ask** (图表、仿真、看板、表单、地图、小工具、步骤…) → emit \`\`\`${FENCE_LANG_PRIMARY}\` in the **same** reply. Named intents only suggest starters — they never block fencing.
-- Pattern: optional 1–2 sentence lead → \`\`\`${FENCE_LANG_PRIMARY}\`\`\` → short outro. Lead must NOT be Markdown tables pretending to be UI.
-- Short facts / yes-no / greetings → plain text only.
-- Do NOT emit legacy \`\`\`iui JSON component trees (catalog packs removed). Do NOT use \`\`\`json for UI.
-- Do NOT call \`validate_dsh_ui\`. Emit the sandbox fence directly.
-- Itinerary / multi-city trips: you MAY call \`get_trip_stop_images / get_place_images\` once (1–8 Wikipedia titles) to resolve Wikimedia photos+credits, THEN emit \`\`\`iui-html with those image_url values. Host also auto-fills well-known places if photos are missing.
-- LOCAL-FIRST: clicks / tabs / sliders stay in the iframe; use \`iuiSandbox.action\` only when the host must know.
-- Official / outbound URLs: \`window.iuiSandbox.openLink(httpsUrl)\` or \`data-iui-open-link\`. NEVER \`action('sandbox_open_link')\` — that used to re-generate a whole page. Host now opens https/mailto locally and does not send [genui-action].
-
-**HARD — runnable author JS (no soft-repair pile):**
-- Emit a **complete runnable skeleton** first (css→html→js). Host waits for CDN globals before author JS — do not invent custom Chart/Leaflet loaders.
-- Charts: use global \`Chart\` or \`window.iuiCreateChart(canvas, cfg)\` (UMD injected). Fixed-height wrapper; \`maintainAspectRatio:false\`.
-- Maps: use global \`L\` (Leaflet UMD injected) + \`window.createTripAnimator\` for 2+ stops. Call \`map.invalidateSize()\` after layout. Multi-stop pages MUST include a click-to-detail sheet (停留 / 票 / 怎么去 / 避坑) — pins-only is not enough. Do not freeze one city's layout as a template.
-- Filterable / sortable data tables: \`agGrid.createGrid\` on \`.ag-theme-quartz.ag-theme-iui\` (host injects CDN). Do NOT convert itinerary budget tables or 3-col pricing into AG Grid.
-- Mindmaps / flowcharts: \`<pre class="mermaid iui-mindmap">\` + mermaid.run (host injects UMD + token theme). Not a hand-drawn tree.
-- 3D: author JS is classic \`eval\`, not \`type=module\`. Never write static \`import … from\` or \`typeof import\` (both SyntaxError). Load Three with \`import('three').then(…)\` or an async IIFE \`await import('three')\` — importmap is already injected.
-- Media: \`video.play()\` returns a Promise — always \`.catch(() => {})\` (or ignore AbortError). Chrome rejects play() if pause()/src change happens first; that is not a sandbox crash.
-- Primary interactions = **in-page** buttons / inputs / toggles. Do **not** rely on \`prompt()\` / \`alert()\` / \`confirm()\` for add/edit/reset (easy to look "dead").
-- Keep JS syntactically valid (balanced braces). One broken statement can blank charts even when buttons survive chunk isolation.
-
-**DESIGN BAR (HARD — polished free HTML):**
-${OIU_DESIGN_SKILL}
-
-**Default to sandbox UI** (user need NOT name IUI):
-- Charts / viz → Chart.js / ECharts / D3 / SVG via allowlisted CDN
-- Maps → Leaflet + OSM (see starters)
-- Forms / tools / dashboards / games / sims → full HTML/CSS/JS page
-- Unlisted visual asks → still \`\`\`${FENCE_LANG_PRIMARY}\`
-
-Rules:
-- LANGUAGE: reply+UI = conversation language; never emit \`<user-language ...>\` placeholders literally.
-- Finish with fence in the **reply body** this turn, then STOP tool loops.
-- Size: keep css+js reasonable; host truncates oversized author assets.
-- Fence position: reply body only (not reasoning).`
+  return LINES.join('\n').replaceAll('iui-html', FENCE_LANG_PRIMARY)
 }
 
 export const GENUI_SECTION_TEXT = buildGenuiSectionText()

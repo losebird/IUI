@@ -428,7 +428,7 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
     if (isHtmlPageWrite(exec.arguments)) {
       return {
         kind: 'deny',
-        reason: 'IUI: do NOT write HTML/web pages to files — the user cannot see them. Put the whole page (css/html/js) in ONE closed ```iui-html fence in your reply body NOW, e.g. ```iui-html\n{"title":"…","height":420,"css":"…","html":"…","js":"…"}\n```',
+        reason: 'IUI: do NOT write HTML/web pages to files — the user cannot see them. Put the whole page (css/html/js) in ONE closed ```iui-html fence in your reply body NOW, e.g. ```iui-html\ntitle: …\nheight: 420\n---css\n…\n---html\n…\n---js\n…\n```',
       }
     }
     return next()

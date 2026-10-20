@@ -82,6 +82,6 @@ describe('AG Grid / Mermaid CDN + token skin (narrow)', () => {
     const section = buildGenuiSectionText()
     expect(section).toContain('agGrid.createGrid')
     expect(section).toContain('iui-mindmap')
-    expect(section).toMatch(/Do NOT convert itinerary budget tables/)
+    expect(section).toMatch(/Not for itinerary budgets or 3-tier pricing/)
   })
 })

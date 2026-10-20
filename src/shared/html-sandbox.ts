@@ -537,15 +537,33 @@ export function rewriteSmartQuotesStringAware(source: string): string {
  * Does NOT claim to fix arbitrary broken model JS, and must not break a
  * legal curly apostrophe inside an ASCII-quoted string.
  */
+/**
+ * `true` = parses as a classic script body, `false` = SyntaxError, `null` = cannot tell
+ * (no Function constructor, e.g. a host page CSP without 'unsafe-eval').
+ */
+export function authorJsParses(source: string): boolean | null {
+  try {
+    // Compile only — never executed.
+    // eslint-disable-next-line no-new-func
+    new Function(source)
+    return true
+  } catch (error) {
+    return error instanceof SyntaxError ? false : null
+  }
+}
+
 export function hardenAuthorJs(source: string): string {
   if (!source) return source
-  let out = rewriteSmartQuotesStringAware(
-    source
-      .replace(/^\uFEFF/, '')
-      // Keep \t \n \r; strip other C0 controls that break parsers.
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-      .replace(/<\/script/gi, '<\\/script'),
-  )
+  const cleaned = source
+    .replace(/^\uFEFF/, '')
+    // Keep \t \n \r; strip other C0 controls that break parsers.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/<\/script/gi, '<\\/script')
+  // F28: valid JS is never "repaired". The heuristics below (bracket balancing,
+  // dash/quote rewrites…) exist for broken model output only; on valid code they
+  // have appended stray `)}}` after template literals and rewritten visible text.
+  if (authorJsParses(cleaned) === true) return sanitizeAuthorRegexFlags(cleaned)
+  let out = rewriteSmartQuotesStringAware(cleaned)
   out = out.replace(/[\u2013\u2014]/g, '-')
   out = rewriteIllegalImportKeywords(out)
   // Soft-fix model typos BEFORE paren/brace balancing so we don't insert an extra `)`.
@@ -1087,11 +1105,15 @@ export function sanitizeSandboxMarkup(html: string): string {
     .replace(/\b(?:href|src)\s*=\s*["']\s*(?:javascript|data|vbscript):[^"']*["']/gi, 'data-blocked=""')
 }
 
+const SECTION_META = /^(title|height|placeholder)\s*[:：]\s*(.+)$/iu
+
 function parseSections(raw: string): {
   sections: Record<'css' | 'html' | 'js', string>
   stages: Array<'css' | 'html' | 'js'>
   sawHeader: boolean
+  meta: { title?: string; height?: number; placeholder?: string }
 } {
+  const meta: { title?: string; height?: number; placeholder?: string } = {}
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
   const sections: Record<'css' | 'html' | 'js', string> = { css: '', html: '', js: '' }
   const stages: Array<'css' | 'html' | 'js'> = []
@@ -1112,10 +1134,21 @@ function parseSections(raw: string): {
       sawHeader = true
       continue
     }
-    if (current !== null) buf.push(line)
+    if (current !== null) { buf.push(line); continue }
+    // Preamble before the first section header: `title: …` / `height: 420` / `placeholder: …`.
+    const m = SECTION_META.exec(line.trim())
+    if (m) {
+      const key = m[1]!.toLowerCase()
+      const value = m[2]!.trim()
+      if (key === 'height') {
+        const n = Number.parseInt(value, 10)
+        if (Number.isFinite(n)) meta.height = Math.min(1200, Math.max(120, n))
+      } else if (key === 'title') meta.title = value
+      else meta.placeholder = value
+    }
   }
   flush()
-  return { sections, stages, sawHeader }
+  return { sections, stages, sawHeader, meta }
 }
 
 function looksPartialJson(raw: string): boolean {
@@ -1299,7 +1332,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
     }
   }
 
-  const { sections, stages, sawHeader } = parseSections(trimmed)
+  const { sections, stages, sawHeader, meta } = parseSections(trimmed)
   if (sawHeader) {
     if (sections.html === '' && sections.css === '' && sections.js === '') return null
     const partial = stages.length > 0 && (!stages.includes('html') || sections.html === '')
@@ -1312,6 +1345,9 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
       cssComplete: stages.includes('css') || sections.css !== '',
       htmlComplete: !partial && stages.includes('html'),
       jsComplete: !partial,
+      ...(meta.placeholder ? { placeholder: meta.placeholder } : {}),
+      ...(meta.title ? { title: meta.title } : {}),
+      ...(meta.height !== undefined ? { height: meta.height } : {}),
     }
   }
 
@@ -2492,7 +2528,7 @@ function buildMermaidGuardScript(): string {
           primaryColor: cssVar('--color-background-info', '#E6F1FB'),
           primaryTextColor: cssVar('--color-text-primary', '#1a1a1a'),
           primaryBorderColor: cssVar('--color-border-tertiary', '#ccc'),
-          lineColor: cssVar('--color-text-secondary', '#73726c'),
+          lineColor: cssVar('--color-text-secondary', '#5f5e58'),
           secondaryColor: cssVar('--color-background-secondary', '#f7f6f3'),
           tertiaryColor: cssVar('--color-background-tertiary', '#efeee9'),
           fontFamily: cssVar('--font-sans', 'system-ui,sans-serif')
