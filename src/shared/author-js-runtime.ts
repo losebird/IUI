@@ -764,17 +764,30 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         waitGlobal(function () { return typeof mermaid !== 'undefined'; }, function () { next(); });
       });
     }
-    var i = 0;
-    function step() {
-      if (i >= chain.length) {
-        setPhase('libsReady');
-        try { post({ type: 'libsReady' }); } catch (e) {}
-        done();
-        return;
-      }
-      chain[i++](step);
+    // F13: libraries load in parallel (each waits for its own global);
+    // author JS runs once all of them have settled.
+    var pending = chain.length;
+    var finished = false;
+    function settle() {
+      if (finished) return;
+      finished = true;
+      setPhase('libsReady');
+      try { post({ type: 'libsReady' }); } catch (e) {}
+      done();
     }
-    step();
+    if (pending === 0) { settle(); return; }
+    chain.forEach(function (fn) {
+      var called = false;
+      try {
+        fn(function () {
+          if (called) return;
+          called = true;
+          if (--pending === 0) settle();
+        });
+      } catch (e) {
+        if (!called) { called = true; if (--pending === 0) settle(); }
+      }
+    });
   }
 
   function ensureLibsThenRun(opts) {

@@ -21,6 +21,7 @@ import {
   getBindingsSnapshot,
   resolveSpecBindings,
   setBindingsNeedTightPoll,
+  acquireBindingWatch,
   subscribeBindings,
 } from './binding-store.ts'
 import { hasUnresolvedBind } from '../shared/binding-parse.ts'
@@ -167,6 +168,9 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, streaming 
     const merged = { ...toolBindings, ...(spec.bindings ?? {}) }
     return applyValueFromFields(resolveSpecBindings(spec, merged), fields)
   }, [spec, toolBindings, fields])
+  // F13: only blocks that reference `$bind:` keep the binding watcher alive.
+  const readsBindings = useMemo(() => JSON.stringify(spec).includes('$bind'), [spec])
+  useEffect(() => (readsBindings ? acquireBindingWatch() : undefined), [readsBindings])
   useEffect(() => {
     const unresolved = hasUnresolvedBind(JSON.stringify(boundSpec))
     setBindingsNeedTightPoll(unresolved)

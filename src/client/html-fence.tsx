@@ -49,7 +49,7 @@ import {
 } from './theme/apply-theme.ts'
 import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
-import { getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
+import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
@@ -571,6 +571,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   // Keep sandbox in sync when host bindings / appData change.
   // F4: only frames whose source actually reads host data get it.
   const wantsHostData = usesHostData(effectiveRaw)
+  // F13: the SSE / poll watcher runs only while some page reads host data.
+  useEffect(() => (wantsHostData ? acquireBindingWatch() : undefined), [wantsHostData])
   useEffect(() => {
     if (!ready || !wantsHostData) return
     const push = () => {

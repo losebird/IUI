@@ -65,6 +65,7 @@ export function setBindingSessionHint(sessionId: string): void {
   if (next === sessionHint) return
   sessionHint = next
   publish({}, {})
+  for (const l of hintListeners) { try { l() } catch { /* ignore */ } }
 }
 
 export function getBindingSessionHint(): string {
@@ -73,7 +74,10 @@ export function getBindingSessionHint(): string {
 
 /** Tell the watcher a live fence still needs `$bind` resolution. */
 export function setBindingsNeedTightPoll(need: boolean): void {
+  const rising = need && !needsTightPoll
   needsTightPoll = need
+  // One immediate fetch when a page starts waiting on `$bind:` (SSE may already be open).
+  if (rising && stopActiveWatch !== undefined) void refreshBindings()
 }
 
 function scopedUrl(file: string, session = sessionHint): string {
@@ -114,23 +118,84 @@ export async function refreshBindings(): Promise<ClientBindingMap> {
   return bindings
 }
 
+/** F13: session-hint changes wake the active watcher (no 1 s polling of the hint). */
+const hintListeners = new Set<() => void>()
+const activeListeners = new Set<(active: boolean) => void>()
+let watchRefs = 0
+let stopActiveWatch: (() => void) | undefined
+let idleStopTimer: ReturnType<typeof setTimeout> | undefined
+const IDLE_STOP_MS = 5000
+
+/** True while some mounted page reads host bindings / appData. */
+export function isBindingWatchActive(): boolean {
+  return stopActiveWatch !== undefined
+}
+
+/** Notified when the lazy watcher starts / stops (index.tsx gates its session sync on this). */
+export function onBindingWatchActive(listener: (active: boolean) => void): () => void {
+  activeListeners.add(listener)
+  return () => { activeListeners.delete(listener) }
+}
+
 /**
- * Prefer EventSource (SSE) for near-realtime binding push; poll as fallback.
- * Tight poll (400ms) only while unresolved binds remain; idle 2.5s otherwise.
+ * F13: lazy watch. A page that reads `$bind:` / host appData acquires it; the
+ * SSE stream + fallback poll run only while at least one holder is mounted,
+ * and stop 5 s after the last one unmounts.
+ */
+export function acquireBindingWatch(): () => void {
+  watchRefs += 1
+  if (idleStopTimer !== undefined) { clearTimeout(idleStopTimer); idleStopTimer = undefined }
+  if (stopActiveWatch === undefined && typeof window !== 'undefined') {
+    for (const l of activeListeners) { try { l(true) } catch { /* ignore */ } }
+    stopActiveWatch = startBindingWatch()
+  }
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    watchRefs = Math.max(0, watchRefs - 1)
+    if (watchRefs > 0 || stopActiveWatch === undefined) return
+    idleStopTimer = setTimeout(() => {
+      idleStopTimer = undefined
+      if (watchRefs > 0) return
+      stopBindingWatchNow()
+    }, IDLE_STOP_MS)
+  }
+}
+
+/** Stop the active watcher immediately (plugin unload). */
+export function stopBindingWatchNow(): void {
+  if (idleStopTimer !== undefined) { clearTimeout(idleStopTimer); idleStopTimer = undefined }
+  const stop = stopActiveWatch
+  stopActiveWatch = undefined
+  if (stop === undefined) return
+  stop()
+  for (const l of activeListeners) { try { l(false) } catch { /* ignore */ } }
+}
+
+/**
+ * SSE is the primary channel. The poll (400 ms while `$bind:` tokens are
+ * unresolved, else 2.5 s) runs only when EventSource is unavailable or the
+ * stream errored, and stops again once it reopens.
  */
 export function startBindingWatch(): () => void {
   void refreshBindings()
   let es: EventSource | undefined
+  let sseOpen = false
   let pollTimer: number | undefined
   let pollMs = 2500
 
-  const armPoll = (): void => {
+  const stopPoll = (): void => {
     if (pollTimer !== undefined) window.clearInterval(pollTimer)
+    pollTimer = undefined
+  }
+  const armPoll = (): void => {
+    stopPoll()
     pollMs = needsTightPoll ? 400 : 2500
     pollTimer = window.setInterval(() => {
+      if (sseOpen) { stopPoll(); return }
       const next = needsTightPoll ? 400 : 2500
       if (next !== pollMs) {
-        pollMs = next
         armPoll()
         return
       }
@@ -139,13 +204,18 @@ export function startBindingWatch(): () => void {
   }
 
   const connectSse = (): void => {
-    if (typeof EventSource === 'undefined') return
+    es?.close()
+    es = undefined
+    sseOpen = false
+    if (typeof EventSource === 'undefined') { armPoll(); return }
+    if (sessionHint === '') { stopPoll(); return }
     try {
-      es?.close()
-      es = undefined
-      if (sessionHint === '') return
       const scoped = sessionHint
       es = new EventSource(scopedUrl('bindings.sse', scoped))
+      es.onopen = () => {
+        sseOpen = true
+        stopPoll()
+      }
       es.onmessage = (ev) => {
         try {
           const data = JSON.parse(String(ev.data)) as { bindings?: ClientBindingMap; appData?: AppDataMap; sessionId?: string }
@@ -160,39 +230,38 @@ export function startBindingWatch(): () => void {
         } catch { /* ignore malformed */ }
       }
       es.onerror = () => {
-        // Browser will retry EventSource; keep poll as safety net.
+        // The browser retries EventSource itself; poll until it reopens.
+        sseOpen = false
+        if (pollTimer === undefined) armPoll()
       }
     } catch {
       es = undefined
+      armPoll()
     }
   }
 
   connectSse()
-  armPoll()
 
   const onVis = () => {
     if (document.visibilityState === 'visible') {
       void refreshBindings()
-      connectSse()
+      if (!sseOpen) connectSse()
     }
   }
   document.addEventListener('visibilitychange', onVis)
 
-  // Re-scope SSE when session hint changes (cheap interval check).
-  let lastHint = sessionHint
-  const hintTimer = window.setInterval(() => {
-    if (sessionHint !== lastHint) {
-      lastHint = sessionHint
-      connectSse()
-      void refreshBindings()
-    }
-  }, 1000)
+  const onHint = (): void => {
+    connectSse()
+    void refreshBindings()
+  }
+  hintListeners.add(onHint)
 
   return () => {
     document.removeEventListener('visibilitychange', onVis)
-    if (pollTimer !== undefined) window.clearInterval(pollTimer)
-    window.clearInterval(hintTimer)
+    hintListeners.delete(onHint)
+    stopPoll()
     es?.close()
+    es = undefined
   }
 }
 

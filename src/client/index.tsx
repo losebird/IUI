@@ -42,7 +42,7 @@ import { bridgeHostLocale } from './i18n/index.ts'
 import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { assetUrl } from './asset-loader.ts'
 import { startRuntimeConfigWatch } from './runtime-config.ts'
-import { setBindingSessionHint, startBindingWatch } from './binding-store.ts'
+import { onBindingWatchActive, setBindingSessionHint, stopBindingWatchNow } from './binding-store.ts'
 import { resolveViewedSessionId } from './session-resolver.ts'
 import { installIuiSettings } from './settings/index.ts'
 import { installMarkdownRescue } from './markdown-rescue.tsx'
@@ -174,11 +174,23 @@ function trackBindingSession(ctx: Context): () => void {
   sync()
   const list = ctx.sessions?.list as { subscribe?: (listener: () => void) => () => void } | undefined
   const unsubscribe = typeof list?.subscribe === 'function' ? list.subscribe(sync) : undefined
-  // Safety net for hosts whose list does not notify on main-view switches.
-  const timer = window.setInterval(sync, 1000)
+  // Safety net for hosts whose list does not notify on main-view switches —
+  // F13: only while some page actually watches bindings.
+  let timer: number | undefined
+  const setActive = (active: boolean): void => {
+    if (active) {
+      sync()
+      if (timer === undefined) timer = window.setInterval(sync, 1000)
+    } else if (timer !== undefined) {
+      window.clearInterval(timer)
+      timer = undefined
+    }
+  }
+  const offActive = onBindingWatchActive(setActive)
   return () => {
     unsubscribe?.()
-    window.clearInterval(timer)
+    offActive()
+    if (timer !== undefined) window.clearInterval(timer)
   }
 }
 
@@ -188,7 +200,6 @@ function trackBindingSession(ctx: Context): () => void {
 
 export function apply(ctx: Context): () => void {
 const stopRuntimeWatch = startRuntimeConfigWatch()
-  const stopBindingWatch = startBindingWatch()
   // Durable DOM fallback so Settings "insert" works even before a panel dock mounts.
   const stopComposerFallback = registerComposerDraftSetter((text) => {
     const el = findComposerEditable()
@@ -224,7 +235,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   disposers.push(stopMdRescue)
   disposers.push(stopSettings)
   disposers.push(stopRuntimeWatch)
-  disposers.push(stopBindingWatch)
+  disposers.push(stopBindingWatchNow)
   disposers.push(trackBindingSession(ctx))
   disposers.push(stopComposerFallback)
   // Keyed toolview: the harness dispatches 'tool.call.toolview' by wire tool

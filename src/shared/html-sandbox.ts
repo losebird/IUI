@@ -1596,24 +1596,45 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (e.key === 'Escape' && !e.defaultPrevented) post({ type: 'escape' });
     });
   } catch (e) {}
-  function measure() {
-    var doc = document.documentElement;
+  // F13: one measurement per animation frame; post only when height moves ≥2px.
+  var __iuiLastHeight = -1;
+  var __iuiMeasureQueued = false;
+  var __iuiMeasureForce = false;
+  var __iuiRaf = window.requestAnimationFrame
+    ? function (cb) { return window.requestAnimationFrame(cb); }
+    : function (cb) { return setTimeout(cb, 16); };
+  function measureNow(force) {
     var body = document.body;
     // Content height (not viewport): bottom of the lowest rendered child + body padding,
     // so frames shrink to fit and 100vh layouts cannot feed back into growth.
     var bottom = 0;
     if (body) {
+      var lowest = null;
       for (var i = 0; i < body.children.length; i++) {
         var ch = body.children[i];
         if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') continue;
         var rect = ch.getBoundingClientRect();
-        var mb = parseFloat(getComputedStyle(ch).marginBottom) || 0;
-        if (rect.height > 0) bottom = Math.max(bottom, rect.bottom + window.scrollY + mb);
+        if (rect.height > 0 && rect.bottom + window.scrollY > bottom) { bottom = rect.bottom + window.scrollY; lowest = ch; }
       }
+      // Only the lowest child's margin matters — no per-child getComputedStyle.
+      if (lowest) bottom += parseFloat(getComputedStyle(lowest).marginBottom) || 0;
       bottom += parseFloat(getComputedStyle(body).paddingBottom) || 0;
     }
-    var h = Math.max(bottom || (body ? body.scrollHeight : 0), 120);
-    post({ type: 'resize', height: Math.min(2400, Math.ceil(h)) });
+    var h = Math.min(2400, Math.ceil(Math.max(bottom || (body ? body.scrollHeight : 0), 120)));
+    if (!force && __iuiLastHeight >= 0 && Math.abs(h - __iuiLastHeight) < 2) return;
+    __iuiLastHeight = h;
+    post({ type: 'resize', height: h });
+  }
+  function measure(force) {
+    if (force === true) __iuiMeasureForce = true;
+    if (__iuiMeasureQueued) return;
+    __iuiMeasureQueued = true;
+    __iuiRaf(function () {
+      __iuiMeasureQueued = false;
+      var f = __iuiMeasureForce;
+      __iuiMeasureForce = false;
+      measureNow(f);
+    });
   }
   // Opaque-origin sandbox: Web Storage throws. F10: localStorage is backed by
   // the host (seeded in srcdoc, debounced storageSet back); sessionStorage
@@ -1921,20 +1942,32 @@ export function buildSandboxBridgeScript(frameId: string): string {
     ev.preventDefault();
     window.iuiSandbox.submitForm(form);
   }, true);
-  window.addEventListener('load', measure);
+  window.addEventListener('load', function () { measure(true); });
+  // F13: size changes come from ResizeObserver (html, body, page root); the
+  // MutationObserver only watches structure/text, not every attribute tick.
   if (typeof ResizeObserver !== 'undefined' && document.documentElement) {
-    try { new ResizeObserver(function () { measure(); }).observe(document.documentElement); } catch (e) {}
+    try {
+      var __iuiRo = new ResizeObserver(function () { measure(); });
+      __iuiRo.observe(document.documentElement);
+      if (document.body) __iuiRo.observe(document.body);
+      var observeRoot = function () {
+        var root = document.getElementById('iui-preview-root');
+        if (root) __iuiRo.observe(root);
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observeRoot);
+      else observeRoot();
+    } catch (e) {}
   }
   if (typeof MutationObserver !== 'undefined' && document.body) {
     try {
-      new MutationObserver(function () { requestAnimationFrame(measure); })
-        .observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true });
+      new MutationObserver(function () { measure(); })
+        .observe(document.body, { childList: true, subtree: true, characterData: true });
     } catch (e) {}
   }
   window.addEventListener('message', function (ev) {
     var data = ev && ev.data;
     if (!data || data.source !== 'iui-html-host' || data.frameId !== FRAME_ID) return;
-    if (data.type === 'measure' || data.type === 'ping') measure();
+    if (data.type === 'measure' || data.type === 'ping') measure(true);
     if (data.type === 'theme' && data.tokens && typeof data.tokens === 'object') {
       var root = document.documentElement;
       Object.keys(data.tokens).forEach(function (key) {
