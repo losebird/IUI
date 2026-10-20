@@ -20,6 +20,7 @@ import { setActiveThemeId, setCustomTokens } from '../theme/apply-theme.ts'
 import { lockVisualPreview, unlockVisualPreview } from '../theme/preview-lock.ts'
 import { setActivePackId } from '../theme/apply-pack.ts'
 import { refreshRuntimeConfig } from '../runtime-config.ts'
+import { clearAllPageState } from '../page-storage.ts'
 import { GenuiBlock } from '../GenuiBlock.tsx'
 import { SETTINGS_PREVIEW_SPEC } from './preview-spec.ts'
 import { composeOverrides, parseOverrides, type TokenOverrideForm } from './token-overrides.ts'
@@ -162,6 +163,7 @@ export function IuiSettingsSection(props: {
     () => parseUserTemplatesJson(state.userTemplatesJson.text),
     [state.userTemplatesJson.text],
   )
+  const [pageStorageNotice, setPageStorageNotice] = useState<string | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDesc, setTemplateDesc] = useState('')
@@ -336,6 +338,21 @@ export function IuiSettingsSection(props: {
               label={t('strictImagePolicy')}
               onChange={(checked) => props.edit('strictImagePolicy', checked ? 'true' : 'false')}
             />
+          </div>
+          <div className={styles.switchCard}>
+            <div className={styles.switchCopy}>
+              <div className={styles.switchTitle}>{t('pageStorage')}</div>
+              <p className={styles.switchHint}>{pageStorageNotice ?? t('pageStorageHint')}</p>
+            </div>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onClick={() => {
+                void clearAllPageState().then(() => setPageStorageNotice(t('pageStorageCleared')))
+              }}
+            >
+              {t('pageStorageClear')}
+            </button>
           </div>
         </section>
 

@@ -55,7 +55,7 @@ describe('0.13.0-iui.18 non-model risk clear', () => {
     expect(sandbox).toContain("type: 'restoreLocalState'")
     expect(sandbox).toContain('captureLocalState')
     const fence = readFileSync(resolve(__dirname, '../src/client/html-fence.tsx'), 'utf8')
-    expect(fence).toContain('localStateByFence')
+    expect(fence).toContain('updatePageState')
     expect(fence).toContain('restoreLocalState')
   })
 

@@ -101,6 +101,8 @@ export type HtmlSandboxSpec = {
 }
 
 export type HtmlSandboxBuildOptions = {
+  /** F10: persisted localStorage items seeded before the bridge / author JS. */
+  storageSeed?: Readonly<Record<string, string>>
   /** F4: strict image policy — img-src/font-src drop the `https:` wildcard. */
   strictImages?: boolean
   /** CSS custom properties injected as :root (active IUI theme). */
@@ -185,6 +187,8 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown> }
+  /** F10: debounced full snapshot of the page's persistent storage items. */
+  | { source: 'iui-html'; type: 'storageSet'; frameId: string; items: Record<string, string> }
 
 
 /** Host → sandbox postMessage (optional; sandbox listens when bridge present). */
@@ -200,6 +204,10 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'rerunAuthorJs'; frameId: string }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html-host'; type: 'requestSnapshot'; frameId: string }
+  /** F10: late-loaded persistent items (merged under writes made since boot). */
+  | { source: 'iui-html-host'; type: 'storageInit'; frameId: string; items: Record<string, string> }
+  /** F10: the last storageSet exceeded the per-page quota and was not saved. */
+  | { source: 'iui-html-host'; type: 'storageQuota'; frameId: string; limit: number }
 
 export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrameCommand {
   if (data === null || typeof data !== 'object') return false
@@ -242,6 +250,10 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
   }
   if (record.type === 'requestSnapshot') return true
+  if (record.type === 'storageInit') {
+    return typeof record.items === 'object' && record.items !== null && !Array.isArray(record.items)
+  }
+  if (record.type === 'storageQuota') return typeof record.limit === 'number'
   return false
 }
 
@@ -277,6 +289,9 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   }
   if (record.type === 'localState') {
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
+  }
+  if (record.type === 'storageSet') {
+    return typeof record.items === 'object' && record.items !== null && !Array.isArray(record.items)
   }
   if (record.type === 'snapshot') {
     return typeof record.html === 'string' && record.html.length <= 200_064
@@ -1592,26 +1607,61 @@ export function buildSandboxBridgeScript(frameId: string): string {
     var h = Math.max(bottom || (body ? body.scrollHeight : 0), 120);
     post({ type: 'resize', height: Math.min(2400, Math.ceil(h)) });
   }
-  // Opaque-origin sandbox: Web Storage throws. Give author code an in-memory shim.
+  // Opaque-origin sandbox: Web Storage throws. F10: localStorage is backed by
+  // the host (seeded in srcdoc, debounced storageSet back); sessionStorage
+  // stays in memory for this document.
+  var __iuiStore = {};
+  try {
+    var seed = window.__iuiStorageSeed;
+    if (seed && typeof seed === 'object') Object.keys(seed).forEach(function (k) { if (typeof seed[k] === 'string') __iuiStore[k] = seed[k]; });
+  } catch (e) {}
+  var __iuiTouched = {};
+  var __iuiSaveTimer = 0;
+  function scheduleStorageSave() {
+    clearTimeout(__iuiSaveTimer);
+    __iuiSaveTimer = setTimeout(function () { post({ type: 'storageSet', items: __iuiStore }); }, 300);
+  }
+  function makeStore(persist) {
+    var store = persist ? null : {};
+    function data() { return persist ? __iuiStore : store; }
+    function changed(k) { if (persist) { if (k != null) __iuiTouched[k] = 1; scheduleStorageSave(); } }
+    return {
+      getItem: function (k) { var d = data(); k = String(k); return Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null; },
+      setItem: function (k, v) { k = String(k); data()[k] = String(v); changed(k); },
+      removeItem: function (k) { k = String(k); delete data()[k]; changed(k); },
+      clear: function () { if (persist) { Object.keys(__iuiStore).forEach(function (k) { __iuiTouched[k] = 1; delete __iuiStore[k]; }); } else { store = {}; } changed(null); },
+      key: function (i) { return Object.keys(data())[i] || null; },
+      get length() { return Object.keys(data()).length; }
+    };
+  }
+  window.__iuiStorageApi = makeStore(true);
   ['localStorage', 'sessionStorage'].forEach(function (name) {
     var ok = false;
     try { ok = !!window[name]; } catch (e) { ok = false; }
     if (ok) return;
-    var store = {};
-    var mem = {
-      getItem: function (k) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
-      setItem: function (k, v) { store[k] = String(v); },
-      removeItem: function (k) { delete store[k]; },
-      clear: function () { store = {}; },
-      key: function (i) { return Object.keys(store)[i] || null; },
-      get length() { return Object.keys(store).length; }
-    };
+    var mem = name === 'localStorage' ? window.__iuiStorageApi : makeStore(false);
     try { Object.defineProperty(window, name, { value: mem, configurable: true }); } catch (e) {}
   });
+  window.__iuiStorageInit = function (items) {
+    if (!items || typeof items !== 'object') return;
+    Object.keys(items).forEach(function (k) {
+      if (typeof items[k] !== 'string' || __iuiTouched[k]) return;
+      __iuiStore[k] = items[k];
+    });
+    try { window.dispatchEvent(new CustomEvent('iui-storage', { detail: { keys: Object.keys(items) } })); } catch (e) {}
+  };
   window.__iuiBindings = window.__iuiBindings || {};
   window.__iuiAppData = window.__iuiAppData || {};
   window.iuiSandbox = {
     resize: measure,
+    /** F10/F18: persistent per-page storage (JSON values; survives reload / session switch). */
+    storage: {
+      get: function (k) { var v = window.__iuiStorageApi.getItem(k); if (v == null) return null; try { return JSON.parse(v); } catch (e) { return v; } },
+      set: function (k, v) { window.__iuiStorageApi.setItem(k, JSON.stringify(v === undefined ? null : v)); },
+      remove: function (k) { window.__iuiStorageApi.removeItem(k); },
+      keys: function () { return Object.keys(__iuiStore); },
+      clear: function () { window.__iuiStorageApi.clear(); }
+    },
     get bindings() { return window.__iuiBindings || {}; },
     get appData() { return window.__iuiAppData || {}; },
     action: function (name, payload) {
@@ -1718,15 +1768,29 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (!state || typeof state !== 'object') return;
       try {
         var fields = state.fields || {};
+        // F10: fire input/change after restoring so author listeners resync
+        // their own state (counters, totals, filtered lists).
+        var touched = [];
+        function find(key) {
+          var el = document.getElementById(key);
+          if (el) return el;
+          try { return document.querySelector('[name="' + (window.CSS && CSS.escape ? CSS.escape(String(key)) : String(key)) + '"]'); } catch (e) { return null; }
+        }
         Object.keys(fields).forEach(function (key) {
-          var el = document.getElementById(key) || document.querySelector('[name="' + key + '"]');
-          if (el && 'value' in el) el.value = fields[key];
+          var el = find(key);
+          if (el && 'value' in el && el.type !== 'file' && el.value !== fields[key]) { el.value = fields[key]; touched.push(el); }
         });
         var checks = state.checks || {};
         Object.keys(checks).forEach(function (key) {
-          var el = document.getElementById(key) || document.querySelector('[name="' + key + '"]');
-          if (el && 'checked' in el) el.checked = !!checks[key];
+          var el = find(key);
+          if (el && 'checked' in el && el.checked !== !!checks[key]) { el.checked = !!checks[key]; touched.push(el); }
         });
+        window.__iuiRestoring = true;
+        touched.forEach(function (el) {
+          try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+          try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+        });
+        window.__iuiRestoring = false;
         var text = state.text || {};
         Object.keys(text).forEach(function (sel) {
           var el = document.querySelector(sel);
@@ -1934,6 +1998,12 @@ export function buildSandboxBridgeScript(frameId: string): string {
       }
       style.textContent = data.css;
       measure();
+    }
+    if (data.type === 'storageInit' && data.items && typeof data.items === 'object') {
+      try { window.__iuiStorageInit(data.items); } catch (e) {}
+    }
+    if (data.type === 'storageQuota') {
+      try { console.warn('[iui] page storage is over its ' + Math.round(Number(data.limit) / 1024) + 'KB quota; latest changes were not saved.'); } catch (e) {}
     }
     if (data.type === 'restoreLocalState' && data.state && typeof data.state === 'object') {
       try { window.iuiSandbox.restoreLocalState(data.state); measure(); } catch (e) {}
@@ -2863,7 +2933,18 @@ body{padding:4px!important}
   if (doc.length > HTML_SANDBOX_MAX_SRCDOC_BYTES) {
     doc = doc.slice(0, HTML_SANDBOX_MAX_SRCDOC_BYTES) + '\n<!-- srcdoc truncated -->'
   }
+  // F10: seed after the size cap so a large store never truncates the page.
+  if (options.storageSeed !== undefined && Object.keys(options.storageSeed).length > 0) {
+    const seedTag = buildStorageSeedScript(options.storageSeed)
+    doc = doc.replace('<body>', () => `<body>${seedTag}`)
+  }
   return doc
+}
+
+/** F10: inline `window.__iuiStorageSeed` (script-safe JSON). */
+export function buildStorageSeedScript(items: Readonly<Record<string, string>>): string {
+  const json = JSON.stringify(items).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
+  return `<script>window.__iuiStorageSeed=${json};<\/script>`
 }
 
 

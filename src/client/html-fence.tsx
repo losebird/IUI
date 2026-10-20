@@ -51,11 +51,10 @@ import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
 import { getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
+import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
 
-/** Persist sandbox interactive state across host contentWiped remounts (same fence body). */
-const localStateByFence = new Map<string, Record<string, unknown>>()
-
+/** Memory-only state key when the page has no stable session identity. */
 function fenceStateKey(raw: string): string {
   const body = raw.trim()
   if (body.length <= 160) return body
@@ -301,7 +300,7 @@ function showStreamingStageChrome(parsed: HtmlSandboxSpec, ready: boolean): bool
   return parsed.partial === true
 }
 
-export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; streaming?: boolean }): ReactNode {
+export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: { raw: string; streaming?: boolean; storageKey?: string | null }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
@@ -325,6 +324,36 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
     return false
   }
   const [reloadToken, setReloadToken] = useState(0)
+  // F10: persistent page state. The iframe waits ≤300ms for IndexedDB so the
+  // seed is in the srcdoc before author JS runs; a later load is merged in.
+  const stateKeyRef = useRef<{ key: string; persist: boolean }>({ key: '', persist: false })
+  stateKeyRef.current = storageKey !== null
+    ? { key: storageKey, persist: true }
+    : { key: `iui:mem:${fenceStateKey(raw)}`, persist: false }
+  const [storageReady, setStorageReady] = useState(() => storageKey === null || peekPageState(storageKey) !== undefined)
+  const seedRef = useRef<PageStateRecord | undefined>(storageKey === null ? undefined : peekPageState(storageKey))
+  const lateItemsRef = useRef<Record<string, string> | null>(null)
+  useEffect(() => {
+    if (storageKey === null || storageReady) return
+    let done = false
+    const timer = window.setTimeout(() => { if (!done) { done = true; setStorageReady(true) } }, 300)
+    void loadPageState(storageKey).then((record) => {
+      if (done) {
+        // Too late for the srcdoc seed: merge into the running page.
+        if (record.items && Object.keys(record.items).length > 0) lateItemsRef.current = record.items
+        const win = iframeRef.current?.contentWindow
+        if (win && lateItemsRef.current) win.postMessage({ source: 'iui-html-host', type: 'storageInit', frameId, items: lateItemsRef.current }, '*')
+        if (win && record.dom) win.postMessage({ source: 'iui-html-host', type: 'restoreLocalState', frameId, state: record.dom }, '*')
+        return
+      }
+      done = true
+      window.clearTimeout(timer)
+      seedRef.current = record
+      setStorageReady(true)
+    })
+    return () => { done = true; window.clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
   /** F6 watchdog: last bridge message time (0 = none yet for this frame). */
   const lastBeatRef = useRef(0)
   const [hung, setHung] = useState(false)
@@ -384,13 +413,14 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
       mergePackTokens: false, // already merged above
       // F4: opt-in strict image policy (Settings → IUI).
       strictImages,
+      ...(seedRef.current?.items ? { storageSeed: seedRef.current.items } : {}),
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
       // C6: libraries from the plugin's own asset route first, CDNs as fallback.
       ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
-    [srcdocRebuildKey, designTokens, frameId, strictImages],
+    [srcdocRebuildKey, designTokens, frameId, strictImages, storageReady],
   )
   const baseHeight = parsed?.height ?? (parsed?.partial ? 280 : 360)
 
@@ -537,7 +567,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
               win.postMessage({ source: 'iui-html-host', type: 'appData', frameId, data: snap.appData }, '*')
             }
             win.postMessage({ source: 'iui-html-host', type: 'theme', frameId, tokens: readDesignTokens() }, '*')
-            const saved = localStateByFence.get(fenceStateKey(effectiveRaw))
+            const saved = peekPageState(stateKeyRef.current.key)?.dom
             if (saved) {
               win.postMessage({ source: 'iui-html-host', type: 'restoreLocalState', frameId, state: saved }, '*')
             }
@@ -546,7 +576,17 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
         return
       }
       if (event.data.type === 'localState') {
-        localStateByFence.set(fenceStateKey(effectiveRaw), event.data.state)
+        const { key: stateKey, persist } = stateKeyRef.current
+        updatePageState(stateKey, { dom: event.data.state }, { persist })
+        return
+      }
+      if (event.data.type === 'storageSet') {
+        const items = sanitizeStorageItems(event.data.items)
+        if (items === null) return
+        const { key: stateKey, persist } = stateKeyRef.current
+        if (!updatePageState(stateKey, { items }, { persist })) {
+          frame.contentWindow?.postMessage({ source: 'iui-html-host', type: 'storageQuota', frameId, limit: PAGE_STATE_QUOTA_BYTES }, '*')
+        }
         return
       }
       if (event.data.type === 'error') {
@@ -829,7 +869,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
         />
       )}
       <div style={{ position: 'relative' }}>
-        <iframe
+        {storageReady && <iframe
           ref={iframeRef}
           key={stopped ? `${srcdocRebuildKey}:stopped` : srcdocRebuildKey}
           title={parsed.title ?? 'IUI sandbox'}
@@ -844,7 +884,8 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
             // Handshake fallback: complete fences should not stay on 加载中 if ready postMessage is lost.
             if (!parsed.partial) setReady(true)
           }}
-        />
+        />}
+        {!storageReady && <div style={{ ...FRAME_STYLE, height }} aria-busy="true" />}
         {hung && !stopped && (
           <div
             data-iui-sandbox-hung="1"
@@ -872,5 +913,12 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
 
 /** Registry-channel fence renderer for language `iui-html`. */
 export function renderHtmlFence(raw: string, key: Key, _context?: GenuiFenceContext): ReactNode {
-  return <HtmlSandboxFrame key={key} raw={raw} streaming={_context?.streaming === true && _context.source === undefined} />
+  return (
+    <HtmlSandboxFrame
+      key={key}
+      raw={raw}
+      streaming={_context?.streaming === true && _context.source === undefined}
+      storageKey={pageStateKey(_context?.sessionId, typeof key === 'string' ? key : String(key))}
+    />
+  )
 }
