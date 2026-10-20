@@ -55,6 +55,22 @@ export function assetUrl(file: string): string {
   return `${ASSET_DIR}/${file}${rev === undefined ? '' : `?rev=${rev}`}`
 }
 
+/**
+ * C6: absolute base URL of the asset route for the ```iui-html sandbox.
+ * The sandbox is a null-origin srcdoc, so it needs an absolute URL (and the
+ * origin goes into its CSP). Vendor files live under `<base>/vendor/...`.
+ */
+export function sandboxAssetBase(): string | undefined {
+  try {
+    const base = embeddedAssetBase ?? new URL(`${ASSET_DIR}/`, document.baseURI).href
+    const u = new URL(base)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return undefined
+    return u.href.replace(/\/+$/, '')
+  } catch {
+    return undefined
+  }
+}
+
 const pending = new Map<string, Promise<Record<string, unknown>>>()
 
 /**

@@ -37,6 +37,7 @@ import {
 import { enrichPlaceMediaHtml } from '../shared/trip-images.ts'
 import { useGenuiAction } from './action-context.ts'
 import type { GenuiFenceContext } from './fence-render.tsx'
+import { sandboxAssetBase } from './asset-loader.ts'
 import { useT } from './i18n/index.ts'
 import {
   getActiveTheme,
@@ -317,6 +318,8 @@ export function HtmlSandboxFrame({ raw }: { raw: string }): ReactNode {
       mergePackTokens: false, // already merged above
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
+      // C6: libraries from the plugin's own asset route first, CDNs as fallback.
+      ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
     [srcdocRebuildKey, designTokens, frameId],

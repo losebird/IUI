@@ -8,6 +8,7 @@
  * 3. Agent design skill teaching token usage + patterns
  * 4. createTripAnimator for map+pin-drop+carousel itineraries
  */
+import { buildVendorImportMap } from '../shared/vendor-registry.ts'
 
 /** Theme tokens — warm stone neutrals, semantic status colors, dark auto. */
 export const OIU_THEME_CSS = `
@@ -586,24 +587,11 @@ export function buildOiuDesignSystemCss(): string {
   return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}`
 }
 
-/** CDN import map for common libs (plus leaflet for maps). */
-export const OIU_IMPORTMAP = {
-  imports: {
-    three: 'https://esm.sh/three',
-    'three/': 'https://esm.sh/three/',
-    gsap: 'https://esm.sh/gsap',
-    'gsap/': 'https://esm.sh/gsap/',
-    d3: 'https://esm.sh/d3',
-    'd3/': 'https://esm.sh/d3/',
-    'chart.js': 'https://esm.sh/chart.js',
-    'chart.js/': 'https://esm.sh/chart.js/',
-    // leaflet intentionally omitted: ESM leaflet-src is unstable in srcdoc sandboxes.
-    // Host auto-injects UMD leaflet.js (global L) when map code is detected.
-  },
-} as const
+/** CDN import map for common libs (pinned; see vendor-registry). Leaflet = UMD auto-inject. */
+export const OIU_IMPORTMAP = buildVendorImportMap()
 
-export function buildOiuImportmapScriptTag(): string {
-  return `<script type="importmap">${JSON.stringify(OIU_IMPORTMAP)}</script>`
+export function buildOiuImportmapScriptTag(assetBase?: string): string {
+  return `<script type="importmap">${JSON.stringify(buildVendorImportMap(assetBase))}</script>`
 }
 
 /**

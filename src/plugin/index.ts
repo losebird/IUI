@@ -111,6 +111,18 @@ function publishRuntimeConfig(live: IuiConfigResolved): void {
 }
 
 const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
+const VENDOR_FILE_RE = /^vendor\/(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+\.(js|mjs|css|png|svg|woff2?|ttf|json)$/i
+const VENDOR_MIME: Record<string, string> = {
+  js: 'text/javascript; charset=utf-8',
+  mjs: 'text/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  png: 'image/png',
+  svg: 'image/svg+xml',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  json: 'application/json; charset=utf-8',
+}
 
 async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promise<void> {
   let pathname: string
@@ -252,6 +264,34 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
     }
     req.on('close', cleanup)
     req.on('error', cleanup)
+    return
+  }
+
+  // C6: pinned third-party libraries for the iui-html sandbox (copied from
+  // node_modules by scripts/vendor-assets.mjs). Immutable: the path carries
+  // the version. CORS * so module/fetch loads from the null-origin srcdoc work.
+  const vendor = VENDOR_FILE_RE.exec(file)
+  if (vendor) {
+    const ext = vendor[1]!.toLowerCase()
+    if (file.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')) {
+      res.writeHead(404)
+      res.end()
+      return
+    }
+    try {
+      const dir = fileURLToPath(new URL('./assets/', import.meta.url))
+      const body = await readFile(join(dir, file))
+      res.writeHead(200, {
+        'content-type': VENDOR_MIME[ext] ?? 'application/octet-stream',
+        'cache-control': 'public, max-age=31536000, immutable',
+        'access-control-allow-origin': '*',
+        'x-content-type-options': 'nosniff',
+      })
+      res.end(req.method === 'HEAD' ? undefined : body)
+    } catch {
+      res.writeHead(404)
+      res.end()
+    }
     return
   }
 

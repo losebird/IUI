@@ -14,6 +14,7 @@ import {
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
+import { VENDOR_CDN_HOSTS, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, type VendorId } from './vendor-registry.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
 /**
@@ -127,6 +128,12 @@ export type HtmlSandboxBuildOptions = {
    * Host should re-build with deferAuthorJs=false once jsComplete.
    */
   deferAuthorJs?: boolean
+  /**
+   * C6: absolute URL of the plugin asset route (e.g.
+   * `http://127.0.0.1:1234/plugins/@losebird/iui/assets`). When set, sandbox
+   * libraries load from `<assetBase>/vendor/...` first, CDNs are fallbacks.
+   */
+  assetBase?: string
 }
 
 /** Inputs that decide whether the host iframe must rebuild `srcdoc`. */
@@ -1864,8 +1871,11 @@ export function buildSandboxBridgeScript(frameId: string): string {
 }
 
 
-function cdnCspOrigins(): string {
-  return HTML_SANDBOX_CDN_ALLOWLIST.map((h) => `https://${h}`).join(' ')
+function cdnCspOrigins(assetBase?: string): string {
+  const hosts = [...new Set<string>([...HTML_SANDBOX_CDN_ALLOWLIST, ...VENDOR_CDN_HOSTS])].map((h) => `https://${h}`)
+  const local = vendorBaseOrigin(assetBase)
+  if (local) hosts.push(local)
+  return hosts.join(' ')
 }
 
 /** Map tiles + Nominatim geocode (Leaflet / ```iui-html maps). */
@@ -2523,13 +2533,70 @@ function buildMermaidGuardScript(): string {
  */
 export function makeCdnTagsNonBlocking(tags: string): string {
   return tags
-    .replace(/<script src=("[^"]+")><\/script>/g, (_m, src: string) =>
-      `<script async data-iui-cdn onload="this.setAttribute('data-iui-done','1')" onerror="this.setAttribute('data-iui-done','0')" src=${src}><\/script>`)
-    .replace(/<link rel="stylesheet" href=("[^"]+")\/>/g, (_m, href: string) =>
-      `<link rel="stylesheet" media="print" onload="this.media='all'" href=${href}/>`)
+    .replace(/<script src=("[^"]+")((?: data-iui-fallback="[^"]*")?)><\/script>/g, (_m, src: string, fb: string) =>
+      `<script async data-iui-cdn${fb} onload="this.setAttribute('data-iui-done','1')" onerror="window.__iuiCdnNext?__iuiCdnNext(this):this.setAttribute('data-iui-done','0')" src=${src}><\/script>`)
+    .replace(/<link rel="stylesheet" href=("[^"]+")((?: data-iui-fallback="[^"]*")?)\/>/g, (_m, href: string, fb: string) =>
+      `<link rel="stylesheet"${fb} media="print" onload="this.media='all';this.setAttribute('data-iui-done','1')" onerror="window.__iuiCdnNext&&__iuiCdnNext(this)" href=${href}/>`)
 }
 
-function autoCdnTags(html: string, js: string): string {
+function vendorScriptTag(id: VendorId, base?: string): string {
+  const [first, ...rest] = vendorJsUrls(id, base)
+  return `<script src="${first}" data-iui-fallback="${rest.join(' ')}"><\/script>`
+}
+function vendorCssTags(id: VendorId, base?: string): string {
+  return vendorCssUrls(id, base).map(([first, ...rest]) => `<link rel="stylesheet" href="${first}" data-iui-fallback="${rest.join(' ')}"/>`).join('')
+}
+
+/**
+ * C5: fallback loader + C6 vendor map for the runtime. Emitted before CDN tags;
+ * `__iuiCdnNext(el)` swaps a failed/slow <script>/<link> to its next candidate.
+ */
+function buildVendorBootScript(base?: string): string {
+  const map: Record<string, string> = {
+    leafletJs: vendorJsUrls('leaflet', base)[0]!,
+    leafletCss: vendorCssUrls('leaflet', base)[0]![0]!,
+    chartJs: vendorJsUrls('chart', base)[0]!,
+    agGridJs: vendorJsUrls('agGrid', base)[0]!,
+    agGridCss: vendorCssUrls('agGrid', base)[0]![0]!,
+    agGridTheme: vendorCssUrls('agGrid', base)[1]![0]!,
+    mermaidJs: vendorJsUrls('mermaid', base)[0]!,
+  }
+  return `<script>
+window.__iuiVendor = ${JSON.stringify(map)};
+window.__iuiCdnNext = function (el) {
+  if (!el || el.getAttribute('data-iui-done') === '1') return;
+  var rest = String(el.getAttribute('data-iui-fallback') || '').split(' ').filter(Boolean);
+  if (!rest.length) { el.setAttribute('data-iui-done', '0'); return; }
+  el.setAttribute('data-iui-done', 'replaced');
+  var isLink = el.tagName === 'LINK';
+  var n = document.createElement(isLink ? 'link' : 'script');
+  n.setAttribute('data-iui-fallback', rest.slice(1).join(' '));
+  n.setAttribute('data-iui-t0', String(Date.now()));
+  if (isLink) {
+    n.rel = 'stylesheet';
+    n.onload = function () { n.setAttribute('data-iui-done', '1'); };
+    n.onerror = function () { window.__iuiCdnNext(n); };
+    n.href = rest[0];
+  } else {
+    n.async = true;
+    n.setAttribute('data-iui-cdn', '');
+    n.onload = function () { n.setAttribute('data-iui-done', '1'); };
+    n.onerror = function () { window.__iuiCdnNext(n); };
+    n.src = rest[0];
+  }
+  (el.parentNode || document.head).insertBefore(n, el.nextSibling);
+};
+<\/script>`
+}
+
+/** C8: rewrite model-authored CDN <script src>/<link href> for registry libs. */
+export function rewriteAuthorCdnTags(html: string, base?: string): string {
+  return html.replace(/<(script|link)\b[^>]*>/gi, (tag) =>
+    tag.replace(/\b(src|href)=(["'])(https:\/\/[^"']+)\2/i, (_m, attr: string, q: string, url: string) =>
+      `${attr}=${q}${rewriteKnownCdnUrl(url, base)}${q}`))
+}
+
+function autoCdnTags(html: string, js: string, base?: string): string {
   const all = html + '\n' + js
   const tags: string[] = []
   const need = (use: RegExp, present: RegExp): boolean => use.test(all) && !present.test(html)
@@ -2543,12 +2610,12 @@ function autoCdnTags(html: string, js: string): string {
     /<canvas\b[^>]*(?:id|class)\s*=\s*["'][^"']*[Cc]hart/i.test(html) ||
     (/<canvas\b/i.test(html) && /(?:doughnut|pie|radar|polarArea|chart\.js)/i.test(all))
   if (wantsChart && !hasChartUmdScript) {
-    tags.push('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>')
+    tags.push(vendorScriptTag('chart', base))
   }
   if (wantsChart || hasChartUmdScript) {
     tags.push(buildChartGuardScript())
   }
-  if (need(/\becharts\s*\.\s*init\s*\(/, /echarts/i)) tags.push('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"><\/script>')
+  if (need(/\becharts\s*\.\s*init\s*\(/, /echarts/i)) tags.push(vendorScriptTag('echarts', base))
   // Prefer UMD Leaflet (global L) over ESM importmap — srcdoc + import("leaflet") often yields empty maps.
   // Inject whenever map APIs / itinerary chrome appear, unless a real leaflet.js <script src> is already present.
   const hasLeafletUmdScript = /<script[^>]+src=["'][^"']*leaflet(?:\.js|\.min\.js)/i.test(html)
@@ -2559,12 +2626,12 @@ function autoCdnTags(html: string, js: string): string {
     /\bimport\s*(?:\*|\{?\s*L\s*\}?)\s*from\s*['"]leaflet['"]/.test(all) ||
     (/leaflet/i.test(all) && /(?:map|tile|marker|lat|lng)/i.test(all))
   if (wantsLeaflet && !hasLeafletUmdScript) {
-    tags.push('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/><script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>')
+    tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base))
   }
   if (wantsLeaflet || hasLeafletUmdScript) {
     tags.push(buildLeafletTileGuardScript())
   }
-  if (need(/\bd3\s*\.\s*(?:select|scale|line|arc)/, /d3(?:@|\.min|\.v)/i)) tags.push('<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"><\/script>')
+  if (need(/\bd3\s*\.\s*(?:select|scale|line|arc)/, /d3(?:@|\.min|\.v)/i)) tags.push(vendorScriptTag('d3', base))
   const hasAgGridScript = /<script[^>]+src=["'][^"']*ag-grid/i.test(html)
   const wantsAgGrid =
     /\bagGrid\s*\.\s*(?:createGrid|Grid)\s*\(/.test(all) ||
@@ -2572,9 +2639,8 @@ function autoCdnTags(html: string, js: string): string {
     /ag-theme-(?:quartz|alpine|balham|iui)/.test(all) ||
     /class\s*=\s*["'][^"']*ag-theme/.test(all)
   if (wantsAgGrid && !hasAgGridScript) {
-    tags.push('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css"/>')
-    tags.push('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css"/>')
-    tags.push('<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"><\/script>')
+    tags.push(vendorCssTags('agGrid', base))
+    tags.push(vendorScriptTag('agGrid', base))
   }
   if (wantsAgGrid || hasAgGridScript) tags.push(buildAgGridGuardScript())
   const hasMermaidScript = /<script[^>]+src=["'][^"']*mermaid/i.test(html)
@@ -2583,10 +2649,10 @@ function autoCdnTags(html: string, js: string): string {
     /class\s*=\s*["'][^"']*\bmermaid\b/.test(all) ||
     /iui-mindmap/.test(all)
   if (wantsMermaid && !hasMermaidScript) {
-    tags.push('<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"><\/script>')
+    tags.push(vendorScriptTag('mermaid', base))
   }
   if (wantsMermaid || hasMermaidScript) tags.push(buildMermaidGuardScript())
-  return tags.join('')
+  return buildVendorBootScript(base) + tags.join('')
 }
 
 /** Build iframe srcdoc (sandbox: allow-scripts; no allow-same-origin). */
@@ -2604,7 +2670,7 @@ export function buildHtmlSandboxSrcdoc(
       ? rawHtml
       : enrichPlaceMediaHtml(rawHtml),
   )
-  const html = truncateAuthor(htmlSan, 'html')
+  const html = rewriteAuthorCdnTags(truncateAuthor(htmlSan, 'html'), options.assetBase)
   if (htmlSan.length > HTML_SANDBOX_MAX_HTML_BYTES) truncatedParts.push('html')
   const cssSan = sanitizeSandboxCss(
     typeof options.liveCss === 'string' && options.liveCss.trim() ? options.liveCss : spec.css,
@@ -2660,10 +2726,10 @@ export function buildHtmlSandboxSrcdoc(
   if (document.readyState !== 'loading') go(); else document.addEventListener('DOMContentLoaded', go);
 })();
 <\/script>`
-  const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc))
+  const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase))
   const bridge = buildSandboxBridgeScript(frameId)
   const oiuCss = buildOiuDesignSystemCss()
-  const importMapTag = buildOiuImportmapScriptTag()
+  const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()
 
   // P1-PREVIEW-PHOTO: always inject runtime fill (well-known map). Volume trade for
@@ -2671,7 +2737,7 @@ export function buildHtmlSandboxSrcdoc(
   const photoFill = buildTripPhotoFillScript()
   // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
-  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}; style-src 'unsafe-inline' ${cdnCspOrigins()}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins()}; font-src https: data:; connect-src ${cdnCspOrigins()} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  let doc = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins()}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src https: data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}
@@ -2697,7 +2763,9 @@ export function buildSandboxDownloadHtml(
   options: HtmlSandboxBuildOptions = {},
 ): string {
   // Reuse srcdoc builder. liveHtml/liveCss bake the running iframe (filled photos, current filter).
-  const doc = buildHtmlSandboxSrcdoc(spec, { ...options, frameId: options.frameId ?? 'download' })
+  // Downloaded files must not point at the local plugin route (C6) — CDN chain only.
+  const { assetBase: _localOnly, ...portable } = options
+  const doc = buildHtmlSandboxSrcdoc(spec, { ...portable, frameId: options.frameId ?? 'download' })
   return doc
 }
 

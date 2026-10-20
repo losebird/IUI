@@ -261,13 +261,15 @@ function isTopLevelAt(source: string, index: number): boolean {
 export function buildAuthorJsRuntimeSource(): string {
   return `
 window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
-  var LEAFLET_JS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-  var LEAFLET_CSS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
-  var CHART_JS = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-  var AGGRID_JS = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js';
-  var AGGRID_CSS = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css';
-  var AGGRID_THEME = 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
-  var MERMAID_JS = 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js';
+  // C6: host-provided vendor map (local asset route first); CDN defaults otherwise.
+  var VND = window.__iuiVendor || {};
+  var LEAFLET_JS = VND.leafletJs || 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+  var LEAFLET_CSS = VND.leafletCss || 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+  var CHART_JS = VND.chartJs || 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+  var AGGRID_JS = VND.agGridJs || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js';
+  var AGGRID_CSS = VND.agGridCss || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css';
+  var AGGRID_THEME = VND.agGridTheme || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
+  var MERMAID_JS = VND.mermaidJs || 'https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js';
   var state = { phase: 'boot', ran: false, lastOpts: null };
 
   function post(msg) {
@@ -813,16 +815,26 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
 
   // C4: async CDN scripts (data-iui-cdn) get one shared deadline instead of
   // hanging forever / blocking window.load. Late arrivals still define globals.
-  var CDN_TIMEOUT_MS = 8000;
+  var CDN_TIMEOUT_MS = 10000;
+  var CDN_SOURCE_TIMEOUT_MS = 4000;
   function waitCdnScripts(done) {
-    var deadline = Date.now() + CDN_TIMEOUT_MS;
+    var started = Date.now();
+    var deadline = started + CDN_TIMEOUT_MS;
     setPhase('libsLoading');
     (function poll() {
       var list = document.querySelectorAll('script[data-iui-cdn]');
       var pending = [];
+      var now = Date.now();
       for (var i = 0; i < list.length; i++) {
         var st = list[i].getAttribute('data-iui-done');
-        if (st === null) pending.push(list[i]);
+        if (st !== null) continue;
+        // C5: a hung source (no load, no error) moves on to the next candidate.
+        var t0 = Number(list[i].getAttribute('data-iui-t0') || started);
+        if (now - t0 > CDN_SOURCE_TIMEOUT_MS && list[i].getAttribute('data-iui-fallback') && window.__iuiCdnNext) {
+          window.__iuiCdnNext(list[i]);
+          continue;
+        }
+        pending.push(list[i]);
       }
       if (!pending.length) { done(); return; }
       if (Date.now() >= deadline) {
