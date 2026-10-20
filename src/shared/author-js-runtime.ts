@@ -46,6 +46,16 @@ export function splitAuthorJsChunks(input: string): string[] {
   const tail = source.slice(start).trim()
   if (tail) chunks.push(tail)
   if (chunks.length === 0) return [source.trim()]
+  // `if (a) b(); else c();` / `try{}catch{}` continuations: a top-level `;`
+  // cut before `else`/`catch`/`finally` would leave an orphan clause that is a
+  // SyntaxError on its own (seen live: "Unexpected token 'else'"). Re-join.
+  for (let i = chunks.length - 1; i > 0; i--) {
+    const head = chunks[i]!.replace(LEADING_TRIVIA, '')
+    if (/^(?:else|catch|finally)\b/.test(head)) {
+      chunks[i - 1] = `${chunks[i - 1]}\n${chunks[i]}`
+      chunks.splice(i, 1)
+    }
+  }
   // One script hoists every function declaration before any statement runs;
   // isolated chunks do not ("refreshFooter is not defined" when a callback
   // fires synchronously inside an earlier chunk). Peel each leading top-level

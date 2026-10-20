@@ -461,13 +461,34 @@ export function isPlainAsk(ask: string): boolean {
   return false
 }
 
+const EXPLICIT_UI_ASK =
+  /做[一个张份款套]?|画[一个张份]?|生成.{0,8}(页|卡|图|表|看板)|给我看|可视化|看板|仪表盘|地图|计算器|图表|界面|页面|卡片|组件|交互|表单|问卷|报名|预订|订票|买票|查票|dashboard|chart|visuali[sz]e|interactive|widget|\bui\b|show\s+me|make\s+(a|me)|build\s+(a|me)|draw\s+(a|me)|iui(?:-html)?/iu
+const CODE_TOPIC =
+  /python|javascript|typescript|\bjs\b|\bts\b|\bjava\b|golang|\bgo\b|rust|c\+\+|c#|\bsql\b|shell|bash|\bgit\b|\bnpm\b|pnpm|node(?:\.js)?|react|vue|正则|代码|函数|方法|变量|数组|字典|列表|元组|字符串|报错|异常|编译|语法|\bapi\b|docker|linux|命令/iu
+const QUESTION_ASK =
+  /怎么|怎样|如何|为什么|为啥|是什么|什么是|有什么|区别|差别|用法|写法|意思|原理|解释|讲讲|说说|吗[?？]?$|how\s+(do|to|can)|what|why|difference|explain/iu
+const BRIEF_ASK = /简单说|简单讲|简要|简短|一句话|大概说|快速说|briefly|in\s+short|tl;?dr|quick\s+question/iu
+
+/**
+ * Knowledge / coding Q&A ("Python 里怎么把列表反转？简单说一下") — plain text is
+ * the right answer even when it mentions a UI-ish noun (列表/流程/安装…).
+ * Seen live: the referee forced a sandbox page after a correct plain answer.
+ * An explicit build/show verb (做/画/可视化/看板/地图…) still wins.
+ */
+export function isKnowledgeAsk(ask: string): boolean {
+  const text = ask.trim()
+  if (text.length === 0 || EXPLICIT_UI_ASK.test(text)) return false
+  if (BRIEF_ASK.test(text)) return true
+  return CODE_TOPIC.test(text) && QUESTION_ASK.test(text)
+}
+
 /**
  * Heuristic: ask wants something to *see* / interact with.
  * Broad on purpose — whitelist must not be the gate.
  */
 export function askNeedsUi(ask: string): boolean {
   const text = ask.trim()
-  if (text.length === 0 || isPlainAsk(text)) return false
+  if (text.length === 0 || isPlainAsk(text) || isKnowledgeAsk(text)) return false
   if (
     /地图|导航|路线|定位|目的地|看板|仪表盘|表单|报名|问卷|对比|比较|步骤|流程|说明书|手册|安装|教程|天气|气温|资源|CPU|内存|磁盘|负载|展示|可视化|卡片|界面|组件|图表|列表|菜单|课表|日历|行程|订票|机票|火车票|车票|高铁|航班|酒店|预订|买票|查票|点菜|嵌入|沙箱|计算器|看板|KPI|dashboard|weather|forecast|form|compare|checklist|manual|map|directions|navigate|booking|ticket|flight|hotel|iui(?:-html)?/iu.test(
       text,
@@ -494,6 +515,7 @@ export function askNeedsUi(ask: string): boolean {
 export function classifyIntentAsk(ask: string): IntentRule | null {
   const text = ask.trim()
   if (text.length === 0) return null
+  if (isKnowledgeAsk(text)) return null
   for (const rule of INTENT_RULES) {
     if (rule.id === 'visual') continue
     if (rule.askPatterns.some((source) => safeRegExpTest(source, 'iu', text))) {

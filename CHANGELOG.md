@@ -15,6 +15,8 @@
 - **No global DOM patch (F2):** removed `installNullSafeQuery` / `NULL_NODE` / `ensureLiveImg`. `querySelector` / `getElementById` return `null` for missing elements again; host library detection uses a captured native. Bench (157 stored pages): Leaflet was loaded on 153 pages that had no map, now 14; one page newly shows a strip, now worded as "page script could not find an element".
 - **Generic regenerate prompt (F9):** "Regenerate" no longer demands itinerary cards with Wikimedia photos; it asks to keep content/layout and passes the first line of the failure.
 - **Build passes type-check (F14):** dev dependency `@deepseek-ai/dsh-client-ui-primitives` → `0.2.0-rc.2` (matches dsh 0.2.x hosts and the settings API); `pnpm-workspace.yaml` declares the runtime deps that package omits so tests import it. `pnpm run check` is green.
+- **No orphan `else` between chunks:** a brace-less `if (x) a(); else {…}` at top level was cut after `;`, so the `else` chunk threw `Unexpected token 'else'` (seen in a real dsh 0.2.1 session). Chunks starting with `else` / `catch` / `finally` are re-joined. Across 159 stored pages, chunk-only syntax errors 3 → 0.
+- **Coding questions stay plain text:** "Python 里怎么把一个列表反转？简单说一下" matched the UI word 列表, so the referee threw away a correct plain answer and forced a sandbox page (6 s → 33 s). Coding / brief knowledge questions without a build-or-show verb (做 / 画 / 可视化 / 看板 / 地图 …) now classify as plain.
 - **Install docs:** `lib/` is a build artifact not tracked in git; INSTALL.md now says so and gives the local-path install fallback.
 
 Also in this release (previously unreleased):

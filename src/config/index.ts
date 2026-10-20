@@ -17,6 +17,7 @@ export {
   classifyIntentAsk,
   askNeedsUi,
   isPlainAsk,
+  isKnowledgeAsk,
 } from './referee-rules.ts'
 export {
   STREAM_HEURISTICS,
