@@ -64,7 +64,7 @@ document.getElementById('pause').onclick=function(){tour.pause()};
     expect(splitAuthorJsChunks(js)).toHaveLength(1)
   })
 
-  it('NULL_NODE stubs getElementById/querySelector, so missing #status would NOT produce this TypeError', () => {
+  it('F2: missing elements stay null (no NULL_NODE) and paint one friendly strip', () => {
     const runtime = buildAuthorJsRuntimeSource()
     const run = new Function(`
       ${runtime}
@@ -73,14 +73,21 @@ document.getElementById('pause').onclick=function(){tour.pause()};
       document.body.appendChild(root);
       var pipe = window.__iuiAuthorPipeline;
       pipe.ensureLibsThenRun({
-        js: 'document.getElementById("status").textContent = "ok"; document.querySelector(".missing").textContent = "ok";',
+        js: 'window.__f2q = document.querySelector(".missing"); window.__f2id = document.getElementById("nope"); document.getElementById("status").textContent = "ok";',
         jsFunctions: '',
         jsExpressions: [],
-        jsChunks: ['document.getElementById("status").textContent = "ok"; document.querySelector(".missing").textContent = "ok";']
+        jsChunks: ['window.__f2q = document.querySelector(".missing"); window.__f2id = document.getElementById("nope"); document.getElementById("status").textContent = "ok";']
       });
-      return document.querySelectorAll('[data-iui-author-fail]').length;
+      var strips = document.querySelectorAll('[data-iui-author-fail]');
+      return { strips: strips.length, text: strips[0] ? strips[0].textContent : '', q: window.__f2q, id: window.__f2id, imgs: document.querySelectorAll('[data-iui-live-img]').length };
     `)
-    expect(run()).toBe(0)
+    const out = run() as { strips: number; text: string; q: unknown; id: unknown; imgs: number }
+    expect(out.q).toBeNull()
+    expect(out.id).toBeNull()
+    expect(out.imgs).toBe(0)
+    expect(out.strips).toBe(1)
+    expect(out.text).toMatch(/找不到某个元素|could not find an element/)
+    document.querySelectorAll('[data-iui-author-fail]').forEach((n) => n.remove())
   })
 
   it('createTripAnimator adopts late .iui-pin-dot nodes when pinElements is empty', () => {

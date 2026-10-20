@@ -21,6 +21,7 @@
  * @module @losebird/iui/client
  */
 
+import { INTERNAL_ACTION } from './action-gate.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -89,6 +90,8 @@ function panelActionSend(ctx: Context, sessionId: SessionId): GenuiPanelInjected
     sendGenuiAction: (action, payload) => {
       if (conversation === undefined) return
       if (openSandboxLinkLocally(action, payload)) return
+      // F3: host-internal sandbox events never become a model turn.
+      if (INTERNAL_ACTION.test(action)) return
       const payloadText = Object.keys(payload).length === 0
         ? ''
         : ` 组件数据: ${JSON.stringify(payload)}`
@@ -137,6 +140,8 @@ function sendInlineGenuiAction(ctx: Context, sessionId: SessionId, action: strin
   const conversation = scoped?.get('conversation') as IConversation | undefined
   if (conversation === undefined) return
   if (openSandboxLinkLocally(action, payload)) return
+  // F3: host-internal sandbox events never become a model turn.
+  if (INTERNAL_ACTION.test(action)) return
   const payloadText = Object.keys(payload).length === 0
     ? ''
     : ` 组件数据: ${JSON.stringify(payload)}`

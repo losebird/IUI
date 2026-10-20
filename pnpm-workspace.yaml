@@ -58,3 +58,28 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-util-values@0.1.2-rc.1'
   - '@deepseek-ai/dsh-util-workspace-path@0.1.2-rc.1'
   - '@deepseek-ai/dsh-workspace@0.1.2-rc.1'
+# F14: dsh 0.2.x client packages are published without their runtime deps
+# (the host bundles them). Declare them so vitest can import the real
+# primitives that `pnpm run build` type-checks against.
+packageExtensions:
+  '@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2':
+    dependencies:
+      '@deepseek-ai/dsh-util-code-language': 0.2.0-rc.2
+      '@shikijs/langs': ^4.4.3
+      anser: ^2.3.5
+      clsx: ^2.1.1
+      diff: ^8.0.2
+      katex: ^0.16.47
+      mdast-util-from-markdown: ^2.0.3
+      mdast-util-gfm: ^3.1.0
+      mdast-util-math: ^3.0.0
+      micromark-core-commonmark: ^2.0.3
+      micromark-extension-gfm: ^3.0.0
+      micromark-extension-math: ^3.1.0
+      micromark-factory-space: ^2.0.1
+      micromark-util-character: ^2.1.1
+      micromark-util-classify-character: ^2.0.1
+      micromark-util-sanitize-uri: ^2.0.1
+      micromark-util-symbol: ^2.0.1
+      shiki: ^4.4.3
+      simple-icons: ^16.0.0

@@ -11,6 +11,10 @@
 - **Compact section-format prompt:** the system prompt teaches `title:/height:` + `---css/---html/---js` sections (5.3k chars vs 13.3k). DeepSeek-V4.1-Flash bench: 20/20 render on global and CN networks, median generation 48s → 39s, output tokens −18%, text under 12px 36% → 4%.
 - **Section-format streaming:** JS is held while the fence is still streaming (`data-streaming`) and runs once when it settles; preamble `title / height / placeholder` is parsed.
 - **AA text tokens:** secondary/tertiary text colors darkened (light `#5f5e58` / `#6b6a64`, dark `#a8a69e` / `#9a988f`); low-contrast text in bench pages 43% → 3%.
+- **No self-looping pages (F3):** host-internal `sandbox_*` events (rerun, regenerate, sendPrompt, open link) never become a `[genui-action]` model turn. Page `action()` / `sendPrompt()` need a real user click (`navigator.userActivation`), are limited to 1 per frame per 2 s and 6 per tab per minute (then paused with a Resume button), and payloads are capped at 2000 chars. `sendPrompt` only fills the composer.
+- **No global DOM patch (F2):** removed `installNullSafeQuery` / `NULL_NODE` / `ensureLiveImg`. `querySelector` / `getElementById` return `null` for missing elements again; host library detection uses a captured native. Bench (157 stored pages): Leaflet was loaded on 153 pages that had no map, now 14; one page newly shows a strip, now worded as "page script could not find an element".
+- **Generic regenerate prompt (F9):** "Regenerate" no longer demands itinerary cards with Wikimedia photos; it asks to keep content/layout and passes the first line of the failure.
+- **Build passes type-check (F14):** dev dependency `@deepseek-ai/dsh-client-ui-primitives` → `0.2.0-rc.2` (matches dsh 0.2.x hosts and the settings API); `pnpm-workspace.yaml` declares the runtime deps that package omits so tests import it. `pnpm run check` is green.
 - **Install docs:** `lib/` is a build artifact not tracked in git; INSTALL.md now says so and gives the local-path install fallback.
 
 Also in this release (previously unreleased):

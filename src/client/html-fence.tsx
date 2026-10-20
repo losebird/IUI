@@ -50,6 +50,7 @@ import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
 import { getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
+import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
 
 /** Persist sandbox interactive state across host contentWiped remounts (same fence body). */
 const localStateByFence = new Map<string, Record<string, unknown>>()
@@ -199,12 +200,21 @@ function requestSandboxSnapshot(
 
 
 const REASK_PROMPT_FALLBACK =
-  'Please regenerate the UI with a closed ```iui-html fence; itinerary cards must include Wikimedia photos and credits.'
+  'Please regenerate the previous page in one closed ```iui-html fence. Keep the content and layout; only fix what stopped it from rendering.'
 
-function reaskPrompt(t: (key: string) => string): string {
+/**
+ * F9: generic "regenerate" prompt — no page-type assumptions (it used to
+ * demand itinerary cards with Wikimedia photos for every page). When the host
+ * knows what failed, the first line of that error rides along so the model
+ * can fix the cause instead of guessing.
+ */
+export function reaskPrompt(t: (key: string) => string, problem?: string | null): string {
   const custom = t('sandbox.reaskPrompt')
-  if (custom && custom !== 'sandbox.reaskPrompt') return custom
-  return REASK_PROMPT_FALLBACK
+  const base = custom && custom !== 'sandbox.reaskPrompt' ? custom : REASK_PROMPT_FALLBACK
+  const detail = (problem ?? '').split('\n').map((line) => line.trim()).find((line) => line !== '') ?? ''
+  if (detail === '') return base
+  const label = t('sandbox.reaskProblem')
+  return `${base}\n${label && label !== 'sandbox.reaskProblem' ? label : 'Problem: '}${detail.slice(0, 300)}`
 }
 
 type SandboxFailKind = 'author' | 'host' | 'unknown'
@@ -281,6 +291,21 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
   const frameId = useMemo(() => `iui-html-${reactId}`, [reactId])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const onAction = useGenuiAction()
+  /** F3: every outbound action/sendPrompt from this frame passes the gate. */
+  const actionGateRef = useRef<FrameActionGate | null>(null)
+  if (actionGateRef.current === null) actionGateRef.current = createFrameActionGate()
+  const [actionsPaused, setActionsPaused] = useState(false)
+  const warnedBlockRef = useRef<Set<ActionVerdict>>(new Set())
+  const gateOutbound = (name: string): boolean => {
+    const verdict = actionGateRef.current!.check(name)
+    if (verdict === 'ok') return true
+    if (verdict === 'paused') setActionsPaused(true)
+    if (!warnedBlockRef.current.has(verdict)) {
+      warnedBlockRef.current.add(verdict)
+      try { console.warn(`[iui] sandbox ${name} blocked: ${verdict}`) } catch { /* ignore */ }
+    }
+    return false
+  }
   const [reloadToken, setReloadToken] = useState(0)
   const [autoHeight, setAutoHeight] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
@@ -525,15 +550,17 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           try { window.open(openUrl, '_blank', 'noopener,noreferrer') } catch { /* ignore */ }
           return
         }
-        onAction?.(action, payload)
+        if (!gateOutbound(action)) return
+        onAction?.(action, capActionPayload(payload))
         return
       }
       if (event.data.type === 'sendPrompt') {
         const prompt = event.data.text.trim()
         if (!prompt) return
-        void insertIntoComposer(prompt).then((result) => {
-          onAction?.('sandbox_send_prompt', { text: prompt, result })
-        })
+        // Fill the composer only; the user presses send. Still gated so a
+        // timer cannot keep overwriting the draft.
+        if (!gateOutbound('prompt')) return
+        void insertIntoComposer(prompt.slice(0, 2000))
         return
       }
       if (event.data.type === 'openLink') {
@@ -562,9 +589,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           {
             label: t('sandbox.reask'),
             onClick: () => {
-              void insertIntoComposer(reaskPrompt(t)).then((result) => {
-                onAction?.('sandbox_reask', { result })
-              })
+              void insertIntoComposer(reaskPrompt(t, t('sandbox.reaskParseFail')))
             },
           },
         ]}
@@ -632,7 +657,6 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
         jsChunks: splitAuthorJsChunks(preparedJs),
       }, '*')
       authorJsRanRef.current = true
-      onAction?.('sandbox_rerun_author_js', {})
     } catch {
       setErrorKind('host')
       setError(friendlyError('failed to post runAuthorJs(force)', t, 'host'))
@@ -720,6 +744,18 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
           {fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
         </button>
       </div>
+      {actionsPaused && (
+        <div data-iui-actions-paused="1" role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0', fontSize: 13, color: 'var(--color-text-secondary, #5f5e58)' }}>
+          <span>{t('sandbox.actionsPaused')}</span>
+          <button
+            type="button"
+            style={TOOLBAR_BTN}
+            onClick={() => { actionGateRef.current?.resume(); setActionsPaused(false) }}
+          >
+            {t('sandbox.actionsResume')}
+          </button>
+        </div>
+      )}
       {error !== null && (
         <ErrorState
           kind={errorKind === 'host' ? 'sandbox-host-error' : 'sandbox-author-error'}
@@ -732,9 +768,7 @@ export function HtmlSandboxFrame({ raw, streaming = false }: { raw: string; stre
             {
               label: t('sandbox.reask'),
               onClick: () => {
-                void insertIntoComposer(reaskPrompt(t)).then((result) => {
-                  onAction?.('sandbox_reask', { result })
-                })
+                void insertIntoComposer(reaskPrompt(t, error))
               },
             },
             { label: t('sandbox.dismissError'), onClick: () => { setError(null); setErrorKind(null) } },

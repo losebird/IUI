@@ -311,6 +311,11 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   var AGGRID_THEME = VND.agGridTheme || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
   var MERMAID_JS = VND.mermaidJs || 'https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js';
   var state = { phase: 'boot', ran: false, lastOpts: null };
+  // F2: host helpers use the DOM native captured before author code runs, so
+  // an author (or a library) patching querySelector cannot fool library
+  // detection / script de-dupe. Missing elements stay null, as in any page.
+  var NQS = Document.prototype.querySelector;
+  function hq(sel) { try { return NQS.call(document, sel); } catch (e) { return null; } }
 
   function post(msg) {
     try {
@@ -396,7 +401,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       || src.indexOf('L.circleMarker') !== -1
       || src.indexOf('createTripAnimator') !== -1
       || src.indexOf('iui-map-wrap') !== -1
-      || !!(document.querySelector && document.querySelector('.iui-map-wrap, #map, [id="map"]'));
+      || !!(hq('.iui-map-wrap, #map, [id="map"]'));
   }
 
   function wantsAgGrid(src) {
@@ -404,19 +409,19 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     return src.indexOf('agGrid') !== -1
       || src.indexOf('ag-grid-community') !== -1
       || src.indexOf('ag-theme-') !== -1
-      || !!(document.querySelector && document.querySelector('[class*="ag-theme"]'));
+      || !!(hq('[class*="ag-theme"]'));
   }
   function wantsMermaid(src) {
     src = String(src || '');
     return src.indexOf('mermaid.run') !== -1
       || src.indexOf('mermaid.initialize') !== -1
       || src.indexOf('iui-mindmap') !== -1
-      || !!(document.querySelector && document.querySelector('.mermaid, .iui-mindmap'));
+      || !!(hq('.mermaid, .iui-mindmap'));
   }
 
   function wantsChart(src) {
     src = String(src || '');
-    var hasCanvas = !!(document.querySelector && document.querySelector('canvas'));
+    var hasCanvas = !!(hq('canvas'));
     return src.indexOf('new Chart') !== -1
       || src.indexOf('iuiCreateChart') !== -1
       || src.indexOf('iui-weather-chart') !== -1
@@ -429,7 +434,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   }
 
   function ensureCss(href) {
-    if (document.querySelector('link[href="' + href + '"]')) return;
+    if (hq('link[href="' + href + '"]')) return;
     var link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
@@ -437,7 +442,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   }
 
   function ensureScript(src, done) {
-    var existing = document.querySelector('script[src="' + src + '"]');
+    var existing = hq('script[src="' + src + '"]');
     if (existing) {
       if (typeof L !== 'undefined' && src.indexOf('leaflet') !== -1) { done(true); return; }
       var known = existing.getAttribute('data-iui-done');
@@ -562,7 +567,12 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     detail.textContent = (name ? name + ': ' : '') + msg;
     var meta = document.createElement('div');
     meta.className = 'iui-fail-meta';
-    meta.textContent = zh
+    var missingEl = kind === 'author' && /of null|null is not an object|is null\b/.test(msg);
+    meta.textContent = missingEl
+      ? (zh
+        ? '页面脚本找不到某个元素：JS 里的 id / 选择器和 HTML 对不上。可点「重新生成」让模型修正。'
+        : 'Page script could not find an element: an id/selector in the JS does not match the HTML. Regenerate to let the model fix it.')
+      : zh
       ? (kind === 'host'
         ? '这是 IUI 沙箱宿主问题。可点「重新加载」整页，或「重跑作者 JS」再试。'
         : '这是模型写出的脚本问题。其它分片仍可能已执行；可只重跑作者 JS，无需整页刷新。')
@@ -633,67 +643,9 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }
   }
 
-  var NULL_NODE = (function () {
-    var n = { nodeType: 1, style: {}, classList: { add: function () {}, remove: function () {}, contains: function () { return false; }, toggle: function () {} },
-      setAttribute: function () {}, getAttribute: function () { return null; }, removeAttribute: function () {},
-      appendChild: function (c) { return c; }, insertBefore: function (c) { return c; }, removeChild: function (c) { return c; },
-      querySelector: function () { return n; }, querySelectorAll: function () { return []; },
-      addEventListener: function () {}, removeEventListener: function () {},
-      closest: function () { return n; }, matches: function () { return false; },
-      getBoundingClientRect: function () { return { top: 0, left: 0, width: 0, height: 0, right: 0, bottom: 0 }; },
-      innerHTML: '', textContent: '', value: '', src: '', href: '', alt: '', id: '', className: '',
-      parentNode: null, firstChild: null, isConnected: false };
-    try {
-      ['src', 'href', 'alt', 'textContent', 'innerHTML', 'value', 'id', 'className'].forEach(function (k) {
-        Object.defineProperty(n, k, { configurable: true, enumerable: true, get: function () { return ''; }, set: function () {} });
-      });
-    } catch (eN) {}
-    return n;
-  })();
-  var origQS = Document.prototype.querySelector;
-  var origEQS = Element.prototype.querySelector;
-  function ensureLiveImg() {
-    var root = origGEBI ? origGEBI('iui-preview-root') : document.getElementById('iui-preview-root');
-    if (!root) root = document.body;
-    var img = origEQS.call(root, 'img');
-    if (img) return img;
-    var slot = origEQS.call(root, '.photo') || origEQS.call(root, '.cover') || origEQS.call(root, '.iui-gallery') || root;
-    img = document.createElement('img');
-    img.setAttribute('data-iui-live-img', '1');
-    try { slot.insertBefore(img, slot.firstChild); } catch (e) {
-      try { slot.appendChild(img); } catch (e2) {}
-    }
-    return img;
-  }
-  var origGEBI = document.getElementById.bind(document);
-  function installNullSafeQuery() {
-    if (document.__iuiNullSafe) return;
-    document.__iuiNullSafe = true;
-    Document.prototype.querySelector = function (sel) {
-      var el = origQS.call(this, sel);
-      if (el) return el;
-      var s = String(sel || '');
-      if (s === 'img' || s.indexOf('img') !== -1) return ensureLiveImg();
-      return NULL_NODE;
-    };
-    Element.prototype.querySelector = function (sel) {
-      var el = origEQS.call(this, sel);
-      if (el) return el;
-      var s = String(sel || '');
-      if (s === 'img' || s.indexOf('img') !== -1) return ensureLiveImg();
-      return NULL_NODE;
-    };
-    document.getElementById = function (id) {
-      var el = origGEBI(id);
-      if (el) return el;
-      if (String(id || '').toLowerCase().indexOf('img') !== -1 || String(id || '') === 'photo') return ensureLiveImg();
-      return NULL_NODE;
-    };
-  }
   function runChunkList(parts, exprs) {
     setPhase('authorRunning');
     var failed = 0;
-    installNullSafeQuery();
     withDomReplay(function () {
       var total = parts.length;
       for (var p = 0; p < parts.length; p++) {
