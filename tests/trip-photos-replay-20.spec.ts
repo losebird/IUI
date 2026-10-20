@@ -7,7 +7,8 @@ describe('0.13.0-iui.20 trip photos + replay tiles', () => {
   it('photo fill script includes Wikipedia/Commons network path (not well-known only)', () => {
     const script = buildTripPhotoFillScript()
     expect(script).toContain('wikipedia.org/api/rest_v1/page/summary')
-    expect(script).toContain('commons.wikimedia.org/w/api.php')
+    expect(script).toContain("api('commons.wikimedia.org'")
+    expect(script).toContain("'/w/api.php?'")
     expect(script).toContain('loading = \'eager\'')
     expect(script).toContain('titleVariants')
     expect(script).toContain('resolveNetwork')

@@ -1739,6 +1739,10 @@ export function buildSandboxBridgeScript(frameId: string): string {
         box.insertBefore(a, box.firstChild);
       }
       a.href = href || '#';
+      // F12: never show a Commons file name as the credit text.
+      if (label && (/\\.(jpe?g|png|gif|webp|svg|tiff?)\\b/i.test(String(label)) || /^\\s*file:/i.test(String(label)))) {
+        label = /[\\u3400-\\u9fff]/.test(String(label)) || /^zh/i.test(String(navigator.language || '')) ? 'ⓘ 图片来自 Wikimedia' : 'ⓘ Photo: Wikimedia';
+      }
       if (label) a.textContent = String(label);
       return a;
     },

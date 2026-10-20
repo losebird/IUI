@@ -426,10 +426,12 @@ a:hover { text-decoration: underline; }
   width: 100%; height: auto !important; max-height: min(70vh, 640px); object-fit: contain !important; display: block;
 }
 .iui-photo-credit {
-  font-size: 10px; line-height: 1.35; padding: 4px 10px 8px;
+  font-size: 11px; line-height: 1.35; padding: 4px 10px 8px;
   color: var(--color-text-tertiary, #9ca3af);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.iui-photo-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.iui-photo-credit a { color: inherit; text-decoration: none; }
+.iui-photo-credit a:hover, .iui-photo-credit a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
 .iui-pin-dot {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 50%;
@@ -788,12 +790,15 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
 - Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
 - Map tiles (REQUIRED): Esri World Street Map (grayscale via CSS) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
 - Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):
-  1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...] }) BEFORE the fence for ANY destination / hotel / cover
-     (Tokyo, California coast, Shanghai daytrip, hotels, landmarks — not only France).
-     Put each image_url into .photo / .cover img and show .iui-photo-credit (artist · license → credit_url).
-  2) Or emit Wikimedia Commons HTTPS yourself (Special:FilePath / upload / thumb).
-  3) Host ALSO auto-fills .photo/.cover via soft well-known cache + Wikipedia/Commons lookup (zh/en, retries)
-     for .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card / [data-iui-place].
+  1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...], coordinates: [{lat,lng}...] }) BEFORE the fence
+     for ANY destination / hotel / cover. Only photos that demonstrably show the place come back (Commons file/description/
+     categories name it, or within 300 m). Put image_url into .photo / .cover img + collapsed credit:
+     <div class="iui-photo-credit"><a href="credit_url" title="artist · license">ⓘ 图片来自 Wikimedia</a></div> — never a file name.
+  2) Unavailable / unsure → leave the .photo band EMPTY and put data-lat/data-lng on the card: the host draws a designed
+     placeholder (category icon on an accent gradient). NEVER substitute a nearby or more famous place's photo
+     (愚园路 ≠ 静安寺, a 安福路 café ≠ 外滩). A city photo is fine only for a whole-city stop.
+  3) Host ALSO auto-fills .photo/.cover (strict well-known aliases + verified Wikipedia/Commons lookup, 300 m geo check)
+     for .iui-stop-card / .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card / [data-iui-place].
      Model-invented Commons filenames are replaced when they 404. Prefer loading=eager on stop photos.
      NEVER invent Unsplash/random hosts; NEVER use solid muted blocks as photo stand-ins.
   Never invent live traffic/hours.

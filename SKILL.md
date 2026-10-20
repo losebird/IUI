@@ -39,7 +39,7 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。
 有日程/住宿/预算再画（住宿用 `.iui-compare-3`）；没有就省略。禁止把三日南京布局套到探店或天气。
 
-行程卡照片：优先调用工具 `get_trip_stop_images`（1–8 个维基标题），把 `image_url` 写入 `.photo img`，并用 `.iui-photo-credit` 展示署名。
+行程卡照片：优先调用工具 `get_trip_stop_images`（1–8 个维基标题，可附 `coordinates`），只会返回确实拍的是该地点的照片（Commons 文件名/描述/分类点名，或 300 m 内）。把 `image_url` 写入 `.photo img`，署名用折叠链接 `<a href=credit_url title="作者 · 许可">ⓘ 图片来自 Wikimedia</a>`（不要写文件名）。没有可信照片时保留空 `.photo` 并在卡片上写 `data-lat/data-lng`，宿主会画设计过的占位图；绝不用别处（如更有名的邻近地标）的照片顶替。
 
 ### 定价三列
 `<div class="iui-compare-3">` 内三个 `.iui-tier`（一个 `.featured`）。桌面必须并排，禁止竖着堆三档。
