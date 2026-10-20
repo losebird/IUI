@@ -8,8 +8,12 @@
  * Split author JS into top-level statement chunks (brace/string/comment aware).
  * One SyntaxError or throw in a later chunk must not prevent earlier bindings.
  */
-export function splitAuthorJsChunks(source: string): string[] {
-  if (!source || !source.trim()) return []
+export function splitAuthorJsChunks(input: string): string[] {
+  if (!input || !input.trim()) return []
+  // F1: each chunk runs in its own indirect eval, so top-level const/let/class
+  // would be scoped to that chunk ("x is not defined" in later chunks).
+  // Hoist them to var so bindings are shared across chunks like one script.
+  const source = hoistTopLevelLexical(input)
   const cuts = new Set<number>()
 
   // Cut AFTER top-level semicolons.
@@ -42,6 +46,62 @@ export function splitAuthorJsChunks(source: string): string[] {
   const tail = source.slice(start).trim()
   if (tail) chunks.push(tail)
   return chunks.length > 0 ? chunks : [source.trim()]
+}
+
+/**
+ * Rewrite top-level `const`/`let` → `var` and `class X` → `var X = class X`
+ * (string/comment/template/regex-light aware). Nested scopes are untouched.
+ */
+export function hoistTopLevelLexical(src: string): string {
+  let out = ''
+  let depth = 0
+  let str: string | null = null
+  let esc = false
+  let lineComment = false
+  let blockComment = false
+  const tpl: number[] = []
+  const isIdent = (ch: string | undefined): boolean => ch !== undefined && /[\w$]/.test(ch)
+  const kwAt = (i: number, w: string): boolean =>
+    src.startsWith(w, i) && !isIdent(src[i - 1]) && src[i - 1] !== '.' && /\s/.test(src[i + w.length] ?? '')
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]!
+    const n = src[i + 1]
+    if (lineComment) { out += c; if (c === '\n') lineComment = false; continue }
+    if (blockComment) { out += c; if (c === '*' && n === '/') { out += n; i++; blockComment = false } continue }
+    if (str) {
+      out += c
+      if (esc) { esc = false; continue }
+      if (c === '\\') { esc = true; continue }
+      if (str === '`' && c === '$' && n === '{') { out += n; i++; tpl.push(depth); depth++; str = null; continue }
+      if (c === str) str = null
+      continue
+    }
+    if (c === '}' && tpl.length && tpl[tpl.length - 1] === depth - 1) { depth--; tpl.pop(); out += c; str = '`'; continue }
+    if (c === '/' && n === '/') { lineComment = true; out += c; continue }
+    if (c === '/' && n === '*') { blockComment = true; out += c; continue }
+    if (c === '"' || c === "'" || c === '`') { str = c; out += c; continue }
+    if (c === '{' || c === '(' || c === '[') depth++
+    else if (c === '}' || c === ')' || c === ']') depth = Math.max(0, depth - 1)
+    if (depth === 0) {
+      if (kwAt(i, 'const')) { out += 'var  '; i += 4; continue }
+      if (kwAt(i, 'let')) { out += 'var'; i += 2; continue }
+      if (src.startsWith('class', i) && !isIdent(src[i - 1]) && src[i - 1] !== '.') {
+        const m = /^class\s+([A-Za-z_$][\w$]*)/.exec(src.slice(i, i + 200))
+        if (m) {
+          // Only declarations (statement position), not `x = class Foo {}`.
+          const before = out.replace(/\s+$/, '')
+          const prev = before[before.length - 1]
+          if (prev === undefined || (!'=(,:?[!&|+-*/%<>~^'.includes(prev) && !/(?:return|new|typeof|void|yield|await)$/.test(before))) {
+            out += `var ${m[1]} = class ${m[1]}`
+            i += m[0].length - 1
+            continue
+          }
+        }
+      }
+    }
+    out += c
+  }
+  return out
 }
 
 type Depth = { brace: number; paren: number; bracket: number; template: number }
@@ -338,6 +398,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     var existing = document.querySelector('script[src="' + src + '"]');
     if (existing) {
       if (typeof L !== 'undefined' && src.indexOf('leaflet') !== -1) { done(true); return; }
+      var known = existing.getAttribute('data-iui-done');
+      if (known === '0' || known === 'timeout') { done(false); return; }
       if (typeof Chart !== 'undefined' && src.indexOf('chart') !== -1) { done(true); return; }
       var n0 = 0;
       var t0 = setInterval(function () {
@@ -630,6 +692,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
           if (!ok) {
             showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Leaflet CDN failed to load' } });
           }
+          if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof L !== 'undefined'; }, function (ready) {
             if (!ready) {
               showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Leaflet global L not ready' } });
@@ -649,6 +712,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
           if (!ok) {
             showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Chart.js CDN failed to load' } });
           }
+          if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof Chart !== 'undefined'; }, function (ready) {
             if (!ready) {
               showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Chart global not ready' } });
@@ -668,6 +732,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
         ensureCss(AGGRID_THEME);
         ensureScript(AGGRID_JS, function (ok) {
           if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'AG Grid CDN failed to load' } });
+          if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof agGrid !== 'undefined'; }, function (ready) {
             if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'agGrid global not ready' } });
             next();
@@ -683,6 +748,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       chain.push(function (next) {
         ensureScript(MERMAID_JS, function (ok) {
           if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Mermaid CDN failed to load' } });
+          if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof mermaid !== 'undefined'; }, function (ready) {
             if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'mermaid global not ready' } });
             next();
@@ -735,14 +801,37 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       parts.push(body);
     }
     var probe = parts.join('\\n');
-    ensureLibs(probe, function () {
+    waitCdnScripts(function () { ensureLibs(probe, function () {
       waitDomRoot(function () {
         setPhase('domPainted');
         // Author JS must not run before libsReady — gate is ensureLibs above.
         runChunkList(parts, exprs);
         setPhase('live');
       });
-    });
+    }); });
+  }
+
+  // C4: async CDN scripts (data-iui-cdn) get one shared deadline instead of
+  // hanging forever / blocking window.load. Late arrivals still define globals.
+  var CDN_TIMEOUT_MS = 8000;
+  function waitCdnScripts(done) {
+    var deadline = Date.now() + CDN_TIMEOUT_MS;
+    setPhase('libsLoading');
+    (function poll() {
+      var list = document.querySelectorAll('script[data-iui-cdn]');
+      var pending = [];
+      for (var i = 0; i < list.length; i++) {
+        var st = list[i].getAttribute('data-iui-done');
+        if (st === null) pending.push(list[i]);
+      }
+      if (!pending.length) { done(); return; }
+      if (Date.now() >= deadline) {
+        for (var k = 0; k < pending.length; k++) pending[k].setAttribute('data-iui-done', 'timeout');
+        done();
+        return;
+      }
+      setTimeout(poll, 50);
+    })();
   }
 
   function rerunAuthorJs() {

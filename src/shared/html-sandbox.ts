@@ -1122,12 +1122,14 @@ function looksPartialJson(raw: string): boolean {
   }
 }
 
-function extractPartialJsonFields(raw: string): Partial<Record<'css' | 'html' | 'js' | 'title' | 'placeholder' | 'jsFunctions', string>> & { height?: number; jsExpressions?: string[] } {
-  const out: Partial<Record<'css' | 'html' | 'js' | 'title' | 'placeholder' | 'jsFunctions', string>> & { height?: number; jsExpressions?: string[] } = {}
+function extractPartialJsonFields(raw: string): Partial<Record<'css' | 'html' | 'js' | 'title' | 'placeholder' | 'jsFunctions', string>> & { height?: number; jsExpressions?: string[]; closed?: string[] } {
+  const out: Partial<Record<'css' | 'html' | 'js' | 'title' | 'placeholder' | 'jsFunctions', string>> & { height?: number; jsExpressions?: string[]; closed?: string[] } = {}
   for (const key of ['css', 'html', 'js', 'title', 'placeholder', 'jsFunctions'] as const) {
     const re = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)`, 'u')
     const match = re.exec(raw)
     if (match) {
+      // F26: remember whether the string literal actually terminated.
+      if (raw[match.index + match[0].length] === '"') (out.closed ??= []).push(key)
       try {
         out[key] = JSON.parse(`"${match[1]}"`) as string
       } catch {
@@ -1201,6 +1203,8 @@ function stripTrailingJunk(text: string): string {
   let end = repaired.lastIndexOf('}')
   for (let tries = 0; end > 0 && tries < 8; tries++) {
     const candidate = repaired.slice(0, end + 1)
+    // F26: never "trim" real fields away (a stray `}` after css used to drop html+js).
+    if (/"(?:html|js|css|jsFunctions)"\s*:/.test(repaired.slice(end + 1))) break
     try { JSON.parse(candidate); return candidate } catch { end = repaired.lastIndexOf('}', end - 1) }
   }
   return repaired
@@ -1225,15 +1229,21 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
       const height = typeof partial.height === 'number' && Number.isFinite(partial.height)
         ? Math.min(1200, Math.max(120, Math.round(partial.height)))
         : undefined
+      // F26: invalid-but-finished JSON (stray `}`, trailing junk, bad escape
+      // elsewhere) used to stay "partial" forever → author JS never ran and no
+      // error was shown. If both html and js string literals are terminated,
+      // the payload is complete; treat it as such.
+      const closed = new Set(partial.closed ?? [])
+      const looksDone = js !== '' && closed.has('js') && (html === '' || closed.has('html')) && (css === '' || closed.has('css'))
       return {
         css,
         html,
         js,
         stages,
-        partial: true,
+        partial: !looksDone,
         cssComplete: css.length > 0,
-        htmlComplete: false,
-        jsComplete: false,
+        htmlComplete: looksDone,
+        jsComplete: looksDone,
         ...(typeof partial.placeholder === 'string' ? { placeholder: partial.placeholder } : {}),
         ...(typeof partial.jsFunctions === 'string' ? { jsFunctions: partial.jsFunctions } : {}),
         ...(typeof partial.title === 'string' ? { title: partial.title } : {}),
@@ -2325,7 +2335,7 @@ function buildChartGuardScript(): string {
     if (window.Chart) { cb(window.Chart); return; }
     var n = 0, t = setInterval(function () {
       if (window.Chart) { clearInterval(t); cb(window.Chart); }
-      else if (++n > 100) clearInterval(t);
+      else if (++n > 250) clearInterval(t);
     }, 40);
   }
   window.iuiCreateChart = function (canvas, config) {
@@ -2439,7 +2449,7 @@ function buildAgGridGuardScript(): string {
     if (window.agGrid) { cb(); return; }
     var n = 0, t = setInterval(function () {
       if (window.agGrid) { clearInterval(t); cb(); }
-      else if (++n > 100) clearInterval(t);
+      else if (++n > 250) clearInterval(t);
     }, 40);
   }
   wait(function () {
@@ -2494,7 +2504,7 @@ function buildMermaidGuardScript(): string {
     if (window.mermaid) { cb(window.mermaid); return; }
     var n = 0, t = setInterval(function () {
       if (window.mermaid) { clearInterval(t); cb(window.mermaid); }
-      else if (++n > 100) clearInterval(t);
+      else if (++n > 250) clearInterval(t);
     }, 40);
   }
   wait(function (m) {
@@ -2504,6 +2514,19 @@ function buildMermaidGuardScript(): string {
   });
 })();
 <\/script>`
+}
+
+/**
+ * C1: host-injected CDN tags must not block first paint. Scripts become
+ * `async` + tracked via data-iui-done (pipeline waits with a timeout, C4);
+ * stylesheets load as print → all.
+ */
+export function makeCdnTagsNonBlocking(tags: string): string {
+  return tags
+    .replace(/<script src=("[^"]+")><\/script>/g, (_m, src: string) =>
+      `<script async data-iui-cdn onload="this.setAttribute('data-iui-done','1')" onerror="this.setAttribute('data-iui-done','0')" src=${src}><\/script>`)
+    .replace(/<link rel="stylesheet" href=("[^"]+")\/>/g, (_m, href: string) =>
+      `<link rel="stylesheet" media="print" onload="this.media='all'" href=${href}/>`)
 }
 
 function autoCdnTags(html: string, js: string): string {
@@ -2632,10 +2655,12 @@ export function buildHtmlSandboxSrcdoc(
     ${options.liveState ? `setTimeout(function () { try { if (window.iuiSandbox && window.iuiSandbox.restoreLocalState) window.iuiSandbox.restoreLocalState(${JSON.stringify(options.liveState)}); } catch (eR) {} }, 80);` : ''}
   }
   // window.load waits for head CDN <script src>; pipeline still re-checks globals.
-  if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
+  // C1: CDN libs are async now; don't wait for window.load (a hung CDN would
+  // hold it for 10s+). The pipeline waits for data-iui-cdn scripts with a timeout.
+  if (document.readyState !== 'loading') go(); else document.addEventListener('DOMContentLoaded', go);
 })();
 <\/script>`
-  const cdnTags = autoCdnTags(html, authorJs + fnSrc)
+  const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc))
   const bridge = buildSandboxBridgeScript(frameId)
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag()
