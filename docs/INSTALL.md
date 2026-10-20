@@ -33,7 +33,15 @@ npx @deepseek-ai/dsh web
 pnpm dsh plugin --profile <profile> add github:losebird/IUI
 ```
 
-本仓库已带 `lib/`，git 安装一般不跑构建脚本。不要用 `npm dsh`，也不要从家目录跑 `pnpm dsh`。
+注意：`lib/` 是构建产物，**不在 git 里**（被 `.gitignore` 忽略）。插件入口 `lib/index.js` 和沙箱本地库 `lib/assets/vendor/` 都由 `pnpm run build` 生成。若 `add github:…` 后启用报 `failed to import` / 找不到 `lib/index.js`，说明安装过程没有执行构建，请改用本地路径安装：
+
+```bash
+git clone https://github.com/losebird/IUI && cd IUI
+pnpm install && pnpm run build
+pnpm dsh plugin --profile <profile> add .   # 或 npx @deepseek-ai/dsh plugin --profile <profile> add <IUI 绝对路径>
+```
+
+不要用 `npm dsh`，也不要从家目录跑 `pnpm dsh`。
 
 打开启动日志里的 **`?token=` URL**，硬刷新。控制台应出现：
 

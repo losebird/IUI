@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.13.0-iui.27
+
+- **Shared author bindings (F1):** top-level `const/let/function` from one author JS chunk are visible to later chunks, so split pages no longer throw `xxx is not defined`.
+- **Function hoisting across chunks (F27):** pure top-level function declarations are peeled to the front of their chunk, so calls before the declaration in an earlier chunk resolve.
+- **Never soft-repair valid JS (F28):** `hardenAuthorJs` first checks `new Function` parse; valid code skips brace/quote repair that used to break it.
+- **Finished-but-invalid JSON still runs JS (F26):** a settled fence with a broken JSON envelope still mounts html/css and executes author JS instead of a blank card.
+- **Non-blocking CDN (C1/C4):** library tags no longer block first paint; each load has an 8s timeout and a visible failure instead of a hung page.
+- **Local sandbox libraries (C3/C5/C6/C8):** Chart.js / ECharts / Leaflet / three / mermaid / ag-grid etc. are served from the plugin asset route (`lib/assets/vendor`, copied by `pnpm run build`). Fallback chain local → jsDelivr → npmmirror with per-source timeout; model-written CDN tags are rewritten; importmap versions pinned. Pages work on networks where public CDNs are blocked.
+- **Compact section-format prompt:** the system prompt teaches `title:/height:` + `---css/---html/---js` sections (5.3k chars vs 13.3k). DeepSeek-V4.1-Flash bench: 20/20 render on global and CN networks, median generation 48s → 39s, output tokens −18%, text under 12px 36% → 4%.
+- **Section-format streaming:** JS is held while the fence is still streaming (`data-streaming`) and runs once when it settles; preamble `title / height / placeholder` is parsed.
+- **AA text tokens:** secondary/tertiary text colors darkened (light `#5f5e58` / `#6b6a64`, dark `#a8a69e` / `#9a988f`); low-contrast text in bench pages 43% → 3%.
+- **Install docs:** `lib/` is a build artifact not tracked in git; INSTALL.md now says so and gives the local-path install fallback.
+
+Also in this release (previously unreleased):
 
 - **Open-link is local:** `openLink(url)` and `action('sandbox_open_link', {url})` open https/mailto in a new tab. They no longer emit `[genui-action]` (that regenerated a whole page and billed another turn).
 - **Weather Chart cfg brace:** `var cfg={…};` missing `}` → `Unexpected token ';'`; `makeChart({…options})` closed with `)` instead of `}` → `Unexpected token ')'`. Host inserts the fewest `}` before that `;` / `)`, only inside an object literal. Balanced `drawHourly` stays untouched.
