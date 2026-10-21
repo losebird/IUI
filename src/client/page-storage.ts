@@ -13,6 +13,8 @@ export type PageStateRecord = {
   items?: Record<string, string>
   /** DOM snapshot from the bridge's captureLocalState(). */
   dom?: Record<string, unknown>
+  /** G10: per-page appearance tweak (serialised; '' = follow the default style). */
+  appearance?: string
   updatedAt?: number
 }
 
@@ -125,7 +127,7 @@ function sizeOf(record: PageStateRecord): number {
  */
 export function updatePageState(
   key: string,
-  patch: Partial<Pick<PageStateRecord, 'items' | 'dom'>>,
+  patch: Partial<Pick<PageStateRecord, 'items' | 'dom' | 'appearance'>>,
   options: { persist?: boolean } = {},
 ): boolean {
   const prev = cache.get(key) ?? {}

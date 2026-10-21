@@ -23,7 +23,11 @@ export interface IuiPluginConfig {
   cdnPreset?: 'local' | 'china' | 'global' | 'custom'
   /** F19: custom library URL template, e.g. `https://my.cdn/{name}@{version}/{file}`. */
   cdnTemplate?: string
+  /** G7: how readily replies become pages (`balanced` default). */
+  uiEagerness?: 'restrained' | 'balanced' | 'eager'
   customTokensJson?: string
+  /** G10: saved default page style (JSON: accent / density / scale / radius / scheme). */
+  pageStyleJson?: string
   userTemplatesJson?: string
   /** Optional TypeSafe Jev format router. */
   jevEnabled?: boolean

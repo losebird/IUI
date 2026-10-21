@@ -24,7 +24,9 @@ describe('0.13.0-iui.22 prompt modals + syntax soft-fix', () => {
 
   it('F6: iframe sandbox drops allow-modals', () => {
     const src = readFileSync(join(root, 'src/client/html-fence.tsx'), 'utf8')
-    expect(src).toContain('sandbox="allow-scripts"')
+    // G9: frozen static copies drop scripts entirely (sandbox="").
+    expect(src).toMatch(/sandbox=\{[^}]*'allow-scripts'\}/)
+    expect(src).not.toContain("allow-modals'")
     expect(src).not.toContain('allow-modals"')
   })
 })

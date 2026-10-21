@@ -6,6 +6,7 @@
 import { createDownloadLimiter, hostCopy, hostDownload, type DelegateVerdict } from './sandbox-delegate.ts'
 import { buildOfflineExport, OFFLINE_EXPORT_MAX_BYTES, type SandboxResource } from './offline-export.ts'
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -57,6 +58,12 @@ import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
+import { AppearancePanel } from './appearance-panel.tsx'
+import { getDefaultPageAppearance, saveDefaultPageAppearance, subscribeDefaultPageAppearance } from './page-appearance-store.ts'
+import { writeIuiConfigField } from './settings/index.ts'
+import { pushTipToast } from './tip-toast.tsx'
+import { isDefaultPageAppearance, normalizePageAppearance, pageAppearanceCss, serializePageAppearance, type PageAppearance } from '../shared/page-appearance.ts'
+import { registerFrameActivity, scheduleFrameActivityCheck, type FrameActivityHandle } from './frame-activity.ts'
 import { applySandboxPatch, pageFromSpec, parseSandboxPatch, sandboxPageId, serializeSandboxPage } from '../shared/sandbox-patch.ts'
 import { listPageVersions, pageVersionsRevision, registerPageVersion, resolvePatchBase, subscribePageVersions, type PageVersion } from './page-versions.ts'
 
@@ -78,6 +85,12 @@ const readCdnKey = (): string => { const s = getCdnSource(); return `${s.preset}
 
 /** F6: silence longer than this marks the frame「无响应」. */
 const SANDBOX_HUNG_MS = 5000
+/** G9: pause a settled page this long after it leaves the viewport. */
+const OFFSCREEN_PAUSE_DELAY_MS = 1500
+/** G9: "visible" includes a margin so pages resume just before they scroll in. */
+const OFFSCREEN_ROOT_MARGIN = '200px 0px'
+/** G9: only freeze pages that have been settled and ready this long. */
+const FREEZE_MIN_SETTLED_MS = 3000
 
 /** F6:「停止」swaps in an inert document, which tears down the old one's scripts. */
 function stoppedSrcdoc(message: string): string {
@@ -144,6 +157,12 @@ export function needsBodyPortal(el: Element): boolean {
   return false
 }
 
+/** G10: srcdoc options for an appearance (nothing for the defaults). */
+function appearanceBuildOptions(a: PageAppearance): { appearanceCss?: string; appearanceScheme?: PageAppearance['scheme'] } {
+  if (isDefaultPageAppearance(a)) return {}
+  return { appearanceCss: pageAppearanceCss(a), appearanceScheme: a.scheme }
+}
+
 const MENU_STYLE: CSSProperties = {
   position: 'absolute',
   right: 0,
@@ -170,6 +189,15 @@ const MENU_ITEM: CSSProperties = {
   cursor: 'pointer',
 }
 
+/** G9: the frozen card is one big resume button over the static copy. */
+const FROZEN_OVERLAY_STYLE: CSSProperties = {
+  position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+  padding: '10px 0 0', margin: 0, border: 'none', background: 'transparent', cursor: 'pointer', font: 'inherit',
+}
+const FROZEN_PILL_STYLE: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 500,
+  background: 'rgba(24,24,27,.72)', color: '#fff', backdropFilter: 'blur(6px)', boxShadow: '0 2px 10px rgba(0,0,0,.18)',
+}
 const TOOLBAR_BTN: CSSProperties = {
   fontSize: 12,
   padding: '5px 10px',
@@ -258,6 +286,35 @@ function downloadText(filename: string, content: string): void {
 }
 
 type ShareSnapshot = { html: string; css: string; state: Record<string, unknown>; resources: SandboxResource[] }
+
+/** G9: static copy of the page (`html` empty when the frame refuses or does not answer). */
+function requestSandboxFreeze(iframe: HTMLIFrameElement | null, frameId: string, timeoutMs = 3000): Promise<{ html: string; reason: string }> {
+  const win = iframe?.contentWindow
+  if (!win) return Promise.resolve({ html: '', reason: 'noFrame' })
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: { html: string; reason: string }): void => {
+      if (settled) return
+      settled = true
+      window.removeEventListener('message', onMessage)
+      window.clearTimeout(timer)
+      resolve(value)
+    }
+    const onMessage = (event: MessageEvent): void => {
+      if (event.source !== win) return
+      const data = event.data as unknown
+      if (!isIuiSandboxHostMessage(data) || data.type !== 'frozen' || data.frameId !== frameId) return
+      finish({ html: data.html, reason: data.reason ?? '' })
+    }
+    const timer = window.setTimeout(() => finish({ html: '', reason: 'timeout' }), timeoutMs)
+    window.addEventListener('message', onMessage)
+    try {
+      win.postMessage({ source: 'iui-html-host', type: 'requestFreeze', frameId }, '*')
+    } catch {
+      finish({ html: '', reason: 'failed' })
+    }
+  })
+}
 
 function requestSandboxSnapshot(
   iframe: HTMLIFrameElement | null,
@@ -423,6 +480,15 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [storageReady, setStorageReady] = useState(() => storageKey === null || peekPageState(storageKey) !== undefined)
   const seedRef = useRef<PageStateRecord | undefined>(storageKey === null ? undefined : peekPageState(storageKey))
   const lateItemsRef = useRef<Record<string, string> | null>(null)
+  // G10: this page's own appearance tweaks (null = follow the user's default).
+  const [pageAppearance, setPageAppearance] = useState<PageAppearance | null>(
+    () => (seedRef.current?.appearance ? normalizePageAppearance(seedRef.current.appearance) : null),
+  )
+  const defaultAppearance = useSyncExternalStore(subscribeDefaultPageAppearance, getDefaultPageAppearance, getDefaultPageAppearance)
+  const appearance = pageAppearance ?? defaultAppearance
+  const appearanceKey = serializePageAppearance(appearance)
+  const appearanceRef = useRef(appearance)
+  appearanceRef.current = appearance
   useEffect(() => {
     if (storageKey === null || storageReady) return
     let done = false
@@ -434,11 +500,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         const win = iframeRef.current?.contentWindow
         if (win && lateItemsRef.current) win.postMessage({ source: 'iui-html-host', type: 'storageInit', frameId, items: lateItemsRef.current }, '*')
         if (win && record.dom) win.postMessage({ source: 'iui-html-host', type: 'restoreLocalState', frameId, state: record.dom }, '*')
+        if (record.appearance) setPageAppearance(normalizePageAppearance(record.appearance))
         return
       }
       done = true
       window.clearTimeout(timer)
       seedRef.current = record
+      if (record.appearance) setPageAppearance(normalizePageAppearance(record.appearance))
       setStorageReady(true)
     })
     return () => { done = true; window.clearTimeout(timer) }
@@ -467,8 +535,12 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const fsButtonRef = useRef<HTMLButtonElement | null>(null)
   const prevFsModeRef = useRef<FullscreenMode>('off')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuView, setMenuView] = useState<'main' | 'appearance'>('main')
+  useEffect(() => { if (!menuOpen) setMenuView('main') }, [menuOpen])
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [starterOverride, setStarterOverride] = useState<string | null>(null)
+  /** G9: static copy shown while the page is frozen (null = live). */
+  const [frozenHtml, setFrozenHtml] = useState<string | null>(null)
   /** P1-STATE: prefer injecting author JS into frozen preview (no srcdoc rebuild). */
   const authorJsRanRef = useRef(false)
   const usedPreviewShellRef = useRef(false)
@@ -525,6 +597,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       // F19: library source preset (Settings → IUI, or a strip's switch-and-retry).
       cdnSource: (() => { const [preset, template] = cdnKey.split('|'); return { preset: normalizeCdnPreset(preset), ...(template ? { template } : {}) } })(),
       ...(seedRef.current?.items ? { storageSeed: seedRef.current.items } : {}),
+      // G10: bake the current appearance (later tweaks are posted live).
+      ...appearanceBuildOptions(appearanceRef.current),
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
       // C6: libraries from the plugin's own asset route first, CDNs as fallback.
@@ -818,7 +892,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     setHung(false)
   }, [srcdocRebuildKey])
   useEffect(() => {
-    if (stopped) return
+    if (stopped || frozenHtml !== null) return
     const timer = window.setInterval(() => {
       if (lastBeatRef.current === 0) return
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -828,7 +902,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       if (Date.now() - lastBeatRef.current > SANDBOX_HUNG_MS) setHung(true)
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [stopped])
+  }, [stopped, frozenHtml])
 
   // F11: leave native mode when the browser exits it (Esc / F11 / tab switch).
   useEffect(() => {
@@ -889,6 +963,127 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       doc.removeEventListener('keydown', onKey, true)
     }
   }, [menuOpen])
+
+  // G10: live appearance changes (the srcdoc bakes the value at build time).
+  useEffect(() => {
+    if (!ready) return
+    const a = appearanceRef.current
+    const css = isDefaultPageAppearance(a) ? '' : pageAppearanceCss(a)
+    try { iframeRef.current?.contentWindow?.postMessage({ source: 'iui-html-host', type: 'appearance', frameId, css, scheme: a.scheme }, '*') } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, appearanceKey, frameId])
+  const choosePageAppearance = (next: PageAppearance | null): void => {
+    setPageAppearance(next)
+    const { key, persist } = stateKeyRef.current
+    // '{}' = explicit built-in look for this page (even when the user default differs).
+    updatePageState(key, { appearance: next === null ? '' : serializePageAppearance(next) || '{}' }, { persist })
+  }
+  const saveAppearanceAsDefault = (): void => {
+    const current = appearanceRef.current
+    void saveDefaultPageAppearance(current, writeIuiConfigField).then((result) => {
+      choosePageAppearance(null) // the page now simply follows the (identical) default
+      const synced = result === 'synced'
+      pushTipToast({
+        title: t(synced ? 'appearance.savedSynced' : 'appearance.savedLocal'),
+        description: t(synced ? 'appearance.savedSyncedDesc' : 'appearance.savedLocalDesc'),
+      })
+    })
+  }
+
+  // G9: pause while offscreen; freeze the oldest offscreen cards past MAX_LIVE_FRAMES.
+  const settledLive = parsed !== null && !parsed.partial && !holdSectionJs && ready && !stopped && frozenHtml === null
+  const freezeGateRef = useRef({ settledLive, since: settledLive ? Date.now() : 0, busy: false })
+  if (settledLive && !freezeGateRef.current.settledLive) freezeGateRef.current.since = Date.now()
+  freezeGateRef.current.settledLive = settledLive
+  freezeGateRef.current.busy = fullscreen || menuOpen || hung || error !== null
+  const activityRef = useRef<FrameActivityHandle | null>(null)
+  const visibleRef = useRef(true)
+  const offscreenSentRef = useRef(false)
+  const offscreenTimerRef = useRef<number | null>(null)
+  const syncOffscreen = useCallback((): void => {
+    if (offscreenTimerRef.current !== null) { window.clearTimeout(offscreenTimerRef.current); offscreenTimerRef.current = null }
+    const post = (visible: boolean): void => {
+      try { iframeRef.current?.contentWindow?.postMessage({ source: 'iui-html-host', type: 'visibility', frameId, visible }, '*') } catch { /* ignore */ }
+    }
+    if (visibleRef.current) {
+      if (offscreenSentRef.current) { offscreenSentRef.current = false; post(true) }
+      return
+    }
+    if (offscreenSentRef.current) return
+    offscreenTimerRef.current = window.setTimeout(() => {
+      offscreenTimerRef.current = null
+      if (visibleRef.current || !freezeGateRef.current.settledLive || freezeGateRef.current.busy) return
+      offscreenSentRef.current = true
+      post(false)
+    }, OFFSCREEN_PAUSE_DELAY_MS)
+  }, [frameId])
+  const freezeNow = useCallback((): void => {
+    void requestSandboxFreeze(iframeRef.current, frameId).then((res) => {
+      const gate = freezeGateRef.current
+      if (res.html === '' || visibleRef.current || !gate.settledLive || gate.busy) {
+        activityRef.current?.setFrozen(false, res.html === '' ? { refused: true } : undefined)
+        return
+      }
+      lastBeatRef.current = 0
+      offscreenSentRef.current = false
+      setFrozenHtml(res.html)
+      activityRef.current?.setFrozen(true)
+    })
+  }, [frameId])
+  const resumeFrozen = useCallback((): void => {
+    const latest = peekPageState(stateKeyRef.current.key)
+    if (latest) seedRef.current = latest
+    setFrozenHtml(null)
+    activityRef.current?.setFrozen(false)
+    setReloadToken((n) => n + 1)
+  }, [])
+  useEffect(() => {
+    const handle = registerFrameActivity(frameId, {
+      canFreeze: () => {
+        const gate = freezeGateRef.current
+        return gate.settledLive && !gate.busy && gate.since > 0 && Date.now() - gate.since >= FREEZE_MIN_SETTLED_MS
+      },
+      freeze: freezeNow,
+    })
+    activityRef.current = handle
+    return () => {
+      handle.dispose()
+      activityRef.current = null
+      if (offscreenTimerRef.current !== null) window.clearTimeout(offscreenTimerRef.current)
+    }
+  }, [frameId, freezeNow])
+  useEffect(() => {
+    // A new iframe document starts unpaused.
+    offscreenSentRef.current = false
+    if (!settledLive) return
+    syncOffscreen()
+    const id = window.setTimeout(() => scheduleFrameActivityCheck(0), FREEZE_MIN_SETTLED_MS + 50)
+    return () => window.clearTimeout(id)
+  }, [settledLive, srcdocRebuildKey, syncOffscreen])
+  const observedRef = useRef<{ el: Element; io: IntersectionObserver } | null>(null)
+  useEffect(() => {
+    const el = shellRef.current
+    if (observedRef.current?.el === el) return
+    observedRef.current?.io.disconnect()
+    observedRef.current = null
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver((entries) => {
+      const last = entries[entries.length - 1]
+      if (!last) return
+      visibleRef.current = last.isIntersecting
+      activityRef.current?.setVisible(last.isIntersecting)
+      syncOffscreen()
+    }, { rootMargin: OFFSCREEN_ROOT_MARGIN })
+    io.observe(el)
+    observedRef.current = { el, io }
+  })
+  useEffect(() => () => { observedRef.current?.io.disconnect(); observedRef.current = null }, [])
+  // A new version / patch of a frozen page resumes it.
+  const frozenRawRef = useRef(effectiveRaw)
+  useEffect(() => {
+    if (frozenHtml !== null && frozenRawRef.current !== effectiveRaw) resumeFrozen()
+    frozenRawRef.current = effectiveRaw
+  }, [effectiveRaw, frozenHtml, resumeFrozen])
 
   if (parsed === null || srcdoc === null) {
     return (
@@ -1053,6 +1248,16 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         </button>
         {menuOpen && (
           <div role="menu" style={MENU_STYLE}>
+            {menuView === 'appearance' ? (
+              <AppearancePanel
+                value={appearance}
+                customized={pageAppearance !== null}
+                onChange={(next) => choosePageAppearance(next)}
+                onReset={() => choosePageAppearance(null)}
+                onSaveDefault={saveAppearanceAsDefault}
+                onBack={() => setMenuView('main')}
+              />
+            ) : (<>
             <button
               type="button"
               role="menuitem"
@@ -1072,6 +1277,15 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
               type="button"
               role="menuitem"
               style={MENU_ITEM}
+              data-iui-sandbox-appearance="1"
+              onClick={() => setMenuView('appearance')}
+            >
+              {t('sandbox.appearance')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={MENU_ITEM}
               onClick={() => {
                 setMenuOpen(false)
                 void (async () => {
@@ -1081,6 +1295,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                     frameId: 'download',
                     brandId: getActivePackId(),
                     mergePackTokens: false,
+                    ...appearanceBuildOptions(appearance),
                     ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
                   })
                   downloadText(shareFileName(parsed.title), html)
@@ -1110,6 +1325,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                     brandId: getActivePackId(),
                     mergePackTokens: false,
                     cdnSource,
+                    ...appearanceBuildOptions(appearance),
                     ...live,
                   }
                   const doc = buildHtmlSandboxSrcdoc(parsed, { ...common, ...(assetBase ? { assetBase } : {}) })
@@ -1151,6 +1367,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
             >
               {copied ? t('sandbox.copied') : t('sandbox.copy')}
             </button>
+            </>)}
           </div>
         )}
       </div>
@@ -1224,20 +1441,33 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       <div style={fullscreen ? { position: 'relative', flex: 1, minHeight: 0 } : { position: 'relative' }}>
         {storageReady && <iframe
           ref={iframeRef}
-          key={stopped ? `${srcdocRebuildKey}:stopped` : srcdocRebuildKey}
+          key={stopped ? `${srcdocRebuildKey}:stopped` : frozenHtml !== null ? `${srcdocRebuildKey}:frozen` : srcdocRebuildKey}
           title={parsed.title ?? 'IUI sandbox'}
           // F6: no allow-modals — the bridge turns alert/confirm/prompt into an in-page toast.
-          srcDoc={stopped ? stoppedSrcdoc(t('sandbox.stopped')) : srcdoc}
-          sandbox="allow-scripts"
+          // G9: a frozen card is a static copy with scripts disabled.
+          srcDoc={stopped ? stoppedSrcdoc(t('sandbox.stopped')) : frozenHtml !== null ? frozenHtml : srcdoc}
+          sandbox={frozenHtml !== null && !stopped ? '' : 'allow-scripts'}
           referrerPolicy="no-referrer"
           style={{ ...FRAME_STYLE, height: fullscreen ? '100%' : height }}
           onLoad={() => {
-            if (stopped) return
+            if (stopped || frozenHtml !== null) return
             requestMeasure()
             // Handshake fallback: complete fences should not stay on 加载中 if ready postMessage is lost.
             if (!parsed.partial) setReady(true)
           }}
         />}
+        {storageReady && frozenHtml !== null && !stopped && (
+          <button
+            type="button"
+            data-iui-sandbox-frozen="1"
+            aria-label={t('sandbox.frozenResume')}
+            title={t('sandbox.frozenResume')}
+            onClick={resumeFrozen}
+            style={FROZEN_OVERLAY_STYLE}
+          >
+            <span style={FROZEN_PILL_STYLE}>{t('sandbox.frozen')}</span>
+          </button>
+        )}
         {!storageReady && <SandboxSkeleton label={t('sandbox.skeleton.loading')} height={fullscreen ? '100%' : height} showProgress={false} />}
         {storageReady && (parsed.partial || holdSectionJs) && !stopped && parsed.html.trim() === '' && (() => {
           const prog = sandboxStreamProgress(parsed)

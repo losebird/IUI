@@ -20,7 +20,11 @@ export type RuntimeConfigSnapshot = {
   /** F19: library source preset + custom template. */
   cdnPreset?: CdnPreset
   cdnTemplate?: string
+  /** G7: page eagerness (restrained · balanced · eager). */
+  uiEagerness?: 'restrained' | 'balanced' | 'eager'
   customTokensJson: string
+  /** G10: saved default page style JSON. */
+  pageStyleJson?: string
   userTemplatesJson: string
   frameChannelMount?: boolean
   productPath?: 'sandbox-html'
@@ -135,7 +139,9 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         legacyFences: data.legacyFences === true,
         cdnPreset: normalizeCdnPreset(data.cdnPreset),
         cdnTemplate: typeof data.cdnTemplate === 'string' ? data.cdnTemplate : '',
+        uiEagerness: data.uiEagerness === 'restrained' || data.uiEagerness === 'eager' ? data.uiEagerness : 'balanced',
         customTokensJson: typeof data.customTokensJson === 'string' ? data.customTokensJson : '',
+        pageStyleJson: typeof data.pageStyleJson === 'string' ? data.pageStyleJson : '',
         userTemplatesJson: typeof data.userTemplatesJson === 'string' ? data.userTemplatesJson : '',
         frameChannelMount: false,
         productPath: 'sandbox-html',

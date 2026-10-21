@@ -46,6 +46,7 @@ export type IuiSettingsSectionValue = {
   legacyFences?: boolean
   cdnPreset?: 'local' | 'china' | 'global' | 'custom'
   cdnTemplate?: string
+  uiEagerness?: 'restrained' | 'balanced' | 'eager'
   customTokensJson?: string
   userTemplatesJson?: string
   gatewayMode?: 'in-process' | 'sidecar' | 'off'
@@ -71,6 +72,7 @@ type CardSnapshot = SettingsFormShell & {
   legacyFences: SettingsFieldState
   cdnPreset: SettingsFieldState
   cdnTemplate: SettingsFieldState
+  uiEagerness: SettingsFieldState
   customTokensJson: SettingsFieldState
   userTemplatesJson: SettingsFieldState
   gatewayMode: SettingsFieldState
@@ -309,6 +311,20 @@ export function IuiSettingsSection(props: {
 
         <section className={styles.group}>
           <h3 className={styles.groupTitle}>{t('behavior')}</h3>
+          <label className={styles.overrideField}>
+            <span className={styles.overrideLabel}>{t('uiEagerness')}</span>
+            <select
+              className={styles.select}
+              disabled={!state.writable}
+              value={['restrained', 'balanced', 'eager'].includes(state.uiEagerness.text) ? state.uiEagerness.text : 'balanced'}
+              onChange={(event) => props.edit('uiEagerness', event.currentTarget.value)}
+            >
+              <option value="restrained">{t('uiEagernessRestrained')}</option>
+              <option value="balanced">{t('uiEagernessBalanced')}</option>
+              <option value="eager">{t('uiEagernessEager')}</option>
+            </select>
+            <span className={styles.hint}>{t('uiEagernessHint')}</span>
+          </label>
           <div className={styles.switchCard}>
             <div className={styles.switchCopy}>
               <div className={styles.switchTitle}>{t('fenceFeedback')}</div>
@@ -849,6 +865,7 @@ export class IuiSettingsCardController {
       boolField('legacyFences'),
       enumField('cdnPreset', ['local', 'china', 'global', 'custom']),
       settingsTextField('cdnTemplate'),
+      enumField('uiEagerness', ['restrained', 'balanced', 'eager']),
       enumField('gatewayMode', ['in-process', 'sidecar', 'off']),
       settingsTextField('gatewaySidecarUrl'),
       boolField('instanceStorePersist'),
@@ -874,6 +891,7 @@ export class IuiSettingsCardController {
       legacyFences: this.form.field('legacyFences'),
       cdnPreset: this.form.field('cdnPreset'),
       cdnTemplate: this.form.field('cdnTemplate'),
+      uiEagerness: this.form.field('uiEagerness'),
       gatewayMode: this.form.field('gatewayMode'),
       gatewaySidecarUrl: this.form.field('gatewaySidecarUrl'),
       instanceStorePersist: this.form.field('instanceStorePersist'),

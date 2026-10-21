@@ -119,6 +119,10 @@ export type HtmlSandboxBuildOptions = {
   uiLang?: string
   /** F10: persisted localStorage items seeded before the bridge / author JS. */
   storageSeed?: Readonly<Record<string, string>>
+  /** G10: appearance CSS (accent / density / size / radius) baked in for first paint. */
+  appearanceCss?: string
+  /** G10: forced colour scheme (the bridge rewrites prefers-color-scheme rules). */
+  appearanceScheme?: 'auto' | 'light' | 'dark'
   /** F4: strict image policy — img-src/font-src drop the `https:` wildcard. */
   strictImages?: boolean
   /** CSS custom properties injected as :root (active IUI theme). */
@@ -210,6 +214,8 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'stripAction'; frameId: string; action: 'reload' | 'reask' | 'switchCdn'; detail?: string }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown>; resources?: Array<{ url: string; type: string }> }
+  /** G9: static page copy for a frozen card (`html` empty + `reason` when refused). */
+  | { source: 'iui-html'; type: 'frozen'; frameId: string; html: string; reason?: string }
   /** F10: debounced full snapshot of the page's persistent storage items. */
   | { source: 'iui-html'; type: 'storageSet'; frameId: string; items: Record<string, string> }
 
@@ -227,12 +233,21 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'rerunAuthorJs'; frameId: string }
   | { source: 'iui-html-host'; type: 'restoreLocalState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html-host'; type: 'requestSnapshot'; frameId: string }
+  /** G9: the card scrolled out of / into view (pause rAF, intervals, animations, video). */
+  | { source: 'iui-html-host'; type: 'visibility'; frameId: string; visible: boolean }
+  /** G10: zero-token appearance (accent / density / size / radius CSS + forced scheme). */
+  | { source: 'iui-html-host'; type: 'appearance'; frameId: string; css: string; scheme: 'auto' | 'light' | 'dark' }
+  /** G9: ask for a static copy of the page (reply: `frozen`). */
+  | { source: 'iui-html-host'; type: 'requestFreeze'; frameId: string }
   /** F10: late-loaded persistent items (merged under writes made since boot). */
   | { source: 'iui-html-host'; type: 'storageInit'; frameId: string; items: Record<string, string> }
   /** F10: the last storageSet exceeded the per-page quota and was not saved. */
   | { source: 'iui-html-host'; type: 'storageQuota'; frameId: string; limit: number }
   /** F18: reply to a delegated download / copy (`reason`: gesture | blocked | tooLarge | rate | failed). */
   | { source: 'iui-html-host'; type: 'hostResult'; frameId: string; reqId: string; ok: boolean; reason?: string }
+
+/** G9: frozen-card static copy cap (the frame refuses larger pages). */
+export const SANDBOX_FREEZE_MAX_CHARS = 3_000_064
 
 /** F18: delegated download cap (10 MB; strings are checked by length first). */
 export const SANDBOX_DOWNLOAD_MAX_CHARS = 10 * 1024 * 1024
@@ -278,6 +293,12 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
     return typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
   }
   if (record.type === 'requestSnapshot') return true
+  if (record.type === 'visibility') return typeof record.visible === 'boolean'
+  if (record.type === 'requestFreeze') return true
+  if (record.type === 'appearance') {
+    return typeof record.css === 'string' && record.css.length <= 20_000
+      && (record.scheme === 'auto' || record.scheme === 'light' || record.scheme === 'dark')
+  }
   if (record.type === 'storageInit') {
     return typeof record.items === 'object' && record.items !== null && !Array.isArray(record.items)
   }
@@ -339,6 +360,10 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   }
   if (record.type === 'storageSet') {
     return typeof record.items === 'object' && record.items !== null && !Array.isArray(record.items)
+  }
+  if (record.type === 'frozen') {
+    return typeof record.html === 'string' && record.html.length <= SANDBOX_FREEZE_MAX_CHARS
+      && (record.reason === undefined || (typeof record.reason === 'string' && record.reason.length <= 40))
   }
   if (record.type === 'snapshot') {
     return typeof record.html === 'string' && record.html.length <= 200_064
@@ -1726,6 +1751,236 @@ export function buildSandboxBridgeScript(frameId: string): string {
   try { performance.setResourceTimingBufferSize(1000); } catch (eRT) {}
   // F6: watchdog heartbeat — the host shows「页面无响应」after 5s of silence.
   try { setInterval(function () { post({ type: 'heartbeat' }); }, 1000); post({ type: 'heartbeat' }); } catch (e) {}
+  // G9: offscreen pause. The host posts visibility; while hidden, page rAF callbacks queue,
+  // setInterval ticks are skipped, CSS / WAAPI animations and playing videos pause.
+  // The bridge keeps native timers (heartbeat above, measure below).
+  var __iuiOff = { hidden: false, q: [], seq: 0, map: {}, anims: [], media: [] };
+  var __iuiNativeRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+  var __iuiNativeCaf = window.cancelAnimationFrame ? window.cancelAnimationFrame.bind(window) : null;
+  try {
+    if (__iuiNativeRaf && __iuiNativeCaf) {
+      window.requestAnimationFrame = function (cb) {
+        if (!__iuiOff.hidden) return __iuiNativeRaf(cb);
+        var qid = -(++__iuiOff.seq);
+        __iuiOff.q.push({ id: qid, cb: cb });
+        return qid;
+      };
+      window.cancelAnimationFrame = function (id) {
+        if (typeof id === 'number' && id < 0) {
+          var mapped = __iuiOff.map[id];
+          if (mapped) { delete __iuiOff.map[id]; __iuiNativeCaf(mapped); return; }
+          for (var qi = 0; qi < __iuiOff.q.length; qi++) {
+            if (__iuiOff.q[qi].id === id) { __iuiOff.q.splice(qi, 1); return; }
+          }
+          return;
+        }
+        __iuiNativeCaf(id);
+      };
+    }
+    var __iuiNativeSetInterval = window.setInterval;
+    window.setInterval = function (fn, ms) {
+      if (typeof fn !== 'function') return __iuiNativeSetInterval.apply(window, arguments);
+      var extra = Array.prototype.slice.call(arguments, 2);
+      return __iuiNativeSetInterval.call(window, function () {
+        if (__iuiOff.hidden) return;
+        return fn.apply(this, extra);
+      }, ms);
+    };
+  } catch (eOff) {}
+  // G9: remember which canvases hold a non-2d context (WebGL pages are paused, never frozen).
+  try {
+    var __iuiGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type) {
+      var ctx = __iuiGetContext.apply(this, arguments);
+      try { if (ctx && !this.__iuiCtx) this.__iuiCtx = String(type); } catch (eT) {}
+      return ctx;
+    };
+  } catch (eCtx) {}
+  function __iuiSetOffscreen(hidden) {
+    hidden = hidden === true;
+    if (hidden === __iuiOff.hidden) return;
+    __iuiOff.hidden = hidden;
+    var docEl = document.documentElement;
+    if (hidden) {
+      docEl.setAttribute('data-iui-offscreen', '');
+      if (!document.getElementById('iui-offscreen-css')) {
+        var offCss = document.createElement('style');
+        offCss.id = 'iui-offscreen-css';
+        offCss.textContent = 'html[data-iui-offscreen] *, html[data-iui-offscreen] *::before, html[data-iui-offscreen] *::after { animation-play-state: paused !important; }';
+        (document.head || docEl).appendChild(offCss);
+      }
+      try {
+        if (document.getAnimations) document.getAnimations().forEach(function (a) {
+          if (a.playState === 'running') { a.pause(); __iuiOff.anims.push(a); }
+        });
+      } catch (eA) {}
+      try {
+        document.querySelectorAll('video').forEach(function (v) {
+          if (!v.paused && !v.ended) { v.pause(); __iuiOff.media.push(v); }
+        });
+      } catch (eV) {}
+      return;
+    }
+    docEl.removeAttribute('data-iui-offscreen');
+    var anims = __iuiOff.anims; __iuiOff.anims = [];
+    anims.forEach(function (a) { try { if (a.playState === 'paused') a.play(); } catch (eP) {} });
+    var media = __iuiOff.media; __iuiOff.media = [];
+    media.forEach(function (v) { try { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); } catch (eM) {} });
+    var queued = __iuiOff.q; __iuiOff.q = [];
+    if (__iuiNativeRaf) queued.forEach(function (item) {
+      __iuiOff.map[item.id] = __iuiNativeRaf(function (ts) { delete __iuiOff.map[item.id]; item.cb(ts); });
+    });
+  }
+  window.__iuiSetOffscreen = __iuiSetOffscreen;
+  // G9: static copy of the page for a frozen card (no scripts; canvases become images).
+  function __iuiFreezeHtml() {
+    try { window.iuiSandbox.persistLocalState(); } catch (eP) {}
+    var srcCanvas = document.querySelectorAll('canvas');
+    for (var ci = 0; ci < srcCanvas.length; ci++) {
+      var kind = srcCanvas[ci].__iuiCtx || '';
+      if (kind && kind !== '2d') return { html: '', reason: 'webgl' };
+    }
+    var clone = document.documentElement.cloneNode(true);
+    clone.removeAttribute('data-iui-offscreen');
+    var srcFields = document.querySelectorAll('input, textarea, select');
+    var dstFields = clone.querySelectorAll('input, textarea, select');
+    for (var fi = 0; fi < srcFields.length && fi < dstFields.length; fi++) {
+      var sf = srcFields[fi], df = dstFields[fi];
+      try {
+        if (sf.tagName === 'TEXTAREA') df.textContent = sf.value;
+        else if (sf.tagName === 'SELECT') {
+          for (var oi = 0; oi < sf.options.length && oi < df.options.length; oi++) {
+            if (sf.options[oi].selected) df.options[oi].setAttribute('selected', '');
+            else df.options[oi].removeAttribute('selected');
+          }
+        } else if (sf.type === 'checkbox' || sf.type === 'radio') {
+          if (sf.checked) df.setAttribute('checked', ''); else df.removeAttribute('checked');
+        } else if (sf.type !== 'file' && sf.type !== 'password') df.setAttribute('value', sf.value);
+      } catch (eF) {}
+    }
+    var dstCanvas = clone.querySelectorAll('canvas');
+    for (var di = 0; di < srcCanvas.length && di < dstCanvas.length; di++) {
+      var sc = srcCanvas[di], dc = dstCanvas[di];
+      var img = document.createElement('img');
+      try { img.src = sc.toDataURL('image/png'); } catch (eD) {}
+      img.alt = '';
+      if (sc.id) img.id = sc.id;
+      if (sc.className && typeof sc.className === 'string') img.className = sc.className;
+      img.style.cssText = sc.style.cssText;
+      try {
+        var rect = sc.getBoundingClientRect();
+        var disp = getComputedStyle(sc).display;
+        img.style.width = rect.width + 'px';
+        img.style.height = rect.height + 'px';
+        img.style.display = disp === 'inline' ? 'inline-block' : disp;
+      } catch (eR) {}
+      if (dc.parentNode) dc.parentNode.replaceChild(img, dc);
+    }
+    clone.querySelectorAll('script').forEach(function (el) { el.remove(); });
+    clone.querySelectorAll('video').forEach(function (el) { el.removeAttribute('autoplay'); });
+    var freezeCss = document.createElement('style');
+    freezeCss.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; }';
+    var cloneHead = clone.querySelector('head');
+    if (cloneHead) cloneHead.appendChild(freezeCss);
+    var out = '<!doctype html>' + clone.outerHTML;
+    if (out.length > 3000000) return { html: '', reason: 'tooLarge' };
+    return { html: out };
+  }
+  window.__iuiFreezeHtml = __iuiFreezeHtml;
+  // G10: forced light / dark. Media rules on prefers-color-scheme are rewritten in place
+  // (host + author sheets), and matchMedia answers the forced scheme.
+  var __iuiScheme = { mode: 'auto', orig: typeof WeakMap === 'function' ? new WeakMap() : null };
+  var __iuiNativeMatchMedia = window.matchMedia ? window.matchMedia.bind(window) : null;
+  function __iuiSchemeQuery(text, mode) {
+    return String(text).replace(/\\(\\s*prefers-color-scheme\\s*:\\s*(dark|light)\\s*\\)/gi, function (m, want) {
+      return String(want).toLowerCase() === mode ? '(min-width: 0px)' : '(max-width: -1px)';
+    });
+  }
+  function __iuiRewriteRules(rules) {
+    for (var i = 0; rules && i < rules.length; i++) {
+      var rule = rules[i];
+      if (rule.media && typeof rule.media.mediaText === 'string' && __iuiScheme.orig) {
+        var orig = __iuiScheme.orig.has(rule) ? __iuiScheme.orig.get(rule) : rule.media.mediaText;
+        if (/prefers-color-scheme/i.test(orig)) {
+          __iuiScheme.orig.set(rule, orig);
+          var next = __iuiScheme.mode === 'auto' ? orig : __iuiSchemeQuery(orig, __iuiScheme.mode);
+          if (rule.media.mediaText !== next) { try { rule.media.mediaText = next; } catch (eM) {} }
+        }
+      }
+      if (rule.cssRules) __iuiRewriteRules(rule.cssRules);
+    }
+  }
+  function __iuiApplyScheme() {
+    var sheets = document.styleSheets;
+    for (var si = 0; si < sheets.length; si++) {
+      var rules = null;
+      try { rules = sheets[si].cssRules; } catch (eS) { rules = null; }
+      if (rules) __iuiRewriteRules(rules);
+    }
+  }
+  // Scheme queries get a wrapper whose matches / change events follow the forced mode.
+  var __iuiSchemeMqls = [];
+  function __iuiSchemeMql(q, mql) {
+    var listeners = [];
+    var w = {
+      media: mql.media, onchange: null,
+      addEventListener: function (type, fn) { if (type === 'change' && typeof fn === 'function' && listeners.indexOf(fn) < 0) listeners.push(fn); },
+      removeEventListener: function (type, fn) { var i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); },
+      addListener: function (fn) { w.addEventListener('change', fn); },
+      removeListener: function (fn) { w.removeEventListener('change', fn); },
+      dispatchEvent: function () { return false; }
+    };
+    Object.defineProperty(w, 'matches', { enumerable: true, get: function () {
+      return __iuiScheme.mode === 'auto' ? mql.matches : __iuiNativeMatchMedia(__iuiSchemeQuery(q, __iuiScheme.mode)).matches;
+    } });
+    var last = w.matches;
+    w.__iuiCheck = function () {
+      var now = w.matches;
+      if (now === last) return;
+      last = now;
+      var ev = { type: 'change', matches: now, media: w.media };
+      if (typeof w.onchange === 'function') { try { w.onchange(ev); } catch (eO) {} }
+      listeners.slice().forEach(function (fn) { try { fn.call(w, ev); } catch (eL) {} });
+    };
+    try {
+      var onNative = function () { if (__iuiScheme.mode === 'auto') w.__iuiCheck(); };
+      if (mql.addEventListener) mql.addEventListener('change', onNative); else if (mql.addListener) mql.addListener(onNative);
+    } catch (eN) {}
+    __iuiSchemeMqls.push(w);
+    if (__iuiSchemeMqls.length > 200) __iuiSchemeMqls.shift();
+    return w;
+  }
+  if (__iuiNativeMatchMedia) {
+    window.matchMedia = function (q) {
+      var mql = __iuiNativeMatchMedia(q);
+      return /prefers-color-scheme/i.test(String(q)) ? __iuiSchemeMql(q, mql) : mql;
+    };
+  }
+  function __iuiSetAppearance(css, scheme) {
+    var el = document.getElementById('iui-appearance');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'iui-appearance';
+      (document.head || document.documentElement).appendChild(el);
+    }
+    if (typeof css === 'string' && el.textContent !== css) el.textContent = css;
+    __iuiScheme.mode = scheme === 'light' || scheme === 'dark' ? scheme : 'auto';
+    if (__iuiScheme.mode === 'auto') document.documentElement.removeAttribute('data-iui-scheme');
+    else document.documentElement.setAttribute('data-iui-scheme', __iuiScheme.mode);
+    __iuiApplyScheme();
+    __iuiSchemeMqls.forEach(function (w) { w.__iuiCheck(); });
+    try { if (window.__iuiRethemeCharts) window.__iuiRethemeCharts(); } catch (eC) {}
+    try { if (window.__iuiRethemeEcharts) window.__iuiRethemeEcharts(); } catch (eE) {}
+  }
+  window.__iuiSetAppearance = __iuiSetAppearance;
+  try {
+    var __iuiInitScheme = document.documentElement.getAttribute('data-iui-scheme');
+    if (__iuiInitScheme === 'light' || __iuiInitScheme === 'dark') {
+      __iuiScheme.mode = __iuiInitScheme;
+      __iuiApplyScheme();
+      document.addEventListener('DOMContentLoaded', __iuiApplyScheme);
+    }
+  } catch (eIS) {}
   // F11: forward Escape so overlay fullscreen can close while the page has focus.
   try {
     document.addEventListener('keydown', function (e) {
@@ -1796,8 +2051,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
   var __iuiLastHeight = -1;
   var __iuiMeasureQueued = false;
   var __iuiMeasureForce = false;
-  var __iuiRaf = window.requestAnimationFrame
-    ? function (cb) { return window.requestAnimationFrame(cb); }
+  var __iuiRaf = __iuiNativeRaf
+    ? function (cb) { return __iuiNativeRaf(cb); }
     : function (cb) { return setTimeout(cb, 16); };
   function measureNow(force) {
     __iuiFitWide();
@@ -2341,6 +2596,22 @@ export function buildSandboxBridgeScript(frameId: string): string {
       return;
     }
     if (data.type === 'measure' || data.type === 'ping') measure(true);
+    if (data.type === 'visibility') {
+      try { __iuiSetOffscreen(data.visible === false); } catch (eVis) {}
+      if (data.visible !== false) measure(true);
+      return;
+    }
+    if (data.type === 'appearance' && typeof data.css === 'string') {
+      try { __iuiSetAppearance(data.css, data.scheme); } catch (eAp) {}
+      measure(true);
+      return;
+    }
+    if (data.type === 'requestFreeze') {
+      var frozen = { html: '', reason: 'failed' };
+      try { frozen = __iuiFreezeHtml(); } catch (eFz) {}
+      post({ type: 'frozen', html: frozen.html || '', reason: frozen.reason || '' });
+      return;
+    }
     if (data.type === 'theme' && data.tokens && typeof data.tokens === 'object') {
       var root = document.documentElement;
       Object.keys(data.tokens).forEach(function (key) {
@@ -2414,6 +2685,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
         document.head.appendChild(style);
       }
       style.textContent = data.css;
+      if (__iuiScheme.mode !== 'auto') __iuiApplyScheme();
       measure();
     }
     if (data.type === 'storageInit' && data.items && typeof data.items === 'object') {
@@ -3098,6 +3370,8 @@ function buildChartGuardScript(): string {
       if (d.elements && d.elements.line && d.elements.line.tension === 0) d.elements.line.tension = 0.35;
     } catch (e) {}
   }
+  // G10: datasets the host coloured are re-coloured when the accent / scheme changes.
+  var painted = typeof WeakMap === 'function' ? new WeakMap() : null;
   function paintDatasets(cfg) {
     try {
       var ds = cfg.data && cfg.data.datasets;
@@ -3105,7 +3379,11 @@ function buildChartGuardScript(): string {
       var pal = palette();
       var type = String(cfg.type || 'line');
       ds.forEach(function (d, i) {
-        if (!d || d.borderColor || d.backgroundColor) return;
+        if (!d) return;
+        var mark = painted ? painted.get(d) : null;
+        if (mark) { delete d.borderColor; delete d.backgroundColor; if (mark.pb) delete d.pointBackgroundColor; }
+        else if (d.borderColor || d.backgroundColor) return;
+        if (painted) painted.set(d, { pb: d.pointBackgroundColor == null });
         var t = String(d.type || type);
         var c = pal[i % pal.length];
         if (t === 'pie' || t === 'doughnut' || t === 'polarArea') {
@@ -3139,13 +3417,49 @@ function buildChartGuardScript(): string {
       });
     } catch (e) {}
   }
+  // Chart.js bakes resolved default colours into each chart's options at creation, so a
+  // scheme switch swaps the old theme colours for the new ones (author colours stay).
+  function themeColors(C) {
+    var d = C.defaults || {};
+    var tt = (d.plugins && d.plugins.tooltip) || {};
+    return { ink: d.color, grid: d.scale && d.scale.grid && d.scale.grid.color, border: d.borderColor, tipBg: tt.backgroundColor, tipFg: tt.titleColor };
+  }
+  function swapColor(obj, key, from, to) {
+    try { if (obj && from !== to && obj[key] === from) obj[key] = to; } catch (e) {}
+  }
+  function recolorChart(ch, prev, next) {
+    var opts = ch.options || {};
+    var scales = opts.scales || {};
+    Object.keys(scales).forEach(function (id) {
+      var sc = scales[id];
+      if (!sc) return;
+      swapColor(sc.ticks, 'color', prev.ink, next.ink);
+      swapColor(sc.title, 'color', prev.ink, next.ink);
+      swapColor(sc.pointLabels, 'color', prev.ink, next.ink);
+      swapColor(sc.grid, 'color', prev.grid, next.grid);
+      swapColor(sc.angleLines, 'color', prev.grid, next.grid);
+      swapColor(sc.border, 'color', prev.border, next.border);
+    });
+    var pl = opts.plugins || {};
+    if (pl.legend) swapColor(pl.legend.labels, 'color', prev.ink, next.ink);
+    swapColor(pl.title, 'color', prev.ink, next.ink);
+    swapColor(pl.tooltip, 'backgroundColor', prev.tipBg, next.tipBg);
+    swapColor(pl.tooltip, 'titleColor', prev.tipFg, next.tipFg);
+    swapColor(pl.tooltip, 'bodyColor', prev.tipFg, next.tipFg);
+  }
   function retheme() {
     var C = window.__iuiChartOrig || window.Chart;
     if (!C) return;
+    var prev = themeColors(C);
     applyChartTheme(C);
+    var next = themeColors(C);
     try {
       var all = C.instances ? Object.keys(C.instances).map(function (k) { return C.instances[k]; }) : [];
-      all.forEach(function (ch) { try { ch.update('none'); } catch (e) {} });
+      all.forEach(function (ch) {
+        try { recolorChart(ch, prev, next); } catch (eR) {}
+        try { if (ch.data) paintDatasets({ type: ch.config && ch.config.type, data: ch.data }); } catch (eP) {}
+        try { ch.update('none'); } catch (e) {}
+      });
     } catch (e) {}
   }
   window.__iuiRethemeCharts = retheme;
@@ -3290,13 +3604,68 @@ function buildEchartsGuardScript(): string {
   }
   function patch(e) {
     if (!e || e.__iuiPatched || typeof e.init !== 'function' || typeof e.registerTheme !== 'function') return false;
-    try { e.registerTheme('iui', theme()); } catch (err) {}
+    try { e.registerTheme('iui', theme()); lastInks = inks(); } catch (err) {}
     var orig = e.init;
     e.init = function (el, th, opts) { return orig.call(e, el, th == null ? 'iui' : th, opts); };
     e.__iuiPatched = true;
     return true;
   }
-  window.__iuiRethemeEcharts = function () { try { if (window.echarts) window.echarts.registerTheme('iui', theme()); } catch (e) {} };
+  function inks() {
+    return {
+      ink: tok('--color-text-secondary', '#5f5e58'), grid: tok('--color-border-tertiary', 'rgba(0,0,0,0.15)'),
+      line: tok('--color-border-secondary', 'rgba(0,0,0,0.3)'), text: tok('--color-text-primary', '#1a1a1a'),
+      bg: tok('--color-background-primary', '#ffffff')
+    };
+  }
+  var lastInks = inks();
+  function lineColor(o, k) { return o && o[k] && o[k].lineStyle && o[k].lineStyle.color; }
+  function textColor(o, k) { return o && o[k] && o[k].color; }
+  function axisPatch(ax, prev, next) {
+    var p = {};
+    if (textColor(ax, 'axisLabel') === prev.ink) p.axisLabel = { color: next.ink };
+    if (textColor(ax, 'nameTextStyle') === prev.ink) p.nameTextStyle = { color: next.ink };
+    if (lineColor(ax, 'splitLine') === prev.grid) p.splitLine = { lineStyle: { color: next.grid } };
+    if (lineColor(ax, 'axisTick') === prev.grid) p.axisTick = { lineStyle: { color: next.grid } };
+    if (lineColor(ax, 'axisLine') === prev.line) p.axisLine = { lineStyle: { color: next.line } };
+    return p;
+  }
+  window.__iuiRethemeEcharts = function () {
+    var prev = lastInks;
+    try { if (window.echarts) window.echarts.registerTheme('iui', theme()); } catch (e) {}
+    // G10: live charts take the new palette; theme-derived ink / grid colours are swapped
+    // (theme values are baked into each instance at init; author colours stay).
+    var next = inks();
+    lastInks = next;
+    try {
+      var pal = theme().color;
+      if (window.echarts && pal) document.querySelectorAll('[_echarts_instance_]').forEach(function (el) {
+        var inst = window.echarts.getInstanceByDom(el);
+        if (!inst) return;
+        var patchOpt = { color: pal };
+        try {
+          var o = inst.getOption() || {};
+          ['xAxis', 'yAxis', 'radiusAxis', 'angleAxis', 'singleAxis'].forEach(function (k) {
+            if (Array.isArray(o[k])) patchOpt[k] = o[k].map(function (ax) { return axisPatch(ax, prev, next); });
+          });
+          if (Array.isArray(o.legend)) patchOpt.legend = o.legend.map(function (l) { return textColor(l, 'textStyle') === prev.ink ? { textStyle: { color: next.ink } } : {}; });
+          if (Array.isArray(o.title)) patchOpt.title = o.title.map(function (t) {
+            var tp = {};
+            if (textColor(t, 'textStyle') === prev.text) tp.textStyle = { color: next.text };
+            if (textColor(t, 'subtextStyle') === prev.ink) tp.subtextStyle = { color: next.ink };
+            return tp;
+          });
+          if (o.textStyle && o.textStyle.color === prev.ink) patchOpt.textStyle = { color: next.ink };
+          if (Array.isArray(o.tooltip)) patchOpt.tooltip = o.tooltip.map(function (t) {
+            var tp = {};
+            if (t && t.backgroundColor === prev.bg) tp.backgroundColor = next.bg;
+            if (textColor(t, 'textStyle') === prev.text) tp.textStyle = { color: next.text };
+            return tp;
+          });
+        } catch (eO) {}
+        inst.setOption(patchOpt);
+      });
+    } catch (e2) {}
+  };
   if (patch(window.echarts)) return;
   // UMD assigns window.echarts = {} and fills it synchronously: patch on the next microtask.
   var cur = window.echarts;
@@ -3640,7 +4009,9 @@ function buildHtmlSandboxSrcdocInner(
   // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
   const langAttr = typeof options.uiLang === 'string' && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u.test(options.uiLang) ? ` lang="${options.uiLang}"` : ''
-  let doc = `<!DOCTYPE html><html${langAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  const schemeAttr = options.appearanceScheme === 'light' || options.appearanceScheme === 'dark' ? ` data-iui-scheme="${options.appearanceScheme}"` : ''
+  const appearanceCss = typeof options.appearanceCss === 'string' ? options.appearanceCss.replace(/<\/style/gi, '<\\/style').slice(0, 20_000) : ''
+  let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 ${pageAccentCss(spec.accent)}
@@ -3648,7 +4019,7 @@ html,body{min-height:0!important;height:auto!important;background:transparent!im
 #iui-preview-root{min-width:0;max-width:100%;overflow-x:clip}
 .leaflet-container{min-height:280px;border-radius:var(--border-radius-lg,12px)}
 body{padding:4px!important}
-</style><style id="iui-author-css">${authorCss}</style></head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
+</style><style id="iui-author-css">${authorCss}</style>${appearanceCss || schemeAttr ? `<style id="iui-appearance">${appearanceCss}</style>` : ''}</head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
   if (doc.length > HTML_SANDBOX_MAX_SRCDOC_BYTES) {
     doc = doc.slice(0, HTML_SANDBOX_MAX_SRCDOC_BYTES) + '\n<!-- srcdoc truncated -->'
   }

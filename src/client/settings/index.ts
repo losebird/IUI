@@ -95,6 +95,11 @@ const en = {
   instanceStorePersist: "Persist to disk",
   instanceStorePersistPath: "Persist path (JSONL)",
   instanceStorePersistPathHint: "e.g. /home/box/.dsh/profiles/web/iui-instance-store.jsonl",
+  uiEagerness: "Page generation",
+  uiEagernessHint: "Restrained: pages only when you ask for one. Balanced: explanations and comparisons are answered in text with a “Make it an interactive page” button. Eager: visualise whenever it helps.",
+  uiEagernessRestrained: "Restrained",
+  uiEagernessBalanced: "Balanced (default)",
+  uiEagernessEager: "Eager",
   cdnSource: "Library source",
   cdnSourceHint: "Where page libraries (maps, charts, tables, diagrams, 3D) load from. Each source falls back to the next after 8 s.",
   cdnPreset: "Source",
@@ -208,6 +213,11 @@ const zh: typeof en = {
   instanceStorePersist: "落盘持久化",
   instanceStorePersistPath: "持久化路径（JSONL）",
   instanceStorePersistPathHint: "例如 /home/box/.dsh/profiles/web/iui-instance-store.jsonl",
+  uiEagerness: "界面生成积极度",
+  uiEagernessHint: "克制：只有你明确要求时才生成页面。均衡：解释、对比类问题先用文字回答，并在下方提供“做成可交互页面”按钮。积极：能可视化就直接生成页面。",
+  uiEagernessRestrained: "克制",
+  uiEagernessBalanced: "均衡（默认）",
+  uiEagernessEager: "积极",
   cdnSource: "资源源",
   cdnSourceHint: "页面里的地图、图表、表格、脑图、3D 等库从哪里加载。每个源 8 秒没响应就换下一个。",
   cdnPreset: "来源",
@@ -289,6 +299,27 @@ function IuiPluginsItem(props: PluginsItemProps): ReactNode {
  */
 export const SETTINGS_INJECT = ['locale', 'configForms'] as const
 
+let activeFormScope: SettingsFormScope<IuiSettingsSectionValue> | null = null
+
+/**
+ * G10: write one IUI config field outside the settings page (e.g. 「设为我的默认风格」).
+ * Resolves false when the host form is unavailable / read-only or rejects the write.
+ */
+export async function writeIuiConfigField(field: string, value: string): Promise<boolean> {
+  const formScope = activeFormScope
+  if (formScope === null) return false
+  try {
+    const snap = formScope.getSnapshot()
+    if (snap.status !== 'ready' || !snap.writable) return false
+    const op = value === ''
+      ? { op: 'unset' as const, path: [field] }
+      : { op: 'set' as const, path: [field], value }
+    return await formScope.mutate([op], snap.revision)
+  } catch {
+    return false
+  }
+}
+
 /**
  * Install Settings → IUI. Caller must hard-inject locale + configForms
  * (see SETTINGS_INJECT + client `export const inject`).
@@ -300,7 +331,9 @@ export function installIuiSettings(ctx: Context): () => void {
 
   let card: IuiSettingsCardController
   try {
-    card = new IuiSettingsCardController(scope.configForms.get(IUI_SETTINGS_NAMESPACE) as SettingsFormScope<IuiSettingsSectionValue>)
+    const formScope = scope.configForms.get(IUI_SETTINGS_NAMESPACE) as SettingsFormScope<IuiSettingsSectionValue>
+    activeFormScope = formScope
+    card = new IuiSettingsCardController(formScope)
   } catch (error) {
     console.error('[iui] settings form failed to bind; registering nav with error face', error)
     const disposeSection = scope.slots.inject('settings.section', () => scope.slots.register({
@@ -341,6 +374,7 @@ export function installIuiSettings(ctx: Context): () => void {
     disposePlugins()
     disposeSection()
     card.dispose()
+    activeFormScope = null
     disposeLocale()
   }
 }

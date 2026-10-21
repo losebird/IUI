@@ -18,6 +18,7 @@ import { DEFAULT_THEME_ID } from '../config/defaults.ts'
 import { resolveThemeId } from '../config/resolve.ts'
 import { listThemePacks } from '../themes/index.ts'
 import { Config, resolveLiveConfig, type IuiConfigResolved } from './config-schema.ts'
+import type { UiEagerness } from '../config/referee-rules.ts'
 import { GENUI_SECTION_TEXT } from './section-text.ts'
 import { formatRouterStatus } from './format-router.ts'
 import {
@@ -88,7 +89,9 @@ let runtimeConfig: RuntimeConfigPayload = buildRuntimeConfig({
   legacyFences: false,
   cdnPreset: 'local',
   cdnTemplate: '',
+  uiEagerness: 'balanced',
   customTokensJson: '',
+  pageStyleJson: '',
   userTemplatesJson: '',
   jevEnabled: false,
   jevApiKey: '',
@@ -398,6 +401,8 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
   const feedbackOptions: {
     fenceFeedback: boolean
     formatReferee: boolean
+    uiEagerness: UiEagerness
+    pageStyleJson: string
     getFormatRouterConfig: () => {
       jevEnabled: boolean
       jevApiKey: string
@@ -407,6 +412,8 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
   } = {
     fenceFeedback: true,
     formatReferee: true,
+    uiEagerness: 'balanced',
+    pageStyleJson: '',
     getFormatRouterConfig: () => ({ jevEnabled: false, jevApiKey: '' }),
   }
   const syncFromConfig = () => {
@@ -414,6 +421,8 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
     publishRuntimeConfig(live)
     feedbackOptions.fenceFeedback = live.fenceFeedback !== false
     feedbackOptions.formatReferee = live.formatReferee !== false
+    feedbackOptions.uiEagerness = live.uiEagerness
+    feedbackOptions.pageStyleJson = live.pageStyleJson
     setLegacyFencesEnabled(live.legacyFences === true)
     feedbackOptions.getFormatRouterConfig = () => ({
       jevEnabled: live.jevEnabled,

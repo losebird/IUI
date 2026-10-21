@@ -60,7 +60,7 @@ import {
   looksLikeJsonMasqueradeOpen,
   matchesForbiddenFirstPrefix,
 } from '../config/stream-heuristics.ts'
-import { buildPatternNote, getIntentRule, isExplicitUiAsk } from '../config/referee-rules.ts'
+import { buildPatternNote, eagernessNoteFor, eagernessWantsText, getIntentRule, isExplicitUiAsk, pageStyleNoteFor, type UiEagerness } from '../config/referee-rules.ts'
 import { recordFenceOp } from '../shared/fence-ops.ts'
 import { designLintNote, lintSandboxDesign, type DesignIssue } from '../shared/design-lint.ts'
 import { ingestToolResultBindings } from './binding-bridge.ts'
@@ -663,6 +663,10 @@ function isFeedbackSource(source: { kind?: unknown; plugin?: unknown } | undefin
 export interface FenceFeedbackOptions {
   fenceFeedback: boolean
   formatReferee: boolean
+  /** G7: page eagerness (live; default balanced). */
+  uiEagerness?: UiEagerness
+  /** G10: saved default page style → one `[iui-style]` line when a page is likely. */
+  pageStyleJson?: string
   /** Live format-router config (optional Jev). Called each route; must not throw. */
   getFormatRouterConfig?: () => FormatRouterConfig
 }
@@ -988,11 +992,25 @@ export function installFenceFeedback(
         extras.push(createFeedbackMessage(pageNote, agent.session.header.version))
         ctx.logger?.info?.(`iui: injecting current-page note turn=${turn} chars=${pageNote.length}`)
       }
+      // G7: eagerness — restrained keeps non-explicit asks in text; balanced answers explain /
+      // compare questions in text (the host offers 「做成可交互页面」); eager visualises when it helps.
+      const modeNote = askNow.trim() === '' ? null : eagernessNoteFor(opts.uiEagerness ?? 'balanced', askNow)
+      if (modeNote !== null) {
+        extras.push(createFeedbackMessage(modeNote, agent.session.header.version))
+        ctx.logger?.info?.(`iui: injecting eagerness note mode=${opts.uiEagerness ?? 'balanced'} turn=${turn}`)
+      }
       // G6: page-type pattern (map / weather / kanban / 3D …) only when the ask matches.
-      const patternNote = askNow.trim() === '' ? null : buildPatternNote(askNow)
+      const textOnly = askNow.trim() !== '' && eagernessWantsText(opts.uiEagerness ?? 'balanced', askNow)
+      const patternNote = askNow.trim() === '' || textOnly ? null : buildPatternNote(askNow)
       if (patternNote !== null) {
         extras.push(createFeedbackMessage(patternNote, agent.session.header.version))
         ctx.logger?.info?.(`iui: injecting pattern note turn=${turn} chars=${patternNote.length}`)
+      }
+      // G10: the user's saved page style (the host applies it; the line keeps the model from fighting it).
+      const styleNote = askNow.trim() === '' || textOnly ? null : pageStyleNoteFor(opts.pageStyleJson ?? '', askNow)
+      if (styleNote !== null) {
+        extras.push(createFeedbackMessage(styleNote, agent.session.header.version))
+        ctx.logger?.info?.(`iui: injecting page-style note turn=${turn}`)
       }
       if (reminderApplies) {
         state.pendingNextTurnReminder = null

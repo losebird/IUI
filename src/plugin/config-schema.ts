@@ -1,6 +1,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { DEFAULT_THEME_ID } from '../config/defaults.ts'
 import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
+import { normalizeUiEagerness, type UiEagerness } from '../config/referee-rules.ts'
 
 function themeIdField() {
   // Soft string: unknown/legacy pack theme ids (shadcn/mui/…) resolve to DEFAULT_THEME_ID at runtime.
@@ -15,7 +16,9 @@ export const Config = Schema.object({
   legacyFences: Schema.boolean().default(false).volatile(),
   cdnPreset: Schema.union(['local', 'china', 'global', 'custom'] as const).default('local').volatile(),
   cdnTemplate: Schema.string().default('').volatile(),
+  uiEagerness: Schema.union(['restrained', 'balanced', 'eager'] as const).default('balanced').volatile(),
   customTokensJson: Schema.string().default('').volatile(),
+  pageStyleJson: Schema.string().default('').volatile(),
   userTemplatesJson: Schema.string().default('').volatile(),
   jevEnabled: Schema.boolean().default(false).volatile(),
   jevApiKey: Schema.string().role('secret').default('').volatile(),
@@ -38,7 +41,10 @@ export type IuiConfigResolved = {
   cdnPreset: 'local' | 'china' | 'global' | 'custom'
   /** F19: custom source template `https://host/{name}@{version}/{file}`. */
   cdnTemplate: string
+  /** G7: restrained = pages only on explicit asks; balanced = explain/compare answers in text + host offer; eager = visualise when it helps. */
+  uiEagerness: UiEagerness
   customTokensJson: string
+  pageStyleJson: string
   userTemplatesJson: string
   jevEnabled: boolean
   jevApiKey: string
@@ -70,7 +76,9 @@ export function resolveLiveConfig(config: unknown): IuiConfigResolved {
     legacyFences: Boolean(readConfigValue(row.legacyFences, false)),
     cdnPreset: normalizeCdnPreset(readConfigValue(row.cdnPreset, 'local')),
     cdnTemplate: String(readConfigValue(row.cdnTemplate, '')).trim(),
+    uiEagerness: normalizeUiEagerness(readConfigValue(row.uiEagerness, 'balanced')),
     customTokensJson: String(readConfigValue(row.customTokensJson, '')),
+    pageStyleJson: String(readConfigValue(row.pageStyleJson, '')),
     userTemplatesJson: String(readConfigValue(row.userTemplatesJson, '')),
     jevEnabled: Boolean(readConfigValue(row.jevEnabled, false)),
     jevApiKey: String(readConfigValue(row.jevApiKey, '')),

@@ -1,4 +1,5 @@
 import { safeRegExpTest } from '../shared/safe-regexp.ts'
+import { normalizePageAppearance, pageAppearanceNote } from '../shared/page-appearance.ts'
 /**
  * Format-referee rules: data-driven intent → fence / plain-text decisions.
  * Call sites resolve via classifyIntentAsk() / listIntentRules() / getIntentRule()
@@ -640,4 +641,80 @@ export function buildPatternNote(ask: string): string | null {
   const notes = patternNotesFor(ask)
   if (notes.length === 0) return null
   return `[iui-pattern]\n${notes.map((n) => `- ${n.text}`).join('\n')}`
+}
+
+/* ------------------------------------------------------------------ */
+/* G7: how readily a reply becomes a page (Settings → 界面生成积极度). */
+/* ------------------------------------------------------------------ */
+
+/** restrained: pages only on explicit asks · balanced (default): explain / compare → text + host offer · eager: visualise when it helps. */
+export type UiEagerness = 'restrained' | 'balanced' | 'eager'
+
+export function normalizeUiEagerness(value: unknown): UiEagerness {
+  return value === 'restrained' || value === 'eager' ? value : 'balanced'
+}
+
+const EXPLAIN_COMPARE_ASK =
+  /对比|比较|区别|差别|差异|优缺点|优劣|哪个(?:好|更|值)|怎么选|如何选|选哪|\bvs\.?\b|versus|趋势|变化|分布|占比|排名|原理|解释|讲讲|说说|介绍一下|为什么|为啥|如何|怎么|怎样|compare|difference|pros and cons|explain|trend|\bwhy\b|\bhow\b/iu
+/** Page-native intents (a page IS the answer): never downgraded to text by `balanced`. */
+const PAGE_NATIVE_INTENTS = new Set(['dashboard', 'tool', 'map', 'resource', 'weather', 'booking', 'form', 'grid-table', 'kanban'])
+
+/** Asks whose natural answer is a page (trip plans, routes, weather, bookings, calculators…). */
+const PAGE_NATIVE_ASK =
+  /行程|攻略|[一二三四五六七八九十两\d]+日游|游玩|路线|导航|天气|气温|地图|订票|预订|报名|计算|换算|记账|日程|课表|itinerary|weather|route|booking|calculat/iu
+
+function looseIntentId(text: string): string | null {
+  for (const rule of INTENT_RULES) {
+    if (rule.id === 'visual') continue
+    if (rule.askPatterns.some((source) => safeRegExpTest(source, 'iu', text))) return rule.id
+  }
+  return null
+}
+
+/** G7: an explain / compare question whose first answer is prose; a page could deepen it later. */
+export function isOfferableAsk(ask: string): boolean {
+  const text = ask.trim()
+  if (text.length < 6 || text.length > 400) return false
+  if (isPlainAsk(text) || isExplicitUiAsk(text) || isKnowledgeAsk(text) || CODE_TOPIC.test(text)) return false
+  if (!EXPLAIN_COMPARE_ASK.test(text) || PAGE_NATIVE_ASK.test(text)) return false
+  const id = looseIntentId(text)
+  return id === null || !PAGE_NATIVE_INTENTS.has(id)
+}
+
+/** G7: under this mode the reply to `ask` should stay text (no page this turn). */
+export function eagernessWantsText(mode: UiEagerness, ask: string): boolean {
+  const text = ask.trim()
+  if (text === '' || isExplicitUiAsk(text)) return false
+  if (mode === 'restrained') return askNeedsUi(text) || isOfferableAsk(text)
+  if (mode === 'balanced') return isOfferableAsk(text)
+  return false
+}
+
+/** G7: host-rendered 「做成可交互页面」 under a settled text answer (no model tokens). */
+export function shouldOfferPage(ask: string): boolean {
+  const text = ask.trim()
+  if (text === '' || isExplicitUiAsk(text)) return false
+  return isOfferableAsk(text) || askNeedsUi(text)
+}
+
+export const EAGERNESS_NOTES: Readonly<Record<'restrained' | 'balanced' | 'eager', string>> = {
+  restrained: '[iui-mode] 用户把界面生成设为「克制」：只有明确要求页面时才生成。本轮用文字回答，不要输出 iui-html 页面。',
+  balanced: '[iui-mode] 这是解释 / 对比类问题：先用文字直接给出结论和要点（可用简短列表），本轮不要输出 iui-html 页面；宿主会在回复下方提供「做成可交互页面」按钮，用户需要时再做。',
+  eager: '[iui-mode] 用户把界面生成设为「积极」：这类内容能可视化就直接输出一个 iui-html 页面；正文只给一句结论，页面负责探索和操作，不重复正文。',
+}
+
+/** G7: step-0 note for the ask under `mode`, or null when the default behaviour applies. */
+export function eagernessNoteFor(mode: UiEagerness, ask: string): string | null {
+  if (eagernessWantsText(mode, ask)) return mode === 'restrained' ? EAGERNESS_NOTES.restrained : EAGERNESS_NOTES.balanced
+  const text = ask.trim()
+  if (mode === 'eager' && text !== '' && !isExplicitUiAsk(text) && (askNeedsUi(text) || isOfferableAsk(text))) return EAGERNESS_NOTES.eager
+  return null
+}
+
+/** G10: `[iui-style]` line for the saved default page style, only when the ask likely gets a page. */
+export function pageStyleNoteFor(pageStyleJson: string, ask: string): string | null {
+  if (pageStyleJson.trim() === '') return null
+  const text = ask.trim()
+  if (text === '' || (!isExplicitUiAsk(text) && !askNeedsUi(text))) return null
+  return pageAppearanceNote(normalizePageAppearance(pageStyleJson))
 }

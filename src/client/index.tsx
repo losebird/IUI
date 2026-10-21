@@ -46,6 +46,7 @@ import { onBindingWatchActive, setBindingSessionHint, stopBindingWatchNow } from
 import { resolveViewedSessionId } from './session-resolver.ts'
 import { installIuiSettings } from './settings/index.ts'
 import { installMarkdownRescue } from './markdown-rescue.tsx'
+import { installPageOffer } from './page-offer.ts'
 import { registerComposerDraftSetter, writeComposerEditable, findComposerEditable } from './composer-bridge.ts'
 import { sandboxOpenLinkUrl } from '../shared/html-sandbox.ts'
 
@@ -208,6 +209,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   })
   const stopSettings = installIuiSettings(ctx)
   const stopMdRescue = installMarkdownRescue(ctx)
+  const stopPageOffer = installPageOffer()
   // Fence channel selection: the registry extension point when the host
   // ships it (contract line), the DOM observer otherwise (pristine line).
   // One plugin build serves both deployments.
@@ -233,6 +235,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   disposers.push(mountAchievementToasts())
   disposers.push(mountTipToasts())
   disposers.push(stopMdRescue)
+  disposers.push(stopPageOffer)
   disposers.push(stopSettings)
   disposers.push(stopRuntimeWatch)
   disposers.push(stopBindingWatchNow)

@@ -48,7 +48,7 @@ function looksLikeApologyInsteadOfUi(text: string): boolean {
   return APOLOGY_FAIL.some((re) => re.test(text))
 }
 
-function latestUserAskNear(row: Element): string {
+export function latestUserAskNear(row: Element): string {
   let el: Element | null = row.previousElementSibling
   for (let i = 0; i < 16 && el; i++, el = el.previousElementSibling) {
     const role = el.getAttribute?.('data-role') ?? el.getAttribute?.('data-message-role')
@@ -69,22 +69,22 @@ function latestUserAskNear(row: Element): string {
   return best
 }
 
-function rowText(row: Element): string {
+export function rowText(row: Element): string {
   const clone = row.cloneNode(true) as Element
   clone.querySelectorAll(`[${MARKER}], .${CONTAINER}, .genui-dom-fence, [data-genui-rendered]`).forEach((n) => n.remove())
   return (clone.textContent ?? '').trim()
 }
 
-function hasIuiFenceInRow(row: Element): boolean {
+export function hasIuiFenceInRow(row: Element): boolean {
   if (row.querySelector('.genui-dom-fence, [data-genui-rendered="true"], .genui-block')) return true
   return FENCE_OPEN.test(rowText(row))
 }
 
-function isStreaming(row: Element): boolean {
+export function isStreaming(row: Element): boolean {
   return row.closest('[data-streaming]') !== null || row.querySelector('[data-streaming]') !== null
 }
 
-function assistantRows(root: ParentNode): Element[] {
+export function assistantRows(root: ParentNode): Element[] {
   const out: Element[] = []
   const candidates = root.querySelectorAll(
     '[data-role="assistant"], [data-message-role="assistant"], .assistant-message, [data-chat-anchor-key]',
