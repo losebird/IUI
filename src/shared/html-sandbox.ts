@@ -17,6 +17,7 @@ import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
 import { VENDOR_CDN_HOSTS, customCdnOrigin, getVendorSource, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
+import { buildMotionRuntimeScript } from './motion-runtime.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
 /**
@@ -3079,6 +3080,21 @@ function buildChartGuardScript(): string {
       }
       if (p.legend && p.legend.labels) { p.legend.labels.usePointStyle = true; p.legend.labels.boxWidth = 8; p.legend.labels.boxHeight = 8; }
       if (p.colors) p.colors.enabled = false;
+      // R5-1: quieter axes — no vertical grid, no value-axis rail, ≤6 value ticks, softer motion.
+      var sc = d.scales || {};
+      ['category', 'time', 'timeseries'].forEach(function (k) {
+        var a = sc[k]; if (!a) return;
+        a.grid = a.grid || {}; a.grid.display = false;
+        a.ticks = a.ticks || {}; if (a.ticks.padding == null) a.ticks.padding = 6;
+      });
+      ['linear', 'logarithmic'].forEach(function (k) {
+        var a = sc[k]; if (!a) return;
+        a.border = a.border || {}; a.border.display = false;
+        a.grid = a.grid || {}; a.grid.drawBorder = false; // Chart.js 3 spelling
+        a.ticks = a.ticks || {}; if (a.ticks.maxTicksLimit == null) a.ticks.maxTicksLimit = 6; if (a.ticks.padding == null) a.ticks.padding = 6;
+      });
+      if (d.animation && typeof d.animation === 'object') { d.animation.duration = 700; }
+      if (d.elements && d.elements.line && d.elements.line.tension === 0) d.elements.line.tension = 0.35;
     } catch (e) {}
   }
   function paintDatasets(cfg) {
@@ -3097,12 +3113,26 @@ function buildChartGuardScript(): string {
           d.borderColor = tok('--color-background-primary', '#ffffff');
           d.borderWidth = d.borderWidth == null ? 2 : d.borderWidth;
         } else if (t === 'line' || t === 'radar') {
-          d.borderColor = c; d.backgroundColor = alpha(c, 0.12);
-          if (d.pointRadius == null) d.pointRadius = 2;
+          d.borderColor = c;
+          // R5-1: area fades out toward the axis instead of a flat tint.
+          d.backgroundColor = t === 'line' ? function (ctx) {
+            var ch = ctx && ctx.chart, a = ch && ch.chartArea;
+            if (!a || !ch.ctx || !ch.ctx.createLinearGradient) return alpha(c, 0.12);
+            var g = ch.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+            g.addColorStop(0, alpha(c, 0.24)); g.addColorStop(1, alpha(c, 0));
+            return g;
+          } : alpha(c, 0.12);
+          var many = Array.isArray(d.data) && d.data.length > 12;
+          if (d.pointRadius == null) d.pointRadius = many ? 0 : 3;
+          if (d.pointHoverRadius == null) d.pointHoverRadius = 5;
+          if (d.pointBackgroundColor == null) d.pointBackgroundColor = tok('--color-background-primary', '#ffffff');
+          if (d.pointBorderWidth == null) d.pointBorderWidth = 2;
           if (d.borderWidth == null) d.borderWidth = 2;
+          if (t === 'line' && d.tension == null) d.tension = 0.35;
         } else {
           d.backgroundColor = c; d.borderColor = c;
-          if (d.borderRadius == null && t === 'bar') d.borderRadius = 4;
+          if (d.borderRadius == null && t === 'bar') d.borderRadius = 6;
+          if (d.maxBarThickness == null && t === 'bar') d.maxBarThickness = 40;
         }
       });
     } catch (e) {}
@@ -3130,6 +3160,11 @@ function buildChartGuardScript(): string {
     if (!cfg.options) cfg.options = {};
     applyChartTheme(C);
     paintDatasets(cfg);
+    // R5-1: line/bar tooltips follow the x position (no pixel hunting for a dot).
+    try {
+      var ty = String(cfg.type || '');
+      if ((ty === 'line' || ty === 'bar') && !cfg.options.interaction) cfg.options.interaction = { mode: 'index', intersect: false };
+    } catch (e) {}
     cfg.options.maintainAspectRatio = false;
     cfg.options.responsive = cfg.options.responsive !== false;
     try { if (window.__iuiReducedMotion && window.__iuiReducedMotion()) cfg.options.animation = false; } catch (e) {}
@@ -3243,7 +3278,12 @@ function buildEchartsGuardScript(): string {
       title: { textStyle: { color: tok('--color-text-primary', '#1a1a1a') }, subtextStyle: { color: ink } },
       legend: { textStyle: { color: ink }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
       tooltip: { backgroundColor: tok('--color-background-primary', '#ffffff'), borderColor: grid, textStyle: { color: tok('--color-text-primary', '#1a1a1a') } },
-      categoryAxis: axis, valueAxis: axis, timeAxis: axis, logAxis: axis
+      // R5-1: category axes without ticks/grid; value axes without rail, dashed grid.
+      categoryAxis: Object.assign({}, axis, { axisTick: { show: false }, splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } }),
+      timeAxis: axis, logAxis: Object.assign({}, axis, { axisLine: { show: false } }),
+      line: { smooth: 0.35, symbol: 'emptyCircle', symbolSize: 6, lineStyle: { width: 2 } },
+      bar: { barMaxWidth: 40, itemStyle: { borderRadius: [6, 6, 0, 0] } }
     };
   }
   function patch(e) {
@@ -3585,7 +3625,7 @@ function buildHtmlSandboxSrcdocInner(
 })();
 <\/script>`
   const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase))
-  const bridge = buildSandboxBridgeScript(frameId)
+  const bridge = buildSandboxBridgeScript(frameId) + buildMotionRuntimeScript({ streaming: deferJs })
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()

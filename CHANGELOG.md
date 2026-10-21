@@ -2,6 +2,7 @@
 
 ## 0.13.0-iui.27
 
+- **Default polish + motion (R5-1, zero author tokens):** new `oiu-polish` CSS layer (motion tokens, tinted KPI tiles, flat nested cards, tabular numerals, balanced headings, featured pricing tier ring + drawn check marks, hover/press feedback, layered light shadows) and an in-frame motion runtime: staggered first-paint entrance that never replays blocks during streaming, swap-in / number tween after clicks (incl. tabs revealing a panel), count-up on complete documents, hover lift for elements with click handlers; all off under `prefers-reduced-motion` and inside maps / `[data-iui-no-motion]`. Chart.js/ECharts defaults: no vertical grid or value-axis rail, ≤ 6 ticks, gradient line areas, hollow points, rounded bars, index tooltips.
 - **Screenshot polish (R5-0):** a declared `accent` now drives a harmonised 8-step chart series (muted same-hue comparison series, analogous hues, ≥ 3:1 contrast; black/grey accents keep stock series 3+); Leaflet tiles no longer show a light hairline between rows on DPR 2 screens (`plus-lighter` kept only while zoom-animating); Leaflet popups/tooltips use `--font-sans`; `.iui-itinerary-head` groups trailing chips on the right.
 - **Shared author bindings (F1):** top-level `const/let/function` from one author JS chunk are visible to later chunks, so split pages no longer throw `xxx is not defined`.
 - **Function hoisting across chunks (F27):** pure top-level function declarations are peeled to the front of their chunk, so calls before the declaration in an earlier chunk resolve.

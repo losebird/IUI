@@ -8,6 +8,7 @@
  * 3. Agent design skill teaching token usage + patterns
  * 4. createTripAnimator for map+pin-drop+carousel itineraries
  */
+import { OIU_POLISH_CSS } from './oiu-polish.ts'
 import { buildVendorImportMap } from '../shared/vendor-registry.ts'
 
 /** Theme tokens — warm stone neutrals, semantic status colors, dark auto. */
@@ -63,8 +64,8 @@ export const OIU_THEME_CSS = `
   --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
 
   /* G2 elevation (1 = resting card, 2 = raised / hover, 3 = popover / sheet). */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 3px 10px -4px rgba(16, 24, 40, 0.08);
+  --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 12px 24px -8px rgba(16, 24, 40, 0.14);
   --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
 
   /* D2 page accent (personality presets override it). */
@@ -931,7 +932,7 @@ button.primary:hover, button[type="submit"]:not(.secondary):not(.ghost):hover { 
 
 /** Full injected design-system CSS block. */
 export function buildOiuDesignSystemCss(): string {
-  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}\n${OIU_A11Y_CSS}`
+  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}\n${OIU_POLISH_CSS}\n${OIU_A11Y_CSS}`
 }
 
 /** CDN import map for common libs (pinned; see vendor-registry). Leaflet = UMD auto-inject. */
