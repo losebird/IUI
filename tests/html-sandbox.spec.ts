@@ -134,8 +134,9 @@ describe('html-sandbox', () => {
     const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'cap' })
     expect(doc).toContain('/* css truncated */')
     expect(doc).toContain('/* js truncated */')
-    // Pipeline + OIU kit grew the baseline; still well under srcdoc hard cap (500k).
-    expect(doc.length).toBeLessThan(350_000)
+    // Pipeline + OIU kit + G11–G16 bridge (summary, image capture, self-check: +27k)
+    // grew the baseline; still well under srcdoc hard cap (500k).
+    expect(doc.length).toBeLessThan(400_000)
   })
 })
 

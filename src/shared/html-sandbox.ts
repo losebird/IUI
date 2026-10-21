@@ -195,7 +195,7 @@ export function htmlSandboxSrcdocRebuildKey(input: HtmlSandboxSrcdocRebuildInput
 export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'resize'; frameId: string; height: number }
   | { source: 'iui-html'; type: 'action'; frameId: string; action: string; payload: Record<string, unknown> }
-  | { source: 'iui-html'; type: 'sendPrompt'; frameId: string; text: string }
+  | { source: 'iui-html'; type: 'sendPrompt'; frameId: string; text: string; summary?: boolean }
   | { source: 'iui-html'; type: 'openLink'; frameId: string; url: string }
   /** D8: copy from an opaque-origin frame (host writes the clipboard on the same click). */
   | { source: 'iui-html'; type: 'copyText'; frameId: string; text: string; reqId?: string }
@@ -216,6 +216,11 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown>; resources?: Array<{ url: string; type: string }> }
   /** G9: static page copy for a frozen card (`html` empty + `reason` when refused). */
   | { source: 'iui-html'; type: 'frozen'; frameId: string; html: string; reason?: string }
+  /** G12: PNG of the page (`dataUrl` empty + `reason` when it failed; `failed` = resources not inlined). */
+  | { source: 'iui-html'; type: 'image'; frameId: string; dataUrl: string; width?: number; height?: number; failed?: number; reason?: string }
+  /** G12: during a capture, an image / stylesheet the frame cannot fetch itself (reply: hostResult.data). */
+  | { source: 'iui-html'; type: 'fetchResource'; frameId: string; url: string; as: 'dataUrl' | 'text'; reqId: string }
+  | { source: 'iui-html'; type: 'selfCheck'; frameId: string; issues: SandboxSelfCheckIssue[]; serious: number }
   /** F10: debounced full snapshot of the page's persistent storage items. */
   | { source: 'iui-html'; type: 'storageSet'; frameId: string; items: Record<string, string> }
 
@@ -239,15 +244,26 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'appearance'; frameId: string; css: string; scheme: 'auto' | 'light' | 'dark' }
   /** G9: ask for a static copy of the page (reply: `frozen`). */
   | { source: 'iui-html-host'; type: 'requestFreeze'; frameId: string }
+  /** G12: render the page to PNG (reply: `image`). */
+  | { source: 'iui-html-host'; type: 'requestImage'; frameId: string; background?: string }
   /** F10: late-loaded persistent items (merged under writes made since boot). */
   | { source: 'iui-html-host'; type: 'storageInit'; frameId: string; items: Record<string, string> }
   /** F10: the last storageSet exceeded the per-page quota and was not saved. */
   | { source: 'iui-html-host'; type: 'storageQuota'; frameId: string; limit: number }
   /** F18: reply to a delegated download / copy (`reason`: gesture | blocked | tooLarge | rate | failed). */
-  | { source: 'iui-html-host'; type: 'hostResult'; frameId: string; reqId: string; ok: boolean; reason?: string }
+  | { source: 'iui-html-host'; type: 'hostResult'; frameId: string; reqId: string; ok: boolean; reason?: string; data?: string }
 
 /** G9: frozen-card static copy cap (the frame refuses larger pages). */
 export const SANDBOX_FREEZE_MAX_CHARS = 3_000_064
+
+/** G12: page image cap (PNG data URL) and per-resource cap for capture fetches. */
+/** G15: self-check findings posted once after the page settles. */
+export const SELF_CHECK_KINDS = ['smallText', 'lowContrast', 'overflowX', 'blankCanvas', 'brokenImage', 'consoleError', 'blankArea'] as const
+export type SandboxSelfCheckKind = (typeof SELF_CHECK_KINDS)[number]
+export interface SandboxSelfCheckIssue { kind: SandboxSelfCheckKind; count: number; serious: boolean; detail?: string }
+
+export const SANDBOX_IMAGE_MAX_CHARS = 48 * 1024 * 1024
+export const SANDBOX_RESOURCE_MAX_CHARS = 12 * 1024 * 1024
 
 /** F18: delegated download cap (10 MB; strings are checked by length first). */
 export const SANDBOX_DOWNLOAD_MAX_CHARS = 10 * 1024 * 1024
@@ -295,6 +311,7 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
   if (record.type === 'requestSnapshot') return true
   if (record.type === 'visibility') return typeof record.visible === 'boolean'
   if (record.type === 'requestFreeze') return true
+  if (record.type === 'requestImage') return record.background === undefined || (typeof record.background === 'string' && record.background.length <= 100)
   if (record.type === 'appearance') {
     return typeof record.css === 'string' && record.css.length <= 20_000
       && (record.scheme === 'auto' || record.scheme === 'light' || record.scheme === 'dark')
@@ -306,6 +323,7 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
   if (record.type === 'hostResult') {
     return typeof record.reqId === 'string' && record.reqId.length <= 40 && typeof record.ok === 'boolean'
       && (record.reason === undefined || (typeof record.reason === 'string' && record.reason.length <= 40))
+      && (record.data === undefined || (typeof record.data === 'string' && record.data.length <= SANDBOX_RESOURCE_MAX_CHARS))
   }
   return false
 }
@@ -364,6 +382,25 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   if (record.type === 'frozen') {
     return typeof record.html === 'string' && record.html.length <= SANDBOX_FREEZE_MAX_CHARS
       && (record.reason === undefined || (typeof record.reason === 'string' && record.reason.length <= 40))
+  }
+  if (record.type === 'image') {
+    return typeof record.dataUrl === 'string' && record.dataUrl.length <= SANDBOX_IMAGE_MAX_CHARS
+      && (record.dataUrl === '' || record.dataUrl.startsWith('data:image/png'))
+      && (record.reason === undefined || (typeof record.reason === 'string' && record.reason.length <= 40))
+  }
+  if (record.type === 'selfCheck') {
+    return Array.isArray(record.issues) && record.issues.length <= 10
+      && record.issues.every((x) => x !== null && typeof x === 'object'
+        && SELF_CHECK_KINDS.includes((x as { kind?: unknown }).kind as SandboxSelfCheckKind)
+        && typeof (x as { count?: unknown }).count === 'number' && Number.isFinite((x as { count: number }).count)
+        && typeof (x as { serious?: unknown }).serious === 'boolean'
+        && ((x as { detail?: unknown }).detail === undefined || (typeof (x as { detail?: unknown }).detail === 'string' && ((x as { detail: string }).detail.length <= 160))))
+      && typeof record.serious === 'number' && Number.isFinite(record.serious)
+  }
+  if (record.type === 'fetchResource') {
+    return typeof record.url === 'string' && /^(https?:|blob:)/i.test(record.url) && record.url.length <= 2000
+      && (record.as === 'dataUrl' || record.as === 'text')
+      && typeof record.reqId === 'string' && record.reqId.length <= 40
   }
   if (record.type === 'snapshot') {
     return typeof record.html === 'string' && record.html.length <= 200_064
@@ -1583,6 +1620,8 @@ p,li,dd,dt,h1,h2,h3,h4,blockquote,figcaption{overflow-wrap:anywhere}
 [style*="repeat(2"],[style*="repeat(3"],[style*="1fr 1fr"]{grid-template-columns:minmax(0,1fr)!important}
 [style*="repeat(2"]>*,[style*="repeat(3"]>*,[style*="1fr 1fr"]>*{grid-column:auto!important}
 }
+/* G14: touch screens get ≥32px tap targets */
+@media (pointer:coarse){button,.iui-sandbox-btn,[role="button"],[role="tab"],select,input:not([type=checkbox]):not([type=radio]):not([type=range]){min-height:32px}input[type=checkbox],input[type=radio]{min-width:18px;min-height:18px}}
 /* Polished defaults for raw elements so un-styled model markup never looks like a default browser page */
 :root{--iui-chart-1:#3b82f6;--iui-chart-2:#10b981;--iui-chart-3:#f59e0b;--iui-chart-4:#ef4444;--iui-chart-5:#8b5cf6;--iui-chart-6:#06b6d4}
 h1,h2,h3,h4{margin:0 0 8px;line-height:1.25;letter-spacing:-0.015em;color:var(--iui-pack-fg)}
@@ -1833,14 +1872,23 @@ export function buildSandboxBridgeScript(frameId: string): string {
   }
   window.__iuiSetOffscreen = __iuiSetOffscreen;
   // G9: static copy of the page for a frozen card (no scripts; canvases become images).
-  function __iuiFreezeHtml() {
-    try { window.iuiSandbox.persistLocalState(); } catch (eP) {}
-    var srcCanvas = document.querySelectorAll('canvas');
-    for (var ci = 0; ci < srcCanvas.length; ci++) {
-      var kind = srcCanvas[ci].__iuiCtx || '';
-      if (kind && kind !== '2d') return { html: '', reason: 'webgl' };
-    }
+  // G9/G12: a static copy of the live document — form values as attributes, canvases as
+  // images, image sources resolved, running animations pinned to their current look.
+  function __iuiCloneStatic(boxes) {
+    var srcAll = document.documentElement.getElementsByTagName('*');
     var clone = document.documentElement.cloneNode(true);
+    var dstAll = clone.getElementsByTagName('*');
+    for (var ai = 0; ai < srcAll.length && ai < dstAll.length; ai++) {
+      var se = srcAll[ai];
+      try {
+        if (!se.getAnimations || !se.getAnimations().length) continue;
+        var cs = getComputedStyle(se);
+        var de = dstAll[ai];
+        de.style.setProperty('opacity', cs.opacity, 'important');
+        de.style.setProperty('transform', cs.transform, 'important');
+        de.style.setProperty('visibility', cs.visibility, 'important');
+      } catch (eA) {}
+    }
     clone.removeAttribute('data-iui-offscreen');
     var srcFields = document.querySelectorAll('input, textarea, select');
     var dstFields = clone.querySelectorAll('input, textarea, select');
@@ -1858,6 +1906,22 @@ export function buildSandboxBridgeScript(frameId: string): string {
         } else if (sf.type !== 'file' && sf.type !== 'password') df.setAttribute('value', sf.value);
       } catch (eF) {}
     }
+    var srcImgs = document.querySelectorAll('img');
+    var dstImgs = clone.querySelectorAll('img');
+    for (var ii = 0; ii < srcImgs.length && ii < dstImgs.length; ii++) {
+      try {
+        var cur = srcImgs[ii].currentSrc || srcImgs[ii].src;
+        if (cur) dstImgs[ii].setAttribute('src', cur);
+        dstImgs[ii].removeAttribute('srcset');
+        dstImgs[ii].removeAttribute('sizes');
+        dstImgs[ii].removeAttribute('loading');
+        if (boxes) {
+          var ib = srcImgs[ii].getBoundingClientRect();
+          dstImgs[ii].setAttribute('data-iui-box', Math.round(ib.width) + 'x' + Math.round(ib.height));
+        }
+      } catch (eI) {}
+    }
+    var srcCanvas = document.querySelectorAll('canvas');
     var dstCanvas = clone.querySelectorAll('canvas');
     for (var di = 0; di < srcCanvas.length && di < dstCanvas.length; di++) {
       var sc = srcCanvas[di], dc = dstCanvas[di];
@@ -1882,10 +1946,342 @@ export function buildSandboxBridgeScript(frameId: string): string {
     freezeCss.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; }';
     var cloneHead = clone.querySelector('head');
     if (cloneHead) cloneHead.appendChild(freezeCss);
+    return clone;
+  }
+  function __iuiFreezeHtml() {
+    try { window.iuiSandbox.persistLocalState(); } catch (eP) {}
+    var srcCanvas = document.querySelectorAll('canvas');
+    for (var ci = 0; ci < srcCanvas.length; ci++) {
+      var kind = srcCanvas[ci].__iuiCtx || '';
+      if (kind && kind !== '2d') return { html: '', reason: 'webgl' };
+    }
+    var clone = __iuiCloneStatic();
     var out = '<!doctype html>' + clone.outerHTML;
     if (out.length > 3000000) return { html: '', reason: 'tooLarge' };
     return { html: out };
   }
+  // G12: 保存为图片 — the static copy with every image / stylesheet inlined (fetched by the
+  // host: the frame's CSP has no general connect-src), drawn through SVG foreignObject.
+  function __iuiCaptureFetch(url, as, cache) {
+    var key = as + '|' + url;
+    if (cache[key]) return cache[key];
+    var job;
+    if (/^data:/i.test(url)) job = Promise.resolve(as === 'text' ? '' : url);
+    else if (!/^(https?:|blob:)/i.test(url)) job = Promise.resolve('');
+    else job = __iuiHostCall({ type: 'fetchResource', url: String(url).slice(0, 2000), as: as }, 12000)
+      .then(function (r) { return r && r.ok && typeof r.data === 'string' ? r.data : ''; });
+    cache[key] = job;
+    return job;
+  }
+  function __iuiAbsUrl(u, base) {
+    try { return new URL(u, base || undefined).href; } catch (e) { return ''; }
+  }
+  function __iuiInlineCssUrls(text, base, cache, stats) {
+    var re = /url\\(\\s*(['"]?)([^'")]+)\\1\\s*\\)/g;
+    var found = [], m;
+    while ((m = re.exec(text))) {
+      var raw = m[2].trim();
+      if (/^(data:|#)/i.test(raw)) continue;
+      // Fonts are skipped (system fallback); images are inlined.
+      if (/\\.(woff2?|ttf|otf|eot)(\\?|#|$)/i.test(raw)) continue;
+      var abs = __iuiAbsUrl(raw, base);
+      if (abs && found.indexOf(abs) < 0) found.push(abs);
+      if (found.length > 120) break;
+    }
+    return Promise.all(found.map(function (u) { return __iuiCaptureFetch(u, 'dataUrl', cache); })).then(function (datas) {
+      var map = {};
+      found.forEach(function (u, i) { map[u] = datas[i]; if (!datas[i]) stats.failed++; });
+      return text.replace(re, function (all, q, raw) {
+        var abs = __iuiAbsUrl(raw.trim(), base);
+        return abs && map[abs] ? 'url("' + map[abs] + '")' : all;
+      });
+    });
+  }
+  function __iuiCaptureImage(opts) {
+    var o = opts || {};
+    var cache = {};
+    var stats = { failed: 0 };
+    try { window.iuiSandbox.persistLocalState(); } catch (eP) {}
+    var root = document.documentElement;
+    var width = Math.max(1, Math.ceil(root.clientWidth || window.innerWidth || 800));
+    // Content height: the scroll height when the page scrolls, else the body's bottom edge
+    // (the viewport can be taller than the page, e.g. in fullscreen).
+    var height = 1;
+    try {
+      var body = document.body;
+      var bodyBottom = 0;
+      if (body) {
+        var bcs = getComputedStyle(body);
+        bodyBottom = body.getBoundingClientRect().bottom + (parseFloat(bcs.marginBottom) || 0) + window.scrollY;
+      }
+      height = root.scrollHeight > root.clientHeight + 1 ? root.scrollHeight : Math.max(bodyBottom, body ? body.scrollHeight : 0);
+      height = Math.max(1, Math.ceil(height) + (root.scrollHeight > root.clientHeight + 1 ? 0 : 6));
+    } catch (eH) { height = Math.max(1, Math.ceil(root.scrollHeight || 1)); }
+    var bg = '';
+    try {
+      var hb = getComputedStyle(root).backgroundColor, bb = document.body ? getComputedStyle(document.body).backgroundColor : '';
+      var clear = function (c) { return !c || c === 'transparent' || /rgba\\([^)]*,\\s*0\\)$/.test(c); };
+      bg = !clear(bb) ? bb : !clear(hb) ? hb : (typeof o.background === 'string' ? o.background : '');
+    } catch (eB) {}
+    var clone = __iuiCloneStatic(true);
+    clone.querySelectorAll('[data-iui-toast],[data-iui-fail-strip],.iui-fail-strip,[data-iui-capture-ignore],iframe,noscript').forEach(function (el) { el.remove(); });
+    clone.querySelectorAll('link').forEach(function (el) { if (!/stylesheet/i.test(el.getAttribute('rel') || '')) el.remove(); });
+    clone.querySelectorAll('video').forEach(function (el) {
+      var poster = el.getAttribute('poster');
+      var ph = document.createElement(poster ? 'img' : 'div');
+      if (poster) ph.setAttribute('src', __iuiAbsUrl(poster));
+      ph.setAttribute('style', (el.getAttribute('style') || '') + ';background:#0002;object-fit:cover');
+      if (el.className && typeof el.className === 'string') ph.className = el.className;
+      if (el.parentNode) el.parentNode.replaceChild(ph, el);
+    });
+    var jobs = [];
+    // External stylesheets → <style> (cssRules when readable, else fetched text).
+    var sheets = [].slice.call(document.styleSheets || []);
+    var linkEls = [].slice.call(clone.querySelectorAll('link'));
+    linkEls.forEach(function (ln) {
+      var href = __iuiAbsUrl(ln.getAttribute('href') || '');
+      var sheet = null;
+      for (var si = 0; si < sheets.length; si++) if (sheets[si].href === href) { sheet = sheets[si]; break; }
+      var textJob;
+      try {
+        var rules = sheet && sheet.cssRules;
+        textJob = Promise.resolve([].map.call(rules, function (r) { return r.cssText; }).join('\\n'));
+      } catch (eS) { textJob = href ? __iuiCaptureFetch(href, 'text', cache) : Promise.resolve(''); }
+      jobs.push(textJob.then(function (text) { return __iuiInlineCssUrls(text || '', href, cache, stats); }).then(function (text) {
+        var st = document.createElement('style');
+        st.textContent = text;
+        if (ln.parentNode) ln.parentNode.replaceChild(st, ln);
+      }));
+    });
+    clone.querySelectorAll('style').forEach(function (st) {
+      if (!/url\\(/i.test(st.textContent || '')) return;
+      jobs.push(__iuiInlineCssUrls(st.textContent, document.baseURI, cache, stats).then(function (t) { st.textContent = t; }));
+    });
+    clone.querySelectorAll('[style*="url("]').forEach(function (el) {
+      jobs.push(__iuiInlineCssUrls(el.getAttribute('style') || '', document.baseURI, cache, stats).then(function (t) { el.setAttribute('style', t); }));
+    });
+    var imgs = [].slice.call(clone.querySelectorAll('img')).slice(0, 400);
+    imgs.forEach(function (im) {
+      var src = im.getAttribute('src') || '';
+      if (!src || /^data:/i.test(src)) return;
+      jobs.push(__iuiCaptureFetch(__iuiAbsUrl(src), 'dataUrl', cache).then(function (d) {
+        if (d) { im.setAttribute('src', d); return; }
+        // Unexportable image → neutral box of the same size (no broken-image glyph).
+        stats.failed++;
+        var box = /^(\\d+)x(\\d+)$/.exec(im.getAttribute('data-iui-box') || '');
+        var ph = document.createElement('span');
+        if (im.className && typeof im.className === 'string') ph.className = im.className;
+        ph.setAttribute('style', (im.getAttribute('style') || '') + ';display:inline-block;vertical-align:middle;border-radius:4px;background:rgba(127,127,127,.15)' + (box ? ';width:' + box[1] + 'px;height:' + box[2] + 'px' : ''));
+        if (im.parentNode) im.parentNode.replaceChild(ph, im);
+      }));
+    });
+    clone.querySelectorAll('image').forEach(function (im) {
+      var href = im.getAttribute('href') || im.getAttribute('xlink:href') || '';
+      if (!href || /^data:/i.test(href)) return;
+      jobs.push(__iuiCaptureFetch(__iuiAbsUrl(href), 'dataUrl', cache).then(function (d) { if (d) im.setAttribute('href', d); else stats.failed++; }));
+    });
+    return Promise.all(jobs).then(function () {
+      clone.querySelectorAll('[data-iui-box]').forEach(function (el) { el.removeAttribute('data-iui-box'); });
+      clone.style.setProperty('width', width + 'px');
+      clone.style.setProperty('height', height + 'px');
+      clone.style.setProperty('overflow', 'hidden');
+      if (bg) clone.style.setProperty('background', bg);
+      var xhtml = new XMLSerializer().serializeToString(clone);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '"><foreignObject x="0" y="0" width="100%" height="100%">' + xhtml + '</foreignObject></svg>';
+      var scale = Math.max(0.5, Math.min(2, Math.sqrt(36000000 / (width * height)), 16000 / height));
+      return new Promise(function (resolve) {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(width * scale);
+            cv.height = Math.round(height * scale);
+            var ctx = cv.getContext('2d');
+            if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height); }
+            ctx.scale(scale, scale);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve({ dataUrl: cv.toDataURL('image/png'), width: cv.width, height: cv.height, failed: stats.failed });
+          } catch (eC) { resolve({ dataUrl: '', reason: 'tainted', failed: stats.failed }); }
+        };
+        img.onerror = function () { resolve({ dataUrl: '', reason: 'render', failed: stats.failed }); };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      });
+    });
+  }
+  // G15: one light self-check when the page has settled and the frame is idle:
+  // small text, low contrast, sideways overflow, blank canvases, broken images,
+  // console errors and large blank areas. The host shows「发现 N 处排版问题」.
+  var __iuiConsoleErrors = 0;
+  try {
+    var __iuiOrigConsoleError = console.error;
+    console.error = function () {
+      __iuiConsoleErrors++;
+      return __iuiOrigConsoleError.apply(console, arguments);
+    };
+  } catch (eCE) {}
+  window.addEventListener('error', function () { __iuiConsoleErrors++; });
+  function __iuiParseRgb(c) {
+    var m = /rgba?\\(([^)]+)\\)/.exec(String(c || ''));
+    if (!m) return null;
+    var p = m[1].split(/[\\s,\\/]+/).filter(Boolean).map(parseFloat);
+    if (p.length < 3) return null;
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function __iuiLum(c) {
+    var f = function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  }
+  function __iuiBgOf(el) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') return null;
+      var c = __iuiParseRgb(cs.backgroundColor);
+      if (c && c.a > 0.9) return c;
+    }
+    return { r: 255, g: 255, b: 255, a: 1 };
+  }
+  function __iuiOwnText(el) {
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var ch = el.childNodes[i];
+      if (ch.nodeType === 3 && /\\S/.test(ch.nodeValue || '')) return true;
+    }
+    return false;
+  }
+  function __iuiShown(el, cs) {
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.2) return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 1 && r.height > 1;
+  }
+  function __iuiSkipCheck(el) {
+    return !!(el.closest && el.closest('[data-iui-toast],[data-iui-fail-strip],.iui-fail-strip,.leaflet-control-attribution,.leaflet-container,.ag-root-wrapper,[aria-hidden="true"],[data-iui-check-ignore]'));
+  }
+  function __iuiSelfCheck() {
+    var issues = [];
+    var body = document.body;
+    if (!body) return issues;
+    var all = body.querySelectorAll('*');
+    var small = 0, tiny = 0, smallSample = '', lowC = 0, severe = 0, lowSample = '', sampled = 0;
+    for (var i = 0; i < all.length && i < 2500; i++) {
+      var el = all[i];
+      if (!__iuiOwnText(el) || /^(SCRIPT|STYLE|NOSCRIPT|OPTION|SUP|SUB)$/.test(el.tagName) || __iuiSkipCheck(el)) continue;
+      var cs = getComputedStyle(el);
+      if (!__iuiShown(el, cs)) continue;
+      var fs = parseFloat(cs.fontSize) || 16;
+      var inSvg = !!(el.closest && el.closest('svg'));
+      if (fs < 11.5 && !inSvg) { small++; if (fs < 11) tiny++; if (!smallSample) smallSample = (el.textContent || '').trim().slice(0, 24) + ' · ' + Math.round(fs * 10) / 10 + 'px'; }
+      // SVG text sits on shape fills the box walk cannot see (mermaid, d3).
+      if (sampled < 80 && !inSvg) {
+        sampled++;
+        var fg = __iuiParseRgb(cs.color), bg = __iuiBgOf(el);
+        if (fg && bg && fg.a > 0.5) {
+          var l1 = __iuiLum(fg), l2 = __iuiLum(bg);
+          var ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+          var large = fs >= 18 || (fs >= 14 && parseInt(cs.fontWeight, 10) >= 700);
+          if (ratio < (large ? 1.8 : 2.3)) severe++;
+          if (ratio < (large ? 2.2 : 3)) { lowC++; if (!lowSample) lowSample = (el.textContent || '').trim().slice(0, 24) + ' · ' + Math.round(ratio * 10) / 10 + ':1'; }
+        }
+      }
+    }
+    if (small > 0) issues.push({ kind: 'smallText', count: small, serious: tiny >= 3 || small >= 8, detail: smallSample });
+    if (lowC > 0) issues.push({ kind: 'lowContrast', count: lowC, serious: severe >= 2, detail: lowSample });
+    var root = document.documentElement;
+    // The host clips overflow-x on html/body/#iui-preview-root, so overflowing
+    // content is silently cut: look for boxes past the edge clipped only there.
+    var cw = root.clientWidth, over = 0, wide = '';
+    var hostClip = function (n) { return n === root || n === body || n.id === 'iui-preview-root'; };
+    for (var w = 0; w < all.length && w < 2500; w++) {
+      var we = all[w];
+      var rr = we.getBoundingClientRect();
+      if (rr.width <= 0 || rr.height <= 0 || rr.right <= cw + 4 || __iuiSkipCheck(we)) continue;
+      var clipper = we.parentElement;
+      while (clipper && !hostClip(clipper) && getComputedStyle(clipper).overflowX === 'visible') clipper = clipper.parentElement;
+      if (clipper && !hostClip(clipper)) continue;
+      if (getComputedStyle(we).position === 'fixed') continue;
+      if (rr.right - cw > over) { over = rr.right - cw; wide = we.tagName.toLowerCase() + (we.className && typeof we.className === 'string' ? '.' + we.className.split(' ')[0] : ''); }
+    }
+    if (over > 4) issues.push({ kind: 'overflowX', count: 1, serious: true, detail: Math.round(over) + 'px' + (wide ? ' · ' + wide : '') });
+    var blankCanvas = 0;
+    document.querySelectorAll('canvas').forEach(function (cv) {
+      if (__iuiSkipCheck(cv) || (cv.__iuiCtx && cv.__iuiCtx !== '2d')) return;
+      var cr = cv.getBoundingClientRect();
+      if (cr.width < 40 || cr.height < 40 || !cv.width || !cv.height) return;
+      try {
+        var ctx = cv.getContext('2d');
+        if (!ctx) return;
+        var data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var step = Math.max(4, Math.floor(data.length / 4 / 4000) * 4);
+        var first = -1, varied = false;
+        for (var k = 0; k < data.length; k += step) {
+          var v = data[k + 3] === 0 ? -1 : (data[k] << 16) | (data[k + 1] << 8) | data[k + 2];
+          if (first === -1 && k === 0) first = v;
+          if (v !== first) { varied = true; break; }
+        }
+        if (!varied) blankCanvas++;
+      } catch (eCv) {}
+    });
+    if (blankCanvas > 0) issues.push({ kind: 'blankCanvas', count: blankCanvas, serious: true });
+    var broken = 0, brokenSample = '';
+    document.querySelectorAll('img').forEach(function (im) {
+      if (__iuiSkipCheck(im)) return;
+      var src = im.getAttribute('src') || '';
+      if (!src || !im.complete || im.naturalWidth > 0) return;
+      broken++;
+      if (!brokenSample) brokenSample = src.slice(0, 80);
+    });
+    if (broken > 0) issues.push({ kind: 'brokenImage', count: broken, serious: true, detail: brokenSample });
+    if (__iuiConsoleErrors > 0) issues.push({ kind: 'consoleError', count: __iuiConsoleErrors, serious: false });
+    // Large blank band: rows where every probe lands on an element with no own content.
+    var H = Math.max(root.scrollHeight, body.scrollHeight), W = root.clientWidth;
+    var contentRoot = document.getElementById('iui-preview-root') || body, cb = 0;
+    for (var ci = 0; ci < contentRoot.children.length; ci++) {
+      var cr0 = contentRoot.children[ci].getBoundingClientRect();
+      if (cr0.height > 0) cb = Math.max(cb, cr0.bottom + window.scrollY);
+    }
+    if (cb > 0) H = Math.min(H, Math.ceil(cb));
+    if (H > 480 && H <= window.innerHeight + 4 && W > 200) {
+      var bodyBg = __iuiParseRgb(getComputedStyle(body).backgroundColor);
+      var isContent = function (el) {
+        if (!el || el === body || el === root) return false;
+        if (/^(IMG|CANVAS|SVG|VIDEO|IFRAME|INPUT|TEXTAREA|SELECT|BUTTON|PATH|RECT|CIRCLE|LINE|TEXT|G)$/i.test(el.tagName)) return true;
+        if (el.closest && el.closest('svg,.leaflet-container,.ag-root-wrapper')) return true;
+        if (__iuiOwnText(el)) return true;
+        var cs = getComputedStyle(el);
+        if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
+        var bg = __iuiParseRgb(cs.backgroundColor);
+        if (bg && bg.a > 0.3 && (!bodyBg || Math.abs(bg.r - bodyBg.r) + Math.abs(bg.g - bodyBg.g) + Math.abs(bg.b - bodyBg.b) > 24)) return true;
+        return false;
+      };
+      var run = 0, maxRun = 0;
+      for (var y = 8; y < H - 8; y += 24) {
+        var hit = false;
+        for (var x = 0.1; x < 1; x += 0.2) {
+          if (isContent(document.elementFromPoint(W * x, y))) { hit = true; break; }
+        }
+        run = hit ? 0 : run + 24;
+        if (run > maxRun) maxRun = run;
+      }
+      if (maxRun >= Math.max(240, H * 0.3)) issues.push({ kind: 'blankArea', count: 1, serious: true, detail: maxRun + 'px' });
+    }
+    return issues.slice(0, 10);
+  }
+  var __iuiSelfChecked = false;
+  function __iuiScheduleSelfCheck() {
+    if (__iuiSelfChecked) return;
+    __iuiSelfChecked = true;
+    var run = function () {
+      var issues = [];
+      try { issues = __iuiSelfCheck(); } catch (eSC) { issues = []; }
+      var serious = issues.filter(function (x) { return x.serious; }).length;
+      post({ type: 'selfCheck', issues: issues, serious: serious });
+    };
+    setTimeout(function () {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(run, { timeout: 3000 });
+      else run();
+    }, 1500);
+  }
+  window.__iuiSelfCheck = __iuiSelfCheck;
+  window.__iuiScheduleSelfCheck = __iuiScheduleSelfCheck;
+  window.__iuiCaptureImage = __iuiCaptureImage;
   window.__iuiFreezeHtml = __iuiFreezeHtml;
   // G10: forced light / dark. Media rules on prefers-color-scheme are rewritten in place
   // (host + author sheets), and matchMedia answers the forced scheme.
@@ -2168,6 +2564,10 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (!t) return;
       post({ type: 'sendPrompt', text: t.slice(0, 8000) });
     },
+    /** G11: fill the composer with a readable summary of the page's choices (on click). */
+    sendSummary: function (opts) { return window.__iuiSendSummary ? window.__iuiSendSummary(null, opts) : ''; },
+    /** G11: the summary text without sending (for previews). */
+    summary: function (opts) { return window.__iuiBuildSummary ? window.__iuiBuildSummary(null, opts) : ''; },
     openLink: function (url) {
       var u = String(url || '').trim();
       if (!u) return;
@@ -2362,9 +2762,142 @@ export function buildSandboxBridgeScript(frameId: string): string {
     }
     return true;
   }
+  // G11: <button data-iui-send="summary"> — the page's current choices as a readable
+  // summary, filled into the composer (the user reviews and presses send).
+  function __iuiSumClean(t) { return String(t == null ? '' : t).replace(/\\s+/g, ' ').trim().slice(0, 120); }
+  function __iuiSumVisible(el) { try { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); } catch (e) { return true; } }
+  function __iuiSumOwnLabel(el) {
+    var t = '';
+    try {
+      if (el.id) {
+        var esc = window.CSS && CSS.escape ? CSS.escape(el.id) : el.id;
+        var lf = document.querySelector('label[for="' + esc + '"]');
+        if (lf) t = lf.textContent;
+      }
+      if (!__iuiSumClean(t)) {
+        var wrap = el.closest('label');
+        if (wrap) {
+          var c = wrap.cloneNode(true);
+          c.querySelectorAll('input,select,textarea,[aria-hidden="true"]').forEach(function (n) { n.remove(); });
+          t = c.textContent;
+        }
+      }
+      if (!__iuiSumClean(t)) t = el.getAttribute('data-iui-label') || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || '';
+    } catch (e) {}
+    return __iuiSumClean(t).replace(/[：:]\\s*$/, '');
+  }
+  function __iuiSumGroupLabel(el) {
+    try {
+      var g = el.closest('fieldset,[role="radiogroup"],[role="group"],[role="listbox"],[role="tablist"],[data-iui-label]');
+      while (g) {
+        var lg = g.tagName === 'FIELDSET' ? g.querySelector('legend') : null;
+        var t = __iuiSumClean(lg ? lg.textContent : (g.getAttribute('data-iui-label') || g.getAttribute('aria-label') || ''));
+        if (!t && g.getAttribute('aria-labelledby')) {
+          var ref = document.getElementById(g.getAttribute('aria-labelledby'));
+          if (ref) t = __iuiSumClean(ref.textContent);
+        }
+        if (t && g !== el) return t.replace(/[：:]\\s*$/, '');
+        g = g.parentElement ? g.parentElement.closest('fieldset,[role="radiogroup"],[role="group"],[role="listbox"],[role="tablist"],[data-iui-label]') : null;
+      }
+    } catch (e) {}
+    return '';
+  }
+  function __iuiBuildSummary(scope, opts) {
+    var zh = __iuiZh();
+    var picked = zh ? '已选' : 'Selected';
+    var groups = {}, order = [], extra = [];
+    function add(label, value) {
+      var v = __iuiSumClean(value);
+      if (!v) return;
+      var l = __iuiSumClean(label) || picked;
+      if (!groups[l]) { groups[l] = []; order.push(l); }
+      if (groups[l].indexOf(v) < 0) groups[l].push(v);
+    }
+    var root = scope || document.body || document.documentElement;
+    if (!root) return '';
+    function skip(el) { return !!(el.closest && el.closest('[data-iui-send-ignore],[data-iui-toast],[data-iui-strip],[data-iui-chrome]')); }
+    root.querySelectorAll('input,select,textarea').forEach(function (el) {
+      if (el.disabled || skip(el)) return;
+      var type = String(el.type || '').toLowerCase();
+      if (/^(hidden|password|file|button|submit|reset|image)$/.test(type)) return;
+      if (type === 'checkbox' || type === 'radio') {
+        if (!el.checked) return;
+        var own = __iuiSumOwnLabel(el) || __iuiSumClean(el.value !== 'on' ? el.value : '');
+        add(__iuiSumGroupLabel(el), own || (zh ? '是' : 'yes'));
+        return;
+      }
+      if (!__iuiSumVisible(el)) return;
+      if (el.tagName === 'SELECT') {
+        var vals = [].slice.call(el.selectedOptions || []).map(function (o) { return __iuiSumClean(o.textContent); }).filter(Boolean);
+        if (vals.length) add(__iuiSumOwnLabel(el) || __iuiSumGroupLabel(el) || (zh ? '选择' : 'Choice'), vals.join(zh ? '、' : ', '));
+        return;
+      }
+      var v = __iuiSumClean(el.value);
+      if (!v) return;
+      if (type === 'range' && el.getAttribute('data-iui-unit')) v += el.getAttribute('data-iui-unit');
+      add(__iuiSumOwnLabel(el) || __iuiSumGroupLabel(el) || (zh ? '填写' : 'Input'), v);
+    });
+    var sel = '[aria-pressed="true"],[aria-checked="true"]:not(input),[aria-selected="true"]:not([role="tab"]),[aria-current="true"],[data-iui-selected="true"],[data-iui-selected=""],.is-selected,.selected';
+    var marks = [].slice.call(root.querySelectorAll(sel)).filter(function (el) { return !skip(el) && !el.closest('label') && el.tagName !== 'OPTION'; });
+    marks.forEach(function (el) {
+      // Outermost marked element only (a selected card containing a pressed badge counts once).
+      for (var p = el.parentElement; p && p !== root; p = p.parentElement) { if (marks.indexOf(p) >= 0) return; }
+      var text = el.getAttribute('data-iui-label') || el.getAttribute('aria-label') || '';
+      if (!text) {
+        var heading = el.querySelector && el.querySelector('h1,h2,h3,h4,h5,strong,.title,[class*="name"],[class*="title"]');
+        text = heading ? heading.textContent : el.textContent;
+      }
+      add(__iuiSumGroupLabel(el), String(text || '').slice(0, 60));
+    });
+    root.querySelectorAll('[data-iui-summary]').forEach(function (el) {
+      if (skip(el)) return;
+      var line = __iuiSumClean(el.getAttribute('data-iui-summary') || el.textContent);
+      if (line && extra.indexOf(line) < 0) extra.push(line);
+    });
+    var custom = '';
+    try { if (typeof window.iuiSummary === 'function') custom = String(window.iuiSummary() || '').trim(); } catch (e) {}
+    var lines = [];
+    if (custom) lines.push(custom.slice(0, 2000));
+    else {
+      order.forEach(function (l) { lines.push('- ' + l + (zh ? '：' : ': ') + groups[l].join(zh ? '、' : ', ')); });
+      extra.forEach(function (l) { lines.push('- ' + l); });
+    }
+    if (!lines.length) return '';
+    var title = __iuiSumClean((opts && opts.title) || document.title || '');
+    var intro = __iuiSumClean(opts && opts.intro) || (zh
+      ? (title ? '在「' + title + '」页面里，我的选择：' : '我在页面里的选择：')
+      : (title ? 'My choices on “' + title + '”:' : 'My choices on the page:'));
+    var ask = __iuiSumClean(opts && opts.ask);
+    return (intro + '\\n' + lines.join('\\n') + (ask ? '\\n' + ask : '')).slice(0, 2000);
+  }
+  window.__iuiBuildSummary = __iuiBuildSummary;
+  function __iuiSendSummary(trigger, opts) {
+    var o = opts || {};
+    var scope = null;
+    try {
+      scope = (trigger && trigger.closest && (trigger.closest('[data-iui-send-scope]') || trigger.closest('form'))) || null;
+      if (trigger && trigger.getAttribute) {
+        if (!o.intro && trigger.getAttribute('data-iui-send-intro')) o.intro = trigger.getAttribute('data-iui-send-intro');
+        if (!o.ask && trigger.getAttribute('data-iui-send-ask')) o.ask = trigger.getAttribute('data-iui-send-ask');
+      }
+    } catch (e) {}
+    var text = __iuiBuildSummary(scope, o);
+    if (!text) {
+      try { window.__iuiToast(__iuiZh() ? '还没有可以发送的选择' : 'Nothing selected yet'); } catch (e) {}
+      return '';
+    }
+    post({ type: 'sendPrompt', text: text, summary: true });
+    return text;
+  }
+  window.__iuiSendSummary = __iuiSendSummary;
   document.addEventListener('click', function (ev) {
     var el = ev.target;
     while (el && el !== document && el !== document.documentElement) {
+      if (el.getAttribute && el.getAttribute('data-iui-send') === 'summary') {
+        ev.preventDefault();
+        __iuiSendSummary(el);
+        break;
+      }
       if (el.getAttribute && el.getAttribute('data-iui-send-prompt')) {
         ev.preventDefault();
         window.iuiSandbox.sendPrompt(el.getAttribute('data-iui-send-prompt') || el.textContent || '');
@@ -2592,7 +3125,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (!data || data.source !== 'iui-html-host' || data.frameId !== FRAME_ID) return;
     if (data.type === 'hostResult') {
       var cb = typeof data.reqId === 'string' ? __iuiPendingReq[data.reqId] : null;
-      if (cb) cb({ ok: data.ok === true, reason: data.reason });
+      if (cb) cb({ ok: data.ok === true, reason: data.reason, data: typeof data.data === 'string' ? data.data : undefined });
       return;
     }
     if (data.type === 'measure' || data.type === 'ping') measure(true);
@@ -2604,6 +3137,14 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (data.type === 'appearance' && typeof data.css === 'string') {
       try { __iuiSetAppearance(data.css, data.scheme); } catch (eAp) {}
       measure(true);
+      return;
+    }
+    if (data.type === 'requestImage') {
+      try {
+        __iuiCaptureImage({ background: data.background }).then(function (r) {
+          post({ type: 'image', dataUrl: r.dataUrl || '', width: r.width, height: r.height, failed: r.failed || 0, reason: r.reason || '' });
+        }, function () { post({ type: 'image', dataUrl: '', reason: 'failed' }); });
+      } catch (eImg) { post({ type: 'image', dataUrl: '', reason: 'failed' }); }
       return;
     }
     if (data.type === 'requestFreeze') {

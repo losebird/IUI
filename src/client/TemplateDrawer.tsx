@@ -35,22 +35,37 @@ function copyText(text: string): Promise<void> {
   })
 }
 
+/** G13: every whitespace-separated term appears in one of the fields. */
+export function templateMatches(q: string, ...fields: string[]): boolean {
+  const hay = fields.join('\n').toLowerCase()
+  return q.split(/\s+/).filter(Boolean).every(term => hay.includes(term))
+}
+
 export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
   const t = useT()
   const localeRevision = useLocaleRevision()
   const [category, setCategory] = useState<Category>('all')
+  // G13: free-text search across name / description / instruction.
+  const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<GenuiTemplate | null>(null)
   const [copied, setCopied] = useState(false)
   const timer = useRef(0)
   // F17: follow the plugin locale, not the browser language.
   const zh = currentLocale() === 'zh'
 
+  const q = query.trim().toLowerCase()
   const items = useMemo(() => {
     const all = genuiTemplates()
-    return category === 'all' ? [...all] : all.filter(tpl => tpl.category === category)
-  }, [category, localeRevision])
+    const inCat = category === 'all' ? [...all] : all.filter(tpl => tpl.category === category)
+    return q ? inCat.filter(tpl => templateMatches(q, tpl.name, tpl.description, tpl.instruction)) : inCat
+  }, [category, localeRevision, q])
 
-  const starters = useMemo(() => listHtmlSandboxStarters(), [])
+  const starters = useMemo(() => {
+    const all = listHtmlSandboxStarters()
+    // Starters are free pages: they show under 全部 / 看板 and in search results.
+    if (category !== 'all' && category !== 'dashboard') return []
+    return q ? all.filter(s => templateMatches(q, s.title, s.summary, s.id)) : all
+  }, [category, q])
 
   const copy = async (text: string): Promise<void> => {
     try {
@@ -91,7 +106,19 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
           </button>
         ))}
       </div>
+      <input
+        type="search"
+        className={css.search}
+        data-genui-template-search
+        value={query}
+        placeholder={t('tpl.search')}
+        aria-label={t('tpl.search')}
+        onChange={(e) => { setQuery(e.target.value); setSelected(null) }}
+      />
       <div className={css.list}>
+        {items.length === 0 && starters.length === 0 && (
+          <p className={css.empty} data-genui-template-empty>{t('tpl.noMatch')}</p>
+        )}
         {items.map(tpl => (
           <button
             key={tpl.id}

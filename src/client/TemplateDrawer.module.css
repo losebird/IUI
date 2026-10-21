@@ -150,3 +150,20 @@
   overflow: auto;
   background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, 0.08));
 }
+
+/* G13: template search */
+.search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.3));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.search:focus { outline: 2px solid var(--dsw-alias-state-business-primary, #6366f1); outline-offset: -1px; }
+.empty { margin: 8px 2px; font-size: 13px; opacity: 0.7; }

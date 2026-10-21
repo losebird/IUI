@@ -907,6 +907,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     try {
       post({ type: 'authorSettled', ok: failed === 0, failedChunks: failed });
     } catch (e) {}
+    // G15: one idle self-check per load once the author code has run.
+    try { if (typeof window.__iuiScheduleSelfCheck === 'function') window.__iuiScheduleSelfCheck(); } catch (eSC) {}
     try {
       if (window.iuiSandbox && typeof window.iuiSandbox.resize === 'function') window.iuiSandbox.resize();
     } catch (e2) {}

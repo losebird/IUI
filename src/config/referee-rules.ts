@@ -671,6 +671,14 @@ function looseIntentId(text: string): string | null {
   return null
 }
 
+/** G13: loose intent id of a page (its ask + title), or null for the generic fallback. */
+export function pageIntentId(text: string): string | null {
+  const t = text.trim().slice(0, 1200)
+  if (t === '') return null
+  if (/kanban|任务板|看板.{0,6}(任务|待办|进度)|(任务|待办|项目).{0,6}看板|待办/iu.test(t)) return 'kanban'
+  return looseIntentId(t)
+}
+
 /** G7: an explain / compare question whose first answer is prose; a page could deepen it later. */
 export function isOfferableAsk(ask: string): boolean {
   const text = ask.trim()

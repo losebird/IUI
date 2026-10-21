@@ -24,6 +24,7 @@
  * apply) queues a [genui-action] user message back to the model.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { StarterChips } from './next-steps-ui.tsx'
 import type { GenuiActionHandler } from './action-context.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -173,7 +174,8 @@ export function GenuiPanel({ sessionId, sendGenuiAction: _sendGenuiAction, inser
     handle.addEventListener('pointercancel', onUp)
   }, [bodyHeight])
 
-  if (!hasSpec) return null
+  // G13: a blank conversation gets example chips instead of an empty dock.
+  if (!hasSpec) return <StarterChips />
 
   const showFlash = (text: string): void => {
     setFlash(text)

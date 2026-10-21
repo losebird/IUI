@@ -21,6 +21,7 @@ import { lockVisualPreview, unlockVisualPreview } from '../theme/preview-lock.ts
 import { setActivePackId } from '../theme/apply-pack.ts'
 import { refreshRuntimeConfig } from '../runtime-config.ts'
 import { clearAllPageState } from '../page-storage.ts'
+import { FeedbackStatsCard } from './FeedbackStatsCard.tsx'
 import { GenuiBlock } from '../GenuiBlock.tsx'
 import { SETTINGS_PREVIEW_SPEC } from './preview-spec.ts'
 import { composeOverrides, parseOverrides, type TokenOverrideForm } from './token-overrides.ts'
@@ -376,6 +377,7 @@ export function IuiSettingsSection(props: {
               {t('pageStorageClear')}
             </button>
           </div>
+          <FeedbackStatsCard t={t} />
         </section>
 
         <section className={styles.group}>

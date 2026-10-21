@@ -137,6 +137,7 @@ async function main(): Promise<void> {
     failures += await keyboardAuditCase(browser)
     failures += await visualScoreCase(browser)
     failures += await themingGesturesCase(browser)
+    failures += await batchCCase(browser)
   } finally {
     await browser.close()
   }
@@ -146,6 +147,57 @@ async function main(): Promise<void> {
   }
   console.log('browser e2e: all passed')
   process.exit(0)
+}
+
+/**
+ * Batch C (G11/G12/G15) in a real `sandbox="allow-scripts"` iframe: the summary
+ * button fills (not sends) a readable summary, the page rasterises itself to a
+ * PNG, and the layout self-check flags a broken page while every starter stays clean.
+ */
+async function batchCCase(browser: any): Promise<number> {
+  const problems: string[] = []
+  const html = '<div class="iui-sandbox-card" style="padding:16px"><h2>订座</h2>'
+    + '<label>人数 <input name="people" value="4"></label> <label>日期 <input name="date" value="2025-05-01"></label>'
+    + '<button data-iui-send="summary" id="sum">确认并发送</button>'
+    + '<p class="tiny">小字一</p><p class="tiny">小字二</p><p class="tiny">小字三</p><div class="wide"></div><canvas width="200" height="80"></canvas></div>'
+  const css = '.tiny{font-size:10px}.wide{width:1400px;height:12px;background:#eee}'
+  const doc = buildHtmlSandboxSrcdoc({ html, css, js: 'window.ok = 1;' } as HtmlSandboxSpec, { frameId: 'gc', uiLang: 'zh' })
+  const page = await browser.newPage({ viewport: { width: 760, height: 900 } })
+  await page.setContent(`<iframe id="fr" sandbox="allow-scripts" style="width:720px;height:600px;border:0"></iframe><script>
+window.got = [];
+addEventListener('message', function (e) { var d = e.data; if (!d || d.source !== 'iui-html') return;
+  if (d.type === 'sendPrompt' || d.type === 'selfCheck' || d.type === 'image') got.push(d); });
+</script>`)
+  await page.evaluate((d: string) => { (document.getElementById('fr') as HTMLIFrameElement).srcdoc = d }, doc)
+  const frameEl = page.frameLocator('#fr')
+  await frameEl.locator('#sum').waitFor()
+  await page.waitForFunction(() => (window as any).got.some((d: any) => d.type === 'selfCheck'), null, { timeout: 15000 }).catch(() => {})
+  await frameEl.locator('#sum').click()
+  await page.waitForTimeout(400)
+  await page.evaluate(() => (document.getElementById('fr') as HTMLIFrameElement).contentWindow!.postMessage({ source: 'iui-html-host', type: 'requestImage', frameId: 'gc', background: '#ffffff' }, '*'))
+  await page.waitForFunction(() => (window as any).got.some((d: any) => d.type === 'image'), null, { timeout: 30000 }).catch(() => {})
+  const got: any[] = await page.evaluate(() => (window as any).got)
+  const sum = got.find((d) => d.type === 'sendPrompt')
+  if (!sum || sum.summary !== true || !/4/.test(sum.text) || !/2025-05-01/.test(sum.text)) problems.push(`summary ${JSON.stringify(sum ?? null).slice(0, 200)}`)
+  const img = got.find((d) => d.type === 'image')
+  if (!img || !String(img.dataUrl).startsWith('data:image/png') || img.dataUrl.length < 2000) problems.push(`image ${img ? `${img.reason ?? ''} len=${String(img.dataUrl).length}` : 'missing'}`)
+  const check = got.find((d) => d.type === 'selfCheck')
+  const serious = new Set((check?.issues ?? []).filter((x: any) => x.serious).map((x: any) => x.kind))
+  for (const kind of ['smallText', 'overflowX', 'blankCanvas']) if (!serious.has(kind)) problems.push(`self-check missed ${kind} (${JSON.stringify(check?.issues ?? null)})`)
+  await page.close()
+  const clean = await browser.newPage({ viewport: { width: 720, height: 900 } })
+  for (const starter of HTML_SANDBOX_STARTERS) {
+    await clean.goto('about:blank')
+    await clean.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `gc-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
+    await clean.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+    await clean.waitForTimeout(300)
+    const issues: any[] = await clean.evaluate(() => (window as any).__iuiSelfCheck())
+    const bad = issues.filter((x) => x.serious)
+    if (bad.length) problems.push(`starter ${starter.id} self-check: ${JSON.stringify(bad)}`)
+  }
+  await clean.close()
+  console.log(`${problems.length ? '✗' : '✓'} batch C: summary fill · save as image · self-check (${HTML_SANDBOX_STARTERS.length} starters clean)${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
 }
 
 /**

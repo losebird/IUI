@@ -30,6 +30,7 @@ import {
 } from '../shared/structured-outputs.ts'
 import { getFenceOpsSnapshot } from '../shared/fence-ops.ts'
 import { createGetTripStopImagesTool, createGetPlaceImagesTool } from './trip-images-tool.ts'
+import { serveResourceProxy } from './resource-proxy.ts'
 export { GENUI_SECTION_TEXT } from './section-text.ts'
 export { Config }
 
@@ -157,6 +158,12 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
     return
   }
   const file = rel.slice(1)
+
+  // G12: image-export resource proxy (public http(s) images / CSS only).
+  if (file === 'proxy') {
+    await serveResourceProxy(req, res)
+    return
+  }
 
   if (file === 'response-format.json') {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
