@@ -46,8 +46,10 @@ import { currentLocale, useT } from './i18n/index.ts'
 import {
   getActiveTheme,
   getCustomTokens,
+  hostColorScheme,
   isHostDarkTheme,
   subscribeActiveTheme,
+  subscribeHostScheme,
   themeToStyle,
 } from './theme/apply-theme.ts'
 import { getActivePackId } from './theme/apply-pack.ts'
@@ -62,6 +64,7 @@ import { capActionPayload, createFrameActionGate, type ActionVerdict, type Frame
 import { AppearancePanel } from './appearance-panel.tsx'
 import { getDefaultPageAppearance, saveDefaultPageAppearance, subscribeDefaultPageAppearance } from './page-appearance-store.ts'
 import { writeIuiConfigField } from './settings/index.ts'
+import { saveUserTemplateFromPage } from './user-template-store.ts'
 import { pushTipToast } from './tip-toast.tsx'
 import { NextStepChips, pageIntentOf } from './next-steps-ui.tsx'
 import { FEEDBACK_REASONS, getPageFeedback, pageFeedbackKey, recordSelfCheck, recordVote, type FeedbackReason, type FeedbackVote } from './feedback-store.ts'
@@ -545,9 +548,15 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   )
   const defaultAppearance = useSyncExternalStore(subscribeDefaultPageAppearance, getDefaultPageAppearance, getDefaultPageAppearance)
   const appearance = pageAppearance ?? defaultAppearance
-  const appearanceKey = serializePageAppearance(appearance)
-  const appearanceRef = useRef(appearance)
-  appearanceRef.current = appearance
+  // S2: "auto" follows the host's light/dark theme (not just the OS) when the host exposes one.
+  const hostScheme = useSyncExternalStore(subscribeHostScheme, hostColorScheme, () => null)
+  const frameAppearance = useMemo<PageAppearance>(
+    () => (appearance.scheme === 'auto' && hostScheme !== null ? { ...appearance, scheme: hostScheme } : appearance),
+    [appearance, hostScheme],
+  )
+  const appearanceKey = serializePageAppearance(frameAppearance)
+  const appearanceRef = useRef(frameAppearance)
+  appearanceRef.current = frameAppearance
   useEffect(() => {
     if (storageKey === null || storageReady) return
     let done = false
@@ -591,6 +600,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   /** F20: offline export progress / result shown on the menu item. */
   const [offlineNote, setOfflineNote] = useState<string | null>(null)
   const [imageNote, setImageNote] = useState<string | null>(null)
+  const [templateNote, setTemplateNote] = useState<string | null>(null)
   /** F11: native = Fullscreen API; overlay = fixed in place; portal = fixed under body (transformed ancestor). */
   const [fsMode, setFsMode] = useState<FullscreenMode>('off')
   const fullscreen = fsMode !== 'off'
@@ -1117,8 +1127,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     updatePageState(key, { appearance: next === null ? '' : serializePageAppearance(next) || '{}' }, { persist })
   }
   const saveAppearanceAsDefault = (): void => {
-    const current = appearanceRef.current
-    void saveDefaultPageAppearance(current, writeIuiConfigField).then((result) => {
+    void saveDefaultPageAppearance(appearance, writeIuiConfigField).then((result) => {
       choosePageAppearance(null) // the page now simply follows the (identical) default
       const synced = result === 'synced'
       pushTipToast({
@@ -1460,7 +1469,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                     frameId: 'download',
                     brandId: getActivePackId(),
                     mergePackTokens: false,
-                    ...appearanceBuildOptions(appearance),
+                    ...appearanceBuildOptions(frameAppearance),
                     ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
                   })
                   downloadText(shareFileName(parsed.title), html)
@@ -1490,7 +1499,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                     brandId: getActivePackId(),
                     mergePackTokens: false,
                     cdnSource,
-                    ...appearanceBuildOptions(appearance),
+                    ...appearanceBuildOptions(frameAppearance),
                     ...live,
                   }
                   const doc = buildHtmlSandboxSrcdoc(parsed, { ...common, ...(assetBase ? { assetBase } : {}) })
@@ -1563,6 +1572,22 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
               }}
             >
               {copied ? t('sandbox.copied') : t('sandbox.copy')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItem}
+              data-iui-sandbox-save-template="1"
+              disabled={templateNote !== null || parsed === null || parsed.partial === true}
+              onClick={() => {
+                // S6: save this page's source to 「我的模板」 (drawer + Settings → IUI → 模板).
+                void saveUserTemplateFromPage({ source: effectiveRaw, ...(parsed?.title ? { name: parsed.title } : {}) }, writeIuiConfigField)
+                  .then(({ result }) => setTemplateNote(t(result === 'synced' ? 'sandbox.templateSaved' : 'sandbox.templateSavedLocal')))
+                  .catch(() => setTemplateNote(t('sandbox.templateFailed')))
+                  .finally(() => { window.setTimeout(() => { setTemplateNote(null); setMenuOpen(false) }, 1600) })
+              }}
+            >
+              {templateNote ?? t('sandbox.saveTemplate')}
             </button>
             <div data-iui-feedback={vote ?? 'none'} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px 2px', borderTop: '1px solid rgba(127,127,127,.18)', marginTop: 4 }}>
               <span style={{ flex: 1, fontSize: 12, opacity: 0.65 }}>{feedbackNote ?? t('sandbox.feedback.label')}</span>

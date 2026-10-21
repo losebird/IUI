@@ -11,6 +11,7 @@ import { writeFileSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import { getSessionSnapshot, subscribeSessionBindings } from './binding-bridge.ts'
 import { installFenceFeedback, setLegacyFencesEnabled } from './fence-feedback.ts'
 import type { IuiPluginConfig } from '../config/types.ts'
@@ -457,7 +458,10 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
     order: ctx.systemPrompt.getSectionOrder('STRUCTURED_OUTPUT'),
     text: GENUI_SECTION_TEXT,
   })
-  try { writeFileSync('/tmp/iui-system-section.txt', GENUI_SECTION_TEXT) } catch { /* debug dump only */ }
+  // S8: debug dump only when asked for (IUI_DEBUG=1), never on every start.
+  if (typeof process !== 'undefined' && /^(1|true|yes)$/i.test(process.env.IUI_DEBUG ?? '')) {
+    try { writeFileSync(join(tmpdir(), 'iui-system-section.txt'), GENUI_SECTION_TEXT) } catch { /* debug dump only */ }
+  }
   // Sandbox-first gate: weak models "build the page" by writing .html files the
   // user never sees. Deny those writes and redirect to the inline fence.
   const toolEvents = ctx as unknown as {

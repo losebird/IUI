@@ -124,7 +124,7 @@ const ZH = {
   density: { compact: '紧凑', standard: '标准', comfortable: '宽松' },
   scale: { S: '小', M: '中', L: '大' },
   radius: { square: '方正', standard: '标准', round: '圆润' },
-  scheme: { auto: '跟随系统', light: '浅色', dark: '深色' },
+  scheme: { auto: '跟随宿主', light: '浅色', dark: '深色' },
 } as const
 
 /** One prompt line for a saved default style (null when everything is default). */

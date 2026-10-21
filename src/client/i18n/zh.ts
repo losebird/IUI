@@ -67,7 +67,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.dashboard.name': '项目仪表盘',
   'tpl.dashboard.desc': '一张卡片汇总核心指标：数字 + 环比 + 进度条，决策一眼可见。',
-  'tpl.dashboard.instruction': '请用 dsh-ui 给当前项目做一个仪表盘：4 个关键指标的 stat 卡片（带环比 delta）、整体进度 progress 条、今天的 3 件待办 list。标题用「项目仪表盘」。',
+  'tpl.dashboard.instruction': '请用一个 ```iui-html 页面给当前项目做仪表盘：顶部一个主指标（大数字 + 环比），下面 4 个关键指标卡（带环比）、一条整体进度条和今天的 3 件待办（可勾选）。标题「项目仪表盘」。',
   'tpl.dashboard.demo.title': '项目仪表盘（示例）',
   'tpl.dashboard.demo.metrics': '本周关键指标',
   'tpl.dashboard.demo.done': '本周完成',
@@ -83,7 +83,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.compare.name': '方案对比卡',
   'tpl.compare.desc': '并排 option 卡片对照成本/风险/收益，圆环指标一眼可读。',
-  'tpl.compare.instruction': '请用 dsh-ui 把以下方案做成并排对比卡（grid+card+stat.ring），不要用 table：方案 A/B 各自一张卡，展示成本/风险/收益圆环；顶部加 callout 结论。',
+  'tpl.compare.instruction': '请用一个 ```iui-html 页面把以下方案做成并排对比卡（不要用表格）：方案 A/B 各一张卡，展示成本、风险、收益三个圆环指标；顶部一句结论，推荐项高亮。',
   'tpl.compare.demo.title': '方案对比（示例）',
   'tpl.compare.demo.conclusion': '结论',
   'tpl.compare.demo.body': '方案 B 综合最优：成本中、复杂度低、风险低。',
@@ -103,7 +103,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.steps.name': '五步上手流程',
   'tpl.steps.desc': '关键步骤排成时间线，每步一句要点，适合教程/交接/发布流程。',
-  'tpl.steps.instruction': '请用 dsh-ui 把操作步骤做成 steps 教程：5 步（按实际流程），每步标题 + 一两句要点，顶部用 badge 标出预计耗时。',
+  'tpl.steps.instruction': '请用一个 ```iui-html 页面把操作步骤做成分步教程：5 步（按实际流程），每步标题 + 一两句要点，可点「下一步 / 上一步」切换，顶部标出预计耗时。',
   'tpl.steps.demo.title': '上手流程（示例）',
   'tpl.steps.demo.badge': '约 5 分钟',
   'tpl.steps.demo.s1': '安装插件',
@@ -119,7 +119,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.quiz.name': '随堂测验',
   'tpl.quiz.desc': '一题一答即时判卷：选中即知对错，附讲解，适合培训问答。',
-  'tpl.quiz.instruction': '请用 dsh-ui 出 3 道随堂测验（quiz 组件：question + options，其中一项 correct，附 explanation），标题「随堂测验」，每题即选即评。',
+  'tpl.quiz.instruction': '请用一个 ```iui-html 页面出 3 道随堂测验：每题一个问题 + 选项（只有一个正确），选完立即显示对错和解析，最后给出得分。标题「随堂测验」。',
   'tpl.quiz.demo.title': '随堂测验（示例）',
   'tpl.quiz.demo.hint': '选中即判卷并显示讲解。',
   'tpl.quiz.demo.q1': 'DSH 插件的最小单位是？',
@@ -142,7 +142,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.stats.name': '关键值 + 进度',
   'tpl.stats.desc': '一次交付：数值、进度、里程碑三件套，周报/复盘通用。',
-  'tpl.stats.instruction': '请用 dsh-ui 总结本周关键数据：keyvalue 列 3 组关键值、两根 progress 进度（计划 vs 实际）、timeline 放 3 个里程碑，标题「周报速览」。',
+  'tpl.stats.instruction': '请用一个 ```iui-html 页面总结本周关键数据：3 组关键数值、两条进度对比（计划 vs 实际）和 3 个里程碑的时间线。标题「周报速览」。',
   'tpl.stats.demo.title': '周报速览（示例）',
   'tpl.stats.demo.done': '完成项',
   'tpl.stats.demo.late': '延期',
@@ -159,13 +159,13 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.chart.name': '趋势柱状图',
   'tpl.chart.desc': '数据直接画成柱状图，多序列对比，走势一眼看清。',
-  'tpl.chart.instruction': '请用 dsh-ui 把下列数据画成 chart（bars，多序列）：近 6 周完成量 vs 计划量；图表上方给一句趋势结论。',
+  'tpl.chart.instruction': '请用一个 ```iui-html 页面把下列数据画成多序列柱状图：近 6 周完成量 vs 计划量，图表上方给一句趋势结论，支持切换显示序列。',
   'tpl.chart.demo.title': '趋势对比（示例）',
   'tpl.chart.demo.conclusion': '结论：近 3 周完成量连续上升，本周首次反超计划。',
 
   'tpl.tabs.name': '分标签页',
   'tpl.tabs.desc': '一大块内容拆成标签页，锚点清晰；面板不挤、消息不刷屏。',
-  'tpl.tabs.instruction': '请用 dsh-ui 把内容分成 tabs 三个标签：概览/明细/FAQ，每个标签 3 条以内要点；标题「功能速览」。',
+  'tpl.tabs.instruction': '请用一个 ```iui-html 页面把内容分成三个标签页：概览 / 明细 / FAQ，每个标签 3 条以内要点。标题「功能速览」。',
   'tpl.tabs.demo.title': '功能速览（示例）',
   'tpl.tabs.demo.overview': '概览',
   'tpl.tabs.demo.overviewBody': '三项能力：实时渲染、交互回传、常驻面板。',
@@ -177,7 +177,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.checklist.name': '交付检查清单',
   'tpl.checklist.desc': '提交前逐项打勾：清单即流程，漏项看得见。',
-  'tpl.checklist.instruction': '请用 dsh-ui 做一张交付检查清单：6 项（测试/文档/发布/回滚/监控/公告），checkbox 可勾选，顶部 badge 提示「全部勾选再合并」。',
+  'tpl.checklist.instruction': '请用一个 ```iui-html 页面做一张交付检查清单：6 项（测试 / 文档 / 发布 / 回滚 / 监控 / 公告），可勾选并显示完成进度，全部勾选前提示「全部勾选再合并」。',
   'tpl.checklist.demo.title': '交付清单（示例）',
   'tpl.checklist.demo.badge': '全部勾选再合并',
   'tpl.checklist.demo.c1': '单元测试通过',
@@ -187,7 +187,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.accordion.name': 'FAQ 手风琴',
   'tpl.accordion.desc': '一问一答收在折叠面板里，长文档变短，回答不吓人。',
-  'tpl.accordion.instruction': '请用 dsh-ui 做 FAQ 手风琴（accordion）：5 个高频问题，标题栏就是问题、展开一条给答案；第一问默认展开。',
+  'tpl.accordion.instruction': '请用一个 ```iui-html 页面做 FAQ 折叠面板：5 个高频问题，标题栏是问题、展开后是答案，第一问默认展开，支持搜索过滤。',
   'tpl.accordion.demo.title': 'FAQ（示例）',
   'tpl.accordion.demo.q1': '支持哪些图表？',
   'tpl.accordion.demo.a1': 'chart（bars/line/donut）、plot 函数图、echart 全功能图表。',
@@ -198,7 +198,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.diagram.name': '系统架构图',
   'tpl.diagram.desc': '框架图画成 SVG：节点分层、连接线、分区标注，比截图清楚。',
-  'tpl.diagram.instruction': '请用 dsh-ui 画一幅架构图（diagram）：描述当前系统的 5 个节点与连接（kind: architecture 或 flowchart），包含一个安全区 zone。',
+  'tpl.diagram.instruction': '请用一个 ```iui-html 页面画一幅架构图：当前系统的 5 个节点和它们之间的连接，其中一部分放在「安全区」分组里，点击节点显示说明。',
   'tpl.diagram.demo.title': '架构图（示例）',
   'tpl.diagram.demo.caption': 'DSH 插件链路',
   'tpl.diagram.demo.model': '模型',
@@ -207,14 +207,14 @@ export const ZH: Record<keyof typeof EN, string> = {
 
   'tpl.3d.name': '3D 场景',
   'tpl.3d.desc': '一个可旋转的 3D 场景：产品演示/空间示意用得上。',
-  'tpl.3d.instruction': '请用 dsh-ui 渲染一个 3D 场景（scene3d）：一个立方体 + 一个球体，标题「示例场景」，附一句使用场景说明。',
+  'tpl.3d.instruction': '请用一个 ```iui-html 页面渲染一个可拖动旋转的 3D 场景：一个立方体 + 一个球体，标题「示例场景」，附一句使用场景说明。',
   'tpl.3d.demo.title': '3D 场景（示例）',
   'tpl.3d.demo.note': '首次加载需下载 three.js（约 700KB，懒加载），之后走缓存。',
   'tpl.3d.demo.scene': '示例场景',
 
   'tpl.breadcrumb.name': '路径面包屑',
   'tpl.breadcrumb.desc': '长路径拆成面包屑：文件位置、组织层级一读就懂。',
-  'tpl.breadcrumb.instruction': '请用 dsh-ui 展示当前工作区结构：breadcrumb 显示文件路径（4 段）、file-tree 描述项目目录（3 个目录、每个 2 个子项）。',
+  'tpl.breadcrumb.instruction': '请用一个 ```iui-html 页面展示当前工作区结构：顶部面包屑显示文件路径（4 段），下面是可折叠的项目目录树（3 个目录、每个 2 个子项）。',
   'tpl.breadcrumb.demo.title': '目录结构（示例）',
   'tpl.breadcrumb.demo.workspace': '工作区',
 
@@ -425,7 +425,7 @@ export const ZH: Record<keyof typeof EN, string> = {
   'appearance.radius.standard': '标准',
   'appearance.radius.round': '圆润',
   'appearance.scheme': '配色',
-  'appearance.scheme.auto': '跟随',
+  'appearance.scheme.auto': '跟随宿主',
   'appearance.scheme.light': '浅色',
   'appearance.scheme.dark': '深色',
   'appearance.reset': '重置',
@@ -485,5 +485,16 @@ export const ZH: Record<keyof typeof EN, string> = {
 'next.label': '继续修改：',
 'next.aria': '继续修改建议',
 'starter.aria': '试试这些',
+// S6: 我的模板
+'tpl.category.mine': '我的模板',
+'tpl.mine.badge': '我的',
+'tpl.mine.empty': '还没有自己的模板。在页面右上角 ⋯ 里点「保存为模板」即可收藏。',
+'tpl.mine.delete': '删除',
+'tpl.mine.deleted': '已删除',
+'tpl.mine.preview': '页面源码（使用时会连同你的需求一起发给模型）',
+'sandbox.saveTemplate': '保存为模板',
+'sandbox.templateSaved': '已保存到「我的模板」',
+'sandbox.templateSavedLocal': '已保存到「我的模板」（仅此浏览器）',
+'sandbox.templateFailed': '保存失败：页面太大或模板已满',
 
 }

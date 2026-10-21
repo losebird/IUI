@@ -33,7 +33,8 @@ describe('模板中心数据契约', () => {
       expect(ids.has(tpl.id), `重复 id: ${tpl.id}`).toBe(false)
       ids.add(tpl.id)
       expect(tpl.instruction.trim().length).toBeGreaterThan(10)
-      expect(tpl.instruction).toContain('dsh-ui')
+      expect(tpl.instruction).toContain('iui-html')
+      expect(tpl.instruction).not.toContain('dsh-ui')
       expect(tpl.name.trim()).not.toBe('')
       expect(tpl.description.trim().length).toBeGreaterThanOrEqual(10)
     }

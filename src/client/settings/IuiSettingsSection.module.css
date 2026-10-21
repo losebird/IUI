@@ -15,7 +15,7 @@
 }
 
 .intro {
-  margin: -12px 0 0;
+  margin: 4px 0 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
   line-height: 1.55;
@@ -25,6 +25,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.group + .group {
+  margin-top: 18px;
 }
 
 .groupTitle {
@@ -180,6 +184,22 @@
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+.textInput {
+  width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-2, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.textInput:disabled { opacity: 0.6; }
 
 .select {
   height: 32px;
@@ -447,4 +467,80 @@
   color: #991b1b;
   background: color-mix(in srgb, #ef4444 12%, transparent);
   border-color: color-mix(in srgb, #ef4444 35%, transparent);
+}
+
+/* ---- Batch D (S1/S3/S12) ---- */
+.appearanceLayout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .appearanceLayout { grid-template-columns: minmax(0, 1fr); }
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.previewPane {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.previewFrame {
+  width: 100%;
+  height: 340px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  background: transparent;
+  display: block;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-warning, #b45309);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-danger, #b91c1c);
+}
+
+.devDetails {
+  border-radius: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  padding: 0;
+}
+
+.devDetails > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.devBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 14px 14px;
 }

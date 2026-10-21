@@ -158,15 +158,27 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
   return snapshot
 }
 
+/**
+ * S10: no fixed 2.5 s poll. Settings saves call refreshRuntimeConfig() directly;
+ * otherwise refresh when the tab becomes visible / focused, plus a slow fallback
+ * (edits made elsewhere, e.g. the CLI) that only runs while the page is visible.
+ */
+export const RUNTIME_CONFIG_FALLBACK_MS = 60_000
 export function startRuntimeConfigWatch(): () => void {
   void refreshRuntimeConfig()
+  let last = Date.now()
+  const refresh = () => { last = Date.now(); void refreshRuntimeConfig() }
   const onVis = () => {
-    if (document.visibilityState === 'visible') void refreshRuntimeConfig()
+    if (document.visibilityState === 'visible' && Date.now() - last > 1000) refresh()
   }
   document.addEventListener('visibilitychange', onVis)
-  const timer = window.setInterval(() => { void refreshRuntimeConfig() }, 2500)
+  window.addEventListener('focus', onVis)
+  const timer = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && Date.now() - last >= RUNTIME_CONFIG_FALLBACK_MS - 50) refresh()
+  }, RUNTIME_CONFIG_FALLBACK_MS)
   return () => {
     document.removeEventListener('visibilitychange', onVis)
+    window.removeEventListener('focus', onVis)
     window.clearInterval(timer)
   }
 }

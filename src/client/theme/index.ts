@@ -4,6 +4,8 @@ export {
   getActiveTheme,
   themeToStyle,
   isHostDarkTheme,
+  hostColorScheme,
+  subscribeHostScheme,
   subscribeActiveTheme,
   setCustomTokens,
   getCustomTokens,

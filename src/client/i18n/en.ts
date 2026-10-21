@@ -69,7 +69,7 @@ export const EN = {
 
   'tpl.dashboard.name': 'Project dashboard',
   'tpl.dashboard.desc': 'Core metrics on one card: numbers, deltas and a progress bar — the decision at a glance.',
-  'tpl.dashboard.instruction': 'Use dsh-ui to build a dashboard for this project: 4 key-metric stat cards (with deltas), an overall progress bar, and a list of today’s 3 todos. Title it “Project dashboard”.',
+  'tpl.dashboard.instruction': 'Build one ```iui-html page as a dashboard for this project: a hero metric (big number + change) on top, then 4 key-metric cards with deltas, an overall progress bar and today’s 3 to-dos (checkable). Title it “Project dashboard”.',
   'tpl.dashboard.demo.title': 'Project dashboard (example)',
   'tpl.dashboard.demo.metrics': 'This week’s key metrics',
   'tpl.dashboard.demo.done': 'Completed',
@@ -85,7 +85,7 @@ export const EN = {
 
   'tpl.compare.name': 'Option comparison cards',
   'tpl.compare.desc': 'Side-by-side option cards with ring metrics — contested tradeoffs jump out.',
-  'tpl.compare.instruction': 'Use dsh-ui to turn these options into side-by-side comparison cards (grid+card+stat.ring), not a table: one card per option with cost/risk/payoff rings; add a callout stating the conclusion.',
+  'tpl.compare.instruction': 'Build one ```iui-html page that puts these options side by side as comparison cards (not a table): one card per option with cost / risk / benefit rings, a one-line verdict on top and the recommended option highlighted.',
   'tpl.compare.demo.title': 'Option comparison (example)',
   'tpl.compare.demo.conclusion': 'Conclusion',
   'tpl.compare.demo.body': 'Option B wins overall: medium cost, low complexity, low risk.',
@@ -105,7 +105,7 @@ export const EN = {
 
   'tpl.steps.name': 'Five-step walkthrough',
   'tpl.steps.desc': 'Key steps on a timeline, one line each — for tutorials, handovers and release runbooks.',
-  'tpl.steps.instruction': 'Use dsh-ui to turn the procedure into a steps walkthrough: 5 steps following the real flow, each with a title and a line or two of detail, with a badge at the top showing the expected duration.',
+  'tpl.steps.instruction': 'Build one ```iui-html page that turns the procedure into a step-by-step walkthrough: 5 steps following the real flow, each with a title and a line or two, Next / Back navigation and the estimated time on top.',
   'tpl.steps.demo.title': 'Getting started (example)',
   'tpl.steps.demo.badge': 'About 5 minutes',
   'tpl.steps.demo.s1': 'Install the plugin',
@@ -121,7 +121,7 @@ export const EN = {
 
   'tpl.quiz.name': 'Pop quiz',
   'tpl.quiz.desc': 'Graded the moment you answer: right or wrong plus an explanation — good for training.',
-  'tpl.quiz.instruction': 'Use dsh-ui to write 3 pop-quiz questions (quiz component: question + options, exactly one correct, each with an explanation), titled “Pop quiz”, graded as soon as an option is picked.',
+  'tpl.quiz.instruction': 'Build one ```iui-html page with a 3-question pop quiz: each question has options (exactly one correct), shows right / wrong and an explanation as soon as you pick, and a final score. Title it “Pop quiz”.',
   'tpl.quiz.demo.title': 'Pop quiz (example)',
   'tpl.quiz.demo.hint': 'Picking an option grades it instantly and reveals the explanation.',
   'tpl.quiz.demo.q1': 'What is the smallest unit of a DSH plugin?',
@@ -144,7 +144,7 @@ export const EN = {
 
   'tpl.stats.name': 'Key figures + progress',
   'tpl.stats.desc': 'Numbers, progress and milestones in one delivery — the standard weekly report.',
-  'tpl.stats.instruction': 'Use dsh-ui to summarize this week: a keyvalue block with 3 key figures, two progress bars (planned vs actual), and a timeline with 3 milestones. Title it “Weekly snapshot”.',
+  'tpl.stats.instruction': 'Build one ```iui-html page summarising this week: 3 key figures, two progress comparisons (planned vs actual) and a timeline with 3 milestones. Title it “Weekly at a glance”.',
   'tpl.stats.demo.title': 'Weekly snapshot (example)',
   'tpl.stats.demo.done': 'Completed',
   'tpl.stats.demo.late': 'Late',
@@ -161,13 +161,13 @@ export const EN = {
 
   'tpl.chart.name': 'Trend chart',
   'tpl.chart.desc': 'Data drawn straight into a chart — multiple series, trend visible at a glance.',
-  'tpl.chart.instruction': 'Use dsh-ui to plot this data as a chart (bars, multi-series): completed vs planned over the last 6 weeks, with a one-line trend conclusion above the chart.',
+  'tpl.chart.instruction': 'Build one ```iui-html page that plots this data as a multi-series bar chart: completed vs planned over the last 6 weeks, a one-line trend takeaway above it and a toggle for each series.',
   'tpl.chart.demo.title': 'Trend comparison (example)',
   'tpl.chart.demo.conclusion': 'Conclusion: completions rose 3 weeks running and overtook plan for the first time this week.',
 
   'tpl.tabs.name': 'Tabbed sections',
   'tpl.tabs.desc': 'A big block split into tabs: clear anchors, an uncluttered panel, no transcript spam.',
-  'tpl.tabs.instruction': 'Use dsh-ui to split the content into three tabs: Overview / Details / FAQ, at most 3 points per tab. Title it “Feature tour”.',
+  'tpl.tabs.instruction': 'Build one ```iui-html page that splits the content into three tabs: Overview / Details / FAQ, at most 3 points per tab. Title it “Feature tour”.',
   'tpl.tabs.demo.title': 'Feature tour (example)',
   'tpl.tabs.demo.overview': 'Overview',
   'tpl.tabs.demo.overviewBody': 'Three capabilities: live rendering, action round-trips, and a persistent panel.',
@@ -179,7 +179,7 @@ export const EN = {
 
   'tpl.checklist.name': 'Release checklist',
   'tpl.checklist.desc': 'Tick every box before you ship: the list is the process, and gaps are visible.',
-  'tpl.checklist.instruction': 'Use dsh-ui to build a release checklist: 6 tickable checkbox items (tests / docs / release / rollback / monitoring / announcement), with a badge at the top reading “Tick everything before merging”.',
+  'tpl.checklist.instruction': 'Build one ```iui-html page with a release checklist: 6 tickable items (tests / docs / release / rollback / monitoring / announcement), a completion meter and the hint “Tick everything before merging” until all are done.',
   'tpl.checklist.demo.title': 'Release checklist (example)',
   'tpl.checklist.demo.badge': 'Tick everything before merging',
   'tpl.checklist.demo.c1': 'Unit tests pass',
@@ -189,7 +189,7 @@ export const EN = {
 
   'tpl.accordion.name': 'FAQ accordion',
   'tpl.accordion.desc': 'Questions and answers folded away: long documents get short and answers stop intimidating.',
-  'tpl.accordion.instruction': 'Use dsh-ui to build an FAQ accordion: 5 common questions, the question as the header and the answer inside, with the first one expanded by default.',
+  'tpl.accordion.instruction': 'Build one ```iui-html page with an FAQ accordion: 5 common questions as headers with the answers inside, the first one open by default, plus a search filter.',
   'tpl.accordion.demo.title': 'FAQ (example)',
   'tpl.accordion.demo.q1': 'Which chart types are supported?',
   'tpl.accordion.demo.a1': 'chart (bars/line/donut), plot for function graphs, and echart for the full chart library.',
@@ -200,7 +200,7 @@ export const EN = {
 
   'tpl.diagram.name': 'System architecture',
   'tpl.diagram.desc': 'Architecture drawn as SVG: layered nodes, real edges, labelled zones — clearer than a screenshot.',
-  'tpl.diagram.instruction': 'Use dsh-ui to draw an architecture diagram: 5 nodes of this system and their connections (kind: architecture or flowchart), including one security zone.',
+  'tpl.diagram.instruction': 'Build one ```iui-html page with an architecture diagram: 5 nodes of this system and their connections, some grouped in a “trust zone”, and a short description when a node is clicked.',
   'tpl.diagram.demo.title': 'Architecture (example)',
   'tpl.diagram.demo.caption': 'DSH plugin path',
   'tpl.diagram.demo.model': 'Model',
@@ -209,14 +209,14 @@ export const EN = {
 
   'tpl.3d.name': '3D scene',
   'tpl.3d.desc': 'A rotatable 3D scene — for product demos and spatial explanations.',
-  'tpl.3d.instruction': 'Use dsh-ui to render a 3D scene (scene3d): a cube and a sphere, titled “Example scene”, with a sentence on when to use it.',
+  'tpl.3d.instruction': 'Build one ```iui-html page with a draggable 3D scene: a cube and a sphere, titled “Example scene”, with a sentence on when to use it.',
   'tpl.3d.demo.title': '3D scene (example)',
   'tpl.3d.demo.note': 'The first load downloads three.js (~700KB, lazily); afterwards it comes from cache.',
   'tpl.3d.demo.scene': 'Example scene',
 
   'tpl.breadcrumb.name': 'Path breadcrumb',
   'tpl.breadcrumb.desc': 'Long paths as breadcrumbs: file location and org hierarchy read instantly.',
-  'tpl.breadcrumb.instruction': 'Use dsh-ui to show the current workspace layout: a breadcrumb for the file path (4 segments) and a file-tree of the project (3 directories, 2 children each).',
+  'tpl.breadcrumb.instruction': 'Build one ```iui-html page showing the workspace layout: a breadcrumb for the file path (4 segments) and a collapsible project tree (3 folders with 2 items each).',
   'tpl.breadcrumb.demo.title': 'Directory layout (example)',
   'tpl.breadcrumb.demo.workspace': 'Workspace',
 
@@ -430,7 +430,7 @@ export const EN = {
   'appearance.radius.standard': 'Standard',
   'appearance.radius.round': 'Round',
   'appearance.scheme': 'Colour scheme',
-  'appearance.scheme.auto': 'Auto',
+  'appearance.scheme.auto': 'Follow app',
   'appearance.scheme.light': 'Light',
   'appearance.scheme.dark': 'Dark',
   'appearance.reset': 'Reset',
@@ -491,4 +491,15 @@ export const EN = {
 'next.label': 'Next:',
 'next.aria': 'Suggested edits',
 'starter.aria': 'Try one of these',
+// S6: my templates
+'tpl.category.mine': 'My templates',
+'tpl.mine.badge': 'Mine',
+'tpl.mine.empty': 'No templates of your own yet. Use “Save as template” in a page’s ⋯ menu.',
+'tpl.mine.delete': 'Delete',
+'tpl.mine.deleted': 'Deleted',
+'tpl.mine.preview': 'Page source (sent to the model together with your request)',
+'sandbox.saveTemplate': 'Save as template',
+'sandbox.templateSaved': 'Saved to My templates',
+'sandbox.templateSavedLocal': 'Saved to My templates (this browser only)',
+'sandbox.templateFailed': 'Could not save: page too large or template list full',
 } as const

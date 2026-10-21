@@ -23,6 +23,8 @@ export interface AppearancePanelProps {
   onSaveDefault: () => void
   onBack: () => void
   savingNote?: string | null
+  /** Settings → IUI → 外观: no back header / reset / save row (the page owns them). */
+  embedded?: boolean
 }
 
 const PANEL: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px 4px', width: 236 }
@@ -88,11 +90,13 @@ export function AppearancePanel(props: AppearancePanelProps): ReactElement {
   const set = (patch: Partial<PageAppearance>) => onChange({ ...value, ...patch })
   const custom = value.accent !== null && !ACCENT_PRESETS.some((p) => p.hex.toLowerCase() === value.accent?.toLowerCase())
   return (
-    <div style={PANEL} data-iui-appearance-panel="1">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button type="button" style={{ ...SEG_BTN, flex: 'none', padding: '2px 6px' }} aria-label={t('appearance.back')} onClick={props.onBack}>‹</button>
-        <strong style={{ fontSize: 13 }}>{t('sandbox.appearance')}</strong>
-      </div>
+    <div style={props.embedded ? { ...PANEL, width: 'auto', maxWidth: 320, padding: 0 } : PANEL} data-iui-appearance-panel={props.embedded ? 'embedded' : '1'}>
+      {!props.embedded && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button type="button" style={{ ...SEG_BTN, flex: 'none', padding: '2px 6px' }} aria-label={t('appearance.back')} onClick={props.onBack}>‹</button>
+          <strong style={{ fontSize: 13 }}>{t('sandbox.appearance')}</strong>
+        </div>
+      )}
       <div>
         <div style={LABEL}>{t('appearance.accent')}</div>
         <div style={ROW} role="radiogroup" aria-label={t('appearance.accent')} data-iui-appearance-group="accent">
@@ -181,14 +185,14 @@ export function AppearancePanel(props: AppearancePanelProps): ReactElement {
           { id: 'dark', label: t('appearance.scheme.dark') },
         ]}
       />
-      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+      {!props.embedded && <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
         <button type="button" style={{ ...ACTION, opacity: props.customized ? 1 : 0.5 }} disabled={!props.customized} onClick={props.onReset} data-iui-appearance-reset="1">
           {t('appearance.reset')}
         </button>
         <button type="button" style={{ ...ACTION, flex: 1.6 }} onClick={props.onSaveDefault} data-iui-appearance-save-default="1">
           {props.savingNote ?? t('appearance.saveDefault')}
         </button>
-      </div>
+      </div>}
     </div>
   )
 }

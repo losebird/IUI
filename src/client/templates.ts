@@ -25,7 +25,7 @@ export const TEMPLATE_CATEGORIES = [
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number]
 
 /** Dictionary key carrying a category's display name. */
-export function categoryLabelKey(category: TemplateCategory | 'all'): string {
+export function categoryLabelKey(category: TemplateCategory | 'all' | 'mine'): string {
   return `tpl.category.${category}`
 }
 
