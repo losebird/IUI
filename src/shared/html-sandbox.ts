@@ -3119,15 +3119,16 @@ function buildChartGuardScript(): string {
             var ch = ctx && ctx.chart, a = ch && ch.chartArea;
             if (!a || !ch.ctx || !ch.ctx.createLinearGradient) return alpha(c, 0.12);
             var g = ch.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-            g.addColorStop(0, alpha(c, 0.24)); g.addColorStop(1, alpha(c, 0));
+            g.addColorStop(0, alpha(c, 0.28)); g.addColorStop(1, alpha(c, 0));
             return g;
           } : alpha(c, 0.12);
-          var many = Array.isArray(d.data) && d.data.length > 12;
-          if (d.pointRadius == null) d.pointRadius = many ? 0 : 3;
+          // R5-2: single series fills to the floor; points only at the latest value (hover shows the rest).
+          if (t === 'line' && d.fill == null && ds.length === 1) d.fill = 'start';
+          if (d.pointRadius == null) d.pointRadius = t === 'line' ? function (ctx) { var n = ctx && ctx.dataset && ctx.dataset.data ? ctx.dataset.data.length : 0; return ctx && ctx.dataIndex === n - 1 ? 3.5 : 0; } : 3;
           if (d.pointHoverRadius == null) d.pointHoverRadius = 5;
           if (d.pointBackgroundColor == null) d.pointBackgroundColor = tok('--color-background-primary', '#ffffff');
           if (d.pointBorderWidth == null) d.pointBorderWidth = 2;
-          if (d.borderWidth == null) d.borderWidth = 2;
+          if (d.borderWidth == null) d.borderWidth = t === 'line' ? 2.5 : 2;
           if (t === 'line' && d.tension == null) d.tension = 0.35;
         } else {
           d.backgroundColor = c; d.borderColor = c;
@@ -3282,7 +3283,7 @@ function buildEchartsGuardScript(): string {
       categoryAxis: Object.assign({}, axis, { axisTick: { show: false }, splitLine: { show: false } }),
       valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } }),
       timeAxis: axis, logAxis: Object.assign({}, axis, { axisLine: { show: false } }),
-      line: { smooth: 0.35, symbol: 'emptyCircle', symbolSize: 6, lineStyle: { width: 2 } },
+      line: { smooth: 0.35, symbol: 'emptyCircle', symbolSize: 7, showSymbol: false, lineStyle: { width: 2.5 } },
       bar: { barMaxWidth: 40, itemStyle: { borderRadius: [6, 6, 0, 0] } }
     };
   }
@@ -3862,7 +3863,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
       title: '排序可视化',
       height: 360,
       placeholder: '准备动画…',
-      css: '.wrap{display:flex;flex-direction:column;gap:12px}.bars{display:flex;align-items:flex-end;gap:6px;height:200px;padding:12px 12px 0;border-radius:var(--border-radius-lg);background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary)}.bar{flex:1;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;color:var(--on-accent,#fff);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--accent-fill,var(--iui-pack-accent));border-radius:6px 6px 0 0;transition:height .2s ease,background .2s ease}.bar.active{background:var(--iui-pack-warn,#d97706)}.bar.done{background:var(--iui-pack-ok,#16a34a)}.stats{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}.stats b{font-size:20px;font-variant-numeric:tabular-nums;margin-right:4px}',
+      css: '.wrap{display:flex;flex-direction:column;gap:12px}.bars{display:flex;align-items:flex-end;gap:6px;height:200px;padding:12px 12px 0;border-radius:var(--border-radius-lg);background:var(--color-background-secondary)}.bar{flex:1;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;color:var(--on-accent,#fff);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--accent-fill,var(--iui-pack-accent));border-radius:6px 6px 0 0;transition:height .2s ease,background .2s ease}.bar.active{background:var(--iui-pack-warn,#d97706)}.bar.done{background:var(--iui-pack-ok,#16a34a)}.stats{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}.stats b{font-size:20px;font-variant-numeric:tabular-nums;margin-right:4px}',
       html: '<div class="iui-sandbox-card wrap"><div class="iui-sandbox-toolbar"><strong>冒泡排序</strong><button type="button" class="primary" id="run">开始</button><button type="button" class="secondary" id="shuffle">打乱</button><button type="button" data-iui-send-prompt="再做一个选择排序可视化">继续问</button></div><div class="bars" id="bars" aria-label="待排序的柱子"></div><div class="stats"><span><b id="cmp">0</b>次比较</span><span><b id="swp">0</b>次交换</span><span class="iui-sandbox-muted" id="hint">本地动画，不调模型</span></div></div>',
       js: 'var arr=[4,7,2,9,1,5,8,3],busy=false,cmp=0,swp=0;function stat(){document.getElementById("cmp").textContent=cmp;document.getElementById("swp").textContent=swp}function paint(active){var el=document.getElementById("bars");el.innerHTML="";var max=Math.max.apply(null,arr);arr.forEach(function(v,i){var d=document.createElement("div");d.className="bar"+(active===i||active===i-1?" active":"");d.style.height=Math.max(24,(v/max)*180)+"px";d.textContent=v;el.appendChild(d)});stat()}function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}async function bubble(){if(busy)return;busy=true;cmp=0;swp=0;var a=arr.slice();var fast=window.iuiSandbox&&window.iuiSandbox.reducedMotion;for(var i=0;i<a.length;i++){for(var j=0;j<a.length-i-1;j++){arr=a;cmp++;paint(j+1);if(!fast)await sleep(120);if(a[j]>a[j+1]){var t=a[j];a[j]=a[j+1];a[j+1]=t;swp++}}}arr=a;paint(-9);document.querySelectorAll(".bar").forEach(function(b){b.classList.add("done")});busy=false;window.iuiSandbox.action("sort_done",{arr:arr})}document.getElementById("run").onclick=bubble;document.getElementById("shuffle").onclick=function(){if(busy)return;cmp=0;swp=0;arr=arr.map(function(){return 1+Math.floor(Math.random()*9)});paint(-9)};paint(-9);',
       stages: ['placeholder','css','html','js'],

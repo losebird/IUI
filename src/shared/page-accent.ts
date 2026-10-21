@@ -69,7 +69,7 @@ export function deriveAccentSet(raw: string, scheme: 'light' | 'dark'): AccentSe
       accent: ensureContrast(hex, LIGHT_SURFACE, '#000000'),
       fill,
       strong: mixHex(fill, '#000000', 0.18),
-      soft: mixHex(hex, LIGHT_SURFACE, 0.88),
+      soft: mixHex(hex, LIGHT_SURFACE, 0.9),
       onAccent: inkFor(fill),
     }
   }
@@ -79,7 +79,7 @@ export function deriveAccentSet(raw: string, scheme: 'light' | 'dark'): AccentSe
     accent,
     fill,
     strong: mixHex(fill, '#ffffff', 0.18),
-    soft: mixHex(hex, DARK_SURFACE, 0.72),
+    soft: mixHex(hex, DARK_SURFACE, 0.8),
     onAccent: inkFor(fill),
   }
 }

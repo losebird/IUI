@@ -179,6 +179,7 @@ export function buildMotionRuntimeScript(opts: { streaming: boolean }): string {
     var root = rootEl();
     if (!root) return;
     M.passes++;
+    segScan();
     var motion = !reduce();
     var top = units(root);
     var idx = 0;
@@ -257,11 +258,37 @@ export function buildMotionRuntimeScript(opts: { streaming: boolean }): string {
     // Keep entrance keys in sync so a later streaming pass does not replay swapped blocks.
     try { var root = rootEl(); if (root) { var top = units(root); var l = top.children; for (var q = 0; q < l.length && q < 80; q++) M.seen[keyOf(l[q], root)] = 1; } } catch (e) {}
   }
+  // 2b. toggle groups → segmented control. A parent whose children are 2–6 short buttons, one of which
+  // carries a pressed / selected / active state, gets data-iui-seg (styled by the polish layer).
+  var SEG_ON = '[aria-pressed],[aria-selected=true],[aria-current=true],button.active,button.selected,button.on,button.is-active,button.current';
+  function segScan() {
+    try {
+      var hits = document.body.querySelectorAll(SEG_ON);
+      for (var i = 0; i < hits.length && i < 80; i++) {
+        var b = hits[i];
+        if (b.tagName !== 'BUTTON') continue;
+        var p = b.parentElement;
+        if (!p || p.hasAttribute('data-iui-seg') || p.__iuiSegNo || skipZone(p)) continue;
+        if (p.matches('.iui-actions,.iui-sandbox-tabbar,.iui-map-chrome,.iui-cards-strip,[role=tablist],form') || p === rootEl()) { p.__iuiSegNo = 1; continue; }
+        var kids = p.children, ok = kids.length >= 2 && kids.length <= 6;
+        for (var k = 0; ok && k < kids.length; k++) {
+          var c = kids[k];
+          var txt = (c.textContent || '').trim();
+          if (c.tagName !== 'BUTTON' || !txt || txt.length > 10 || c.children.length > 1) ok = false;
+        }
+        if (ok) p.setAttribute('data-iui-seg', '1'); else p.__iuiSegNo = 1;
+      }
+    } catch (e) {}
+  }
+  var segQueued = false;
+  function queueSeg() { if (segQueued) return; segQueued = true; setTimeout(function () { segQueued = false; segScan(); }, 60); }
+
   // 3b. panels revealed by a click (tabs / segmented views toggling hidden, data-active, class…)
   function strip(c) { return String(c || '').split(' ').filter(function (x) { return x && x.indexOf('iui-') !== 0; }).sort().join(' '); }
   function shown(el) { return el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'; }
   var attrObs = null;
   function onAttrs(list) {
+    queueSeg();
     if (Date.now() - M.lastUser >= 600 || reduce()) return;
     var hit = 0, done = [];
     for (var i = 0; i < list.length && i < 40 && hit < 6; i++) {

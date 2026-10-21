@@ -32,7 +32,7 @@ export const OIU_THEME_CSS = `
 
   --color-border-primary: rgba(0, 0, 0, 0.4);
   --color-border-secondary: rgba(0, 0, 0, 0.3);
-  --color-border-tertiary: rgba(0, 0, 0, 0.15);
+  --color-border-tertiary: rgba(0, 0, 0, 0.12);
   --color-border-info: #185FA5;
   --color-border-danger: #A32D2D;
   --color-border-success: #3B6D11;
@@ -568,8 +568,7 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 .iui-weather-hero {
   display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
   padding: 18px 20px; border-radius: var(--border-radius-xl);
-  background: linear-gradient(135deg, var(--color-background-info), var(--color-background-secondary));
-  border: 1px solid var(--color-border-tertiary);
+  background: linear-gradient(135deg, var(--accent-soft, var(--color-background-info)), var(--color-background-secondary));
 }
 .iui-weather-hero .temp {
   font-size: 56px; font-weight: 700; letter-spacing: -0.04em; line-height: 1;
@@ -579,9 +578,8 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 .iui-weather-hero .icon { font-size: 42px; line-height: 1; }
 .iui-weather-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .iui-weather-chip {
-  padding: 8px 12px; border-radius: 999px;
-  background: var(--color-background-secondary);
-  border: 1px solid var(--color-border-tertiary);
+  padding: 6px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-background-primary) 72%, transparent);
   font-size: 12px; color: var(--color-text-secondary);
 }
 .iui-weather-chip strong { color: var(--color-text-primary); font-weight: 600; margin-left: 4px; }
@@ -590,13 +588,14 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 .iui-weather-day {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 10px 4px; border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-tertiary);
-  background: var(--color-background-primary); cursor: pointer; font: inherit; color: inherit;
+  border: 1px solid transparent;
+  background: var(--color-background-secondary); cursor: pointer; font: inherit; color: inherit;
 }
+.iui-weather-day:hover { background: var(--color-background-tertiary, var(--color-background-secondary)); }
 .iui-weather-day[aria-current="true"] {
-  border-color: var(--color-border-info);
-  background: var(--color-background-info);
-  box-shadow: 0 0 0 1px var(--color-border-info);
+  border-color: var(--accent-fill);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent-fill);
 }
 .iui-weather-day .wd { font-size: 12px; font-weight: 600; }
 .iui-weather-day .dt { font-size: 12px; color: var(--color-text-tertiary); }

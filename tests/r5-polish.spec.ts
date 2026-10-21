@@ -47,3 +47,25 @@ describe('R5-1 default polish + motion (zero author tokens)', () => {
     expect(doc).toContain("mode: 'index', intersect: false")
   })
 })
+
+describe('R5-2 visual corrections', () => {
+  it('segmented toggle groups, frosted map controls, accent selection, neutral secondary buttons', () => {
+    expect(OIU_POLISH_CSS).toContain('html [data-iui-seg]')
+    expect(OIU_POLISH_CSS).toContain('.iui-map-chrome > button')
+    expect(OIU_POLISH_CSS).toMatch(/\.iui-stop-card\[aria-current="true"\][^{]*\{\s*border-color: var\(--accent-fill\)/)
+    expect(OIU_POLISH_CSS).toMatch(/button\.secondary[^{]*\{\s*background: var\(--color-background-primary\); color: var\(--color-text-primary\)/)
+    expect(OIU_POLISH_CSS).toContain('.iui-tier.featured .iui-chip')
+    const rt = buildMotionRuntimeScript({ streaming: false })
+    expect(rt).toContain('data-iui-seg')
+    expect(rt).toContain('function segScan')
+  })
+
+  it('weather / itinerary starters lean on host theming (no hard-coded chart ink, localised controls)', () => {
+    const wx = HTML_SANDBOX_STARTERS.find((s) => s.id === 'weather-dense')!.spec
+    expect(wx.js).not.toContain('#5f5e58')
+    expect(wx.js).not.toContain("borderColor:'#185FA5'")
+    const it = HTML_SANDBOX_STARTERS.find((s) => s.id === 'itinerary-coast')!.spec
+    expect(it.html).toContain('>暂停<')
+    expect(it.html).not.toContain('>Pause<')
+  })
+})
