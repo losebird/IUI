@@ -216,6 +216,6 @@ describe('F24 plugin', () => {
   it('system prompt documents iui-patch within budget', () => {
     const text = buildGenuiSectionText()
     expect(text).toContain('```iui-patch')
-    expect(text.length).toBeLessThan(6500)
+    expect(text.length).toBeLessThan(4600)
   })
 })

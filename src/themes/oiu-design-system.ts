@@ -37,7 +37,8 @@ export const OIU_THEME_CSS = `
   --color-border-success: #3B6D11;
   --color-border-warning: #854F0B;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* G2: explicit CJK faces — system-ui alone falls back to SimSun on some Windows / Linux setups. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", Roboto, sans-serif;
   --font-serif: Georgia, "Times New Roman", serif;
   --font-mono: "SF Mono", "Fira Code", "Fira Mono", monospace;
 
@@ -52,11 +53,25 @@ export const OIU_THEME_CSS = `
   --fs-lg: 20px;
   --fs-xl: 28px;
   --fs-2xl: 40px;
+  /* G2 aliases + line heights (CJK body 1.65, Latin 1.5, headings 1.25). */
+  --text-xs: var(--fs-xs); --text-sm: var(--fs-sm); --text-base: var(--fs-md);
+  --text-lg: var(--fs-lg); --text-xl: var(--fs-xl); --text-2xl: var(--fs-2xl);
+  --lh-body: 1.65; --lh-latin: 1.5; --lh-heading: 1.25;
+
+  /* G2 spacing on a 4/8pt grid. */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
+
+  /* G2 elevation (1 = resting card, 2 = raised / hover, 3 = popover / sheet). */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
 
   /* D2 page accent (personality presets override it). */
   --accent: var(--color-text-info);
   --accent-soft: var(--color-background-info);
   --accent-fill: #185FA5;
+  --accent-strong: #124a80;
   --on-accent: #ffffff;
 
   --p: var(--color-text-primary);
@@ -85,8 +100,8 @@ export const OIU_THEME_CSS = `
   --iui-pack-radius: var(--border-radius-lg);
   --iui-pack-radius-sm: var(--border-radius-md);
   --iui-pack-radius-control: var(--border-radius-md);
-  --iui-pack-elev: 0 1px 2px rgba(0,0,0,0.04);
-  --iui-pack-elev-2: 0 4px 12px rgba(0,0,0,0.06);
+  --iui-pack-elev: var(--shadow-1);
+  --iui-pack-elev-2: var(--shadow-2);
   --dsl-g-fg: var(--color-text-primary);
   --dsl-g-bg: var(--color-background-primary);
   --dsl-g-surface: var(--color-background-primary);
@@ -98,6 +113,8 @@ export const OIU_THEME_CSS = `
   --iui-chart-4: #A32D2D;
   --iui-chart-5: #534AB7;
   --iui-chart-6: #0F6E56;
+  --iui-chart-7: #B4457A;
+  --iui-chart-8: #5F5E58;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -132,6 +149,20 @@ export const OIU_THEME_CSS = `
     --iui-pack-muted-fg-dark: #a8a69e;
     --iui-pack-border-dark: rgba(255, 255, 255, 0.15);
     --iui-pack-accent-dark: #85B7EB;
+
+    --accent-strong: #2a73bd;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.55);
+    /* G3: lighter series so charts stay readable on dark surfaces. */
+    --iui-chart-1: #85B7EB;
+    --iui-chart-2: #97C459;
+    --iui-chart-3: #EF9F27;
+    --iui-chart-4: #F09595;
+    --iui-chart-5: #AFA9EC;
+    --iui-chart-6: #5DCAA5;
+    --iui-chart-7: #ED93B1;
+    --iui-chart-8: #B4B2A9;
   }
 }
 `.trim()
@@ -243,7 +274,7 @@ html { background: transparent; }
 body {
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 1.7;
+  line-height: var(--lh-body, 1.65);
   color: var(--color-text-primary);
   background: transparent;
   -webkit-font-smoothing: antialiased;
@@ -358,6 +389,26 @@ a:hover { text-decoration: underline; }
 /* F25: Leaflet's 0.75rem chrome text renders ~10.5px — keep map labels, popups and tooltips at 12px. */
 body .leaflet-container { font-size: var(--fs-xs, 12px); }
 body .leaflet-popup-content, body .leaflet-tooltip { font-size: max(12px, 1em); }
+/* G3: Leaflet chrome on tokens (popup, tooltip, zoom / attribution controls). */
+.leaflet-container { font-family: var(--font-sans); background: var(--color-background-tertiary); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--color-background-primary); color: var(--color-text-primary); box-shadow: var(--shadow-3); }
+.leaflet-popup-content-wrapper { border-radius: var(--border-radius-lg); }
+.leaflet-popup-content { margin: 10px 14px; line-height: 1.5; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--color-text-secondary); }
+.leaflet-tooltip { background: var(--color-background-primary); color: var(--color-text-primary); border-color: var(--color-border-tertiary); border-radius: var(--border-radius-md); box-shadow: var(--shadow-2); }
+.leaflet-bar { border: 0.5px solid var(--color-border-tertiary) !important; border-radius: var(--border-radius-md) !important; box-shadow: var(--shadow-1) !important; overflow: hidden; }
+.leaflet-bar a, .leaflet-bar a:hover { background: var(--color-background-primary); color: var(--color-text-primary); border-bottom-color: var(--color-border-tertiary); }
+.leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--color-background-primary) 80%, transparent); color: var(--color-text-secondary); }
+.leaflet-container .leaflet-control-attribution a { color: var(--color-text-secondary); }
+/* G8: "hold Ctrl/⌘ to zoom" / "two fingers" hint for cooperative map gestures. */
+.iui-map-hint {
+  position: absolute; inset: 0; z-index: 1001; display: flex; align-items: center; justify-content: center;
+  padding: 16px; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.2s ease;
+  background: rgba(0, 0, 0, 0.42); color: #fff; font: 600 14px/1.4 var(--font-sans);
+}
+.iui-map-hint[data-on] { opacity: 1; }
+/* G8: horizontal scrollers keep the swipe instead of navigating / bouncing the chat. */
+.iui-cards-strip, .iui-sandbox-tabbar, .iui-scroll-x, .iui-table-scroll, [data-iui-scroll-x] { overscroll-behavior-x: contain; }
 [data-iui-map-style="mono"] .leaflet-tile-pane, .leaflet-container[data-iui-map-style="mono"] .leaflet-tile-pane {
   filter: grayscale(1) contrast(1.12) brightness(1.02);
 }
@@ -553,17 +604,23 @@ body .leaflet-popup-content, body .leaflet-tooltip { font-size: max(12px, 1em); 
   display: grid; gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-/* Chat bubbles are ~680px; 720px mq collapsed pricing to 1 col. Keep 3-col until phone-narrow. */
-@media (max-width: 480px) {
+/* G1: 3 columns in the chat column; phones (≤ 520px) stack the tiers. */
+@media (max-width: 520px) {
   .iui-compare-3 { grid-template-columns: 1fr; }
+  .iui-compare-3 > .iui-tier.featured { order: -1; }
 }
 .iui-kanban-3 {
   display: grid; gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
 }
-@media (max-width: 480px) {
-  .iui-kanban-3 { grid-template-columns: 1fr; }
+/* G1: phones (≤ 520px) swipe between kanban columns instead of squeezing three. */
+@media (max-width: 520px) {
+  .iui-kanban-3 {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+    padding-bottom: 6px; -webkit-overflow-scrolling: touch;
+  }
+  .iui-kanban-3 > .iui-kanban-col { flex: 0 0 82%; scroll-snap-align: start; }
 }
 .iui-kanban-col {
   display: flex; flex-direction: column; gap: 8px;
@@ -624,6 +681,10 @@ body .leaflet-popup-content, body .leaflet-tooltip { font-size: max(12px, 1em); 
 /** D1–D8 design kit: type scale, page personalities, stat, scroll hints, equal-height cards, code tools, 3D stage. */
 export const OIU_DESIGN_KIT_CSS = `
 /* D1 type scale: 12 / 14 / 16 / 20 / 28 / 40 — nothing below 12px. */
+/* G2: heading rhythm, Latin line height, aligned digits for numbers / prices / tables. */
+h1, h2, h3, h4 { line-height: var(--lh-heading, 1.25); }
+:lang(en) body { line-height: var(--lh-latin, 1.5); }
+.iui-stat-value, .iui-sandbox-kpi, .iui-kpi, .price, .num, [data-iui-num], td, th, time, progress + span { font-variant-numeric: tabular-nums; }
 h1 { font-size: var(--fs-lg); font-weight: 750; }
 h2 { font-size: var(--fs-md); font-weight: 700; }
 h3 { font-size: var(--fs-sm); font-weight: 650; }
@@ -710,6 +771,37 @@ table { font-size: var(--fs-sm); }
 .iui-stat.lg .iui-stat-value { font-size: var(--fs-2xl); }
 .iui-stat.sm .iui-stat-value { font-size: var(--fs-lg); }
 .iui-sandbox-kpi .value { font-variant-numeric: tabular-nums; }
+
+/* G5 hero + state components: one hero block, empty / loading / sample-data states. */
+.iui-hero {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-5) var(--space-5);
+  border-radius: var(--border-radius-xl); background: var(--accent-soft); color: var(--color-text-primary);
+}
+.iui-hero .iui-stat-value, .iui-hero-value { font-size: var(--fs-2xl); font-weight: 750; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.iui-hero-label { font-size: var(--fs-sm); color: var(--color-text-secondary); }
+.iui-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-7) var(--space-4); text-align: center; font-size: var(--fs-sm); color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border-secondary); border-radius: var(--border-radius-lg);
+}
+.iui-empty > strong, .iui-empty > b { font-size: var(--fs-md); color: var(--color-text-primary); }
+.iui-skeleton {
+  position: relative; overflow: hidden; min-height: 12px; border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary); color: transparent !important;
+}
+.iui-skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-background-primary) 65%, transparent), transparent);
+  animation: iuiSkeleton 1.4s ease-in-out infinite;
+}
+@keyframes iuiSkeleton { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .iui-skeleton::after { animation: none; } }
+.iui-badge-sample {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; vertical-align: middle;
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.6; color: var(--color-text-warning); background: var(--color-background-warning);
+}
+.iui-badge-sample:empty::before { content: "示例数据"; }
+:lang(en) .iui-badge-sample:empty::before { content: "Sample data"; }
 
 /* D4 horizontal scroll hints (bridge sets data-iui-scroll-fade="l r" + indicator vars). */
 [data-iui-scroll-fade] {
@@ -998,7 +1090,7 @@ export function buildTripAnimatorScriptTag(): string {
 export const OIU_DESIGN_SKILL = `
 The sandbox already includes a shared design system. Build on it — do NOT restyle from scratch.
 
-Colors (ALWAYS use CSS variables — never hardcode hex for text/backgrounds):
+Colors (use CSS variables for text/surfaces; one topic colour via the \`accent:\` header line):
 - Surfaces: --color-background-primary / secondary / tertiary
 - Text: --color-text-primary / secondary / tertiary
 - Semantic: --color-background-info|danger|success|warning + matching --color-text-* / --color-border-*
@@ -1020,15 +1112,15 @@ Stats: <div class="iui-stat"><div class="iui-stat-value">128<span class="unit">m
 Cards side by side: .iui-card-grid (equal height); .iui-card-title clamps to 2 lines, .iui-card-summary to 3; .iui-card-foot sticks to the bottom; .iui-clamp-1/2/3 helpers.
 Host auto-adds: edge fades + indicator on horizontal scrollers; 换行/复制 tools on <pre> (opt out: data-iui-no-tools).
 3D: canvas inside .iui-3d-wrap with a .iui-3d-loading placeholder; set data-iui-3d-ready on the wrap when the first frame renders.
-Three-point light (key casts soft shadow + fill + rim) + ShadowMaterial ground; fit the camera to the object's bounding sphere so it fills ≥ 40% of the frame;
+Three-point light (key casts soft shadow + fill + rim) + ShadowMaterial ground; fit the camera by projecting the mesh vertices (Box3 / bounding sphere are too loose) so the object fills ≥ 40% of the frame;
 OrbitControls from 'three/addons/controls/OrbitControls.js' with enableDamping.
 
 SVG diagrams: use .c-purple .c-teal .c-coral .c-pink .c-gray .c-blue .c-green .c-amber .c-red plus .box .node .arr .leader and text .t .ts .th.
 
 Layout helpers already injected:
 - .iui-itinerary / .iui-map-wrap / .iui-cards-strip / .iui-stop-card / .iui-chip / .iui-map-chrome
-- .iui-compare-3 / .iui-tier / .iui-tier.featured  (MUST be 3 side-by-side columns in chat bubbles)
-- .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards)
+- .iui-compare-3 / .iui-tier / .iui-tier.featured  (3 columns; stacks on phones ≤520px)
+- .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards; scroll horizontally on phones)
 - .iui-weather / .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days
 - .iui-actions  (right-aligned action footer: secondary buttons first, one button.primary last; full-width on phones)
 - .iui-cols-2 / .iui-cols-3 / .iui-cols-4  (equal columns with built-in breakpoints: 4→2 at ≤560px, all→1 at ≤480px; no horizontal overflow at 360px)
@@ -1039,7 +1131,7 @@ css parameter = widget-specific styles ONLY (theme/forms/SVG already loaded).
 Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat). Prefer host-injected UMD globals: Chart (chart.js) and L (Leaflet) — do NOT rely on import("chart.js") or import("leaflet") in srcdoc (flaky → blank charts/maps). Author JS is classic eval, not a module: never \`import … from\` or \`typeof import\`. Load Three with import('three').then(...) or an async IIFE await import('three'). Load other CDN libs inside async functions (no top-level await in classic js).
 
 ## Pattern — maps / multi-stop (Nanjing density, not a frozen city template)
-Lock DENSITY, not copy. Any map with 2+ places (trip, 探店, 一日游, 景点详解) MUST ship:
+Lock the structure, not the copy. Any map with 2+ places (trip, 探店, 一日游, 景点详解) MUST ship:
 1) REAL Leaflet in .iui-map-wrap (height 300px, colored muted basemap; data-iui-map-style="mono" only if asked). Pause/Replay chrome.
 2) Numbered L.divIcon pins (.iui-pin-dot, data-cat="food|sight|hotel|shop|nature|culture|transport" colors them; .active = selected → bigger, ringed, on top). Host spreads overlapping pins apart. createTripAnimator — do not invent timers. Filter null getElement() before pinElements.
 3) Horizontal .iui-cards-strip + .iui-stop-card (photo 110px + number + name + one-line). Extra cards SCROLL inside the first rounded frame (host sets min-width:0).
@@ -1063,7 +1155,7 @@ Optional only when the ask has the data: day timeline, lodging .iui-compare-3, b
   3) Host ALSO auto-fills .photo/.cover (strict well-known aliases + verified Wikipedia/Commons lookup, 300 m geo check)
      for .iui-stop-card / .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card / [data-iui-place].
      Model-invented Commons filenames are replaced when they 404. Prefer loading=eager on stop photos.
-     NEVER invent Unsplash/random hosts; NEVER use solid muted blocks as photo stand-ins.
+     NEVER invent Unsplash/random hosts; no photo → leave the band empty (host placeholder), never a grey block.
   Never invent live traffic/hours.
 
 ## Pattern — hotel / product / place covers (non-itinerary)
@@ -1071,13 +1163,13 @@ Use .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card with
 + .name (or data-iui-place="Tokyo"). Same Wikimedia rules as itinerary stops. Host enrich+fill applies.
 
 ## Pattern — pricing / compare (3 columns)
-Wrap tiers in <div class="iui-compare-3"> with three .iui-tier (one .featured). Each: plan name, .price + <small>/月</small>, feature <ul><li>, CTA button. NEVER stack three pricing cards vertically — host CSS keeps 3 columns down to ~480px.
+Wrap tiers in <div class="iui-compare-3"> with three .iui-tier (one .featured). Each: plan name, .price + <small>/月</small>, feature <ul><li>, CTA button. Three columns side by side; host CSS stacks them on phones (≤520px) with the featured tier first.
 
 ## Pattern — kanban board (3 columns)
-Use <div class="iui-kanban-3"> with three .iui-kanban-col (each .iui-kanban-col-title + .iui-kanban-card items). Move cards via buttons (local JS only). NEVER stack columns vertically in the chat bubble.
+Use <div class="iui-kanban-3"> with three .iui-kanban-col (each .iui-kanban-col-title + .iui-kanban-card items). Move cards via buttons (local JS only). On phones (≤520px) the host turns the board into a horizontal scroll-snap strip.
 
 ## Pattern — weather (dense dashboard)
-NEVER ship a thin 3-KPI strip. Required density:
+Hero first, then detail — a bare 3-KPI strip reads unfinished. Structure:
 1) Hero band (.iui-weather-hero): city+date, LARGE temp (≥48px), condition icon, high/low.
 2) Detail chips (.iui-weather-chip): feels-like, humidity, wind, AQI (or UV).
 3) Hourly Chart.js line in a fixed-height (~200px) wrapper (.iui-weather-chart) — use global Chart / window.iuiCreateChart(canvas, cfg) (UMD injected); maintainAspectRatio:false; never leave the canvas blank. Chart cfg MUST parse (var cfg={type,data,options:{scales:{x,y,y1}}}; — count the closing braces; a missing } before ; is SyntaxError Unexpected token ';' ; closing the object with ) instead of } is Unexpected token ')').

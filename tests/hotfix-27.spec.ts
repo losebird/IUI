@@ -74,7 +74,7 @@ describe('.27 round 6: format + repair', () => {
   })
   it('system prompt is the compact section-format contract', async () => {
     const { GENUI_SECTION_TEXT } = await import('../src/plugin/section-text.ts')
-    expect(GENUI_SECTION_TEXT.length).toBeLessThan(6500)
+    expect(GENUI_SECTION_TEXT.length).toBeLessThan(4600)
     expect(GENUI_SECTION_TEXT).toContain('---js')
     expect(GENUI_SECTION_TEXT).toMatch(/NO network data/)
     expect(GENUI_SECTION_TEXT).toMatch(/never below 12px/)

@@ -30,6 +30,7 @@
  */
 
 import type { HtmlSandboxSpec } from './html-sandbox.ts'
+import { normalizeAccent } from './page-accent.ts'
 
 export type SandboxPatchOp =
   | { kind: 'css' | 'css-replace' | 'js' | 'js-replace' | 'html-replace'; content: string }
@@ -42,6 +43,8 @@ export type SandboxPatch = {
   page?: string
   /** Optional new title for the merged version. */
   title?: string
+  /** G2: optional new page accent (`accent: #hex`). */
+  accent?: string
   ops: SandboxPatchOp[]
   /** Parse problems (e.g. `---find` without `---with`). */
   errors: string[]
@@ -51,6 +54,7 @@ export type SandboxPatch = {
 export type SandboxPage = {
   id?: string
   title?: string
+  accent?: string
   height?: number
   css: string
   html: string
@@ -67,7 +71,7 @@ export type SandboxPatchResult = {
 }
 
 const OP_HEADER = /^---\s*(css-replace|js-replace|html-replace|css|js|replace|append|prepend|before|after|remove|find|with)\b\s*(.*)$/iu
-const META = /^(page|id|title)\s*[:：]\s*(.+)$/iu
+const META = /^(page|id|title|accent)\s*[:：]\s*(.+)$/iu
 const SELECTOR_OPS = new Set(['replace', 'append', 'prepend', 'before', 'after', 'remove'])
 const MAX_OPS = 40
 
@@ -121,12 +125,13 @@ export function parseSandboxPatch(raw: string): SandboxPatch | null {
       const key = meta[1]!.toLowerCase()
       const value = meta[2]!.trim().slice(0, 80)
       if (key === 'title') patch.title = value
+      else if (key === 'accent') { const a = normalizeAccent(value); if (a) patch.accent = a }
       else patch.page = value
     }
   }
   flush()
   if (pendingFind !== null) patch.errors.push('---find without ---with')
-  if (patch.ops.length === 0 && patch.errors.length === 0) return null
+  if (patch.ops.length === 0 && patch.errors.length === 0 && patch.accent === undefined) return null
   return patch
 }
 
@@ -228,6 +233,7 @@ export function pageFromSpec(spec: HtmlSandboxSpec): SandboxPage {
   return {
     ...(spec.id ? { id: spec.id } : {}),
     ...(spec.title ? { title: spec.title } : {}),
+    ...(spec.accent ? { accent: spec.accent } : {}),
     ...(spec.height !== undefined ? { height: spec.height } : {}),
     css: spec.css,
     html: spec.html,
@@ -285,6 +291,7 @@ export function applySandboxPatch(base: SandboxPage, patch: SandboxPatch): Sandb
     }
   }
   if (patch.title) page.title = patch.title
+  if (patch.accent) { page.accent = patch.accent; applied++ }
   return { ok: errors.length === 0 && applied > 0, page, applied, errors }
 }
 
@@ -293,6 +300,7 @@ export function serializeSandboxPage(page: SandboxPage): string {
   return JSON.stringify({
     ...(page.id ? { id: page.id } : {}),
     ...(page.title ? { title: page.title } : {}),
+    ...(page.accent ? { accent: page.accent } : {}),
     ...(page.height !== undefined ? { height: page.height } : {}),
     css: page.css,
     html: page.html,
@@ -323,6 +331,7 @@ export function pageSourceForPrompt(page: SandboxPage, max = 4000): string {
   const lines: string[] = []
   if (page.id) lines.push(`id: ${page.id}`)
   if (page.title) lines.push(`title: ${page.title}`)
+  if (page.accent) lines.push(`accent: ${page.accent}`)
   for (const [name, v] of parts) {
     if (v.trim() === '') continue
     const share = total <= budget ? v.length : Math.floor((v.length / total) * budget)

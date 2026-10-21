@@ -57,6 +57,6 @@ describe('F23 prompt', () => {
   it('asks for one primary action in an .iui-actions footer and real buttons', () => {
     expect(GENUI_SECTION_TEXT).toContain('`.iui-actions` footer')
     expect(GENUI_SECTION_TEXT).toContain('iuiSandbox.reducedMotion')
-    expect(GENUI_SECTION_TEXT.length).toBeLessThan(6500)
+    expect(GENUI_SECTION_TEXT.length).toBeLessThan(4600)
   })
 })

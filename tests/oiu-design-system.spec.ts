@@ -12,6 +12,7 @@ import {
   listHtmlSandboxStarters,
 } from '../src/shared/html-sandbox.ts'
 import { buildGenuiSectionText } from '../src/plugin/section-text.ts'
+import { buildPatternNote } from '../src/config/referee-rules.ts'
 
 describe('OIU design-system port', () => {
   it('exports theme + svg + form CSS with color tokens', () => {
@@ -90,7 +91,7 @@ describe('OIU design-system port', () => {
     const section = buildGenuiSectionText()
     expect(section).toContain('--color-background-primary')
     expect(section).toContain('createTripAnimator')
-    expect(section).toContain('iui-compare-3')
+    expect(buildPatternNote('做个三档定价页')).toContain('iui-compare-3')
     expect(section).toContain('Runnable author JS')
     expect(section).toContain('in-page')
     expect(section).toContain('window.iuiCreateChart')
@@ -100,7 +101,8 @@ describe('OIU design-system port', () => {
     expect(OIU_DESIGN_SKILL).toContain('Nanjing density')
     expect(OIU_DESIGN_SKILL).toContain('停留')
     expect(OIU_DESIGN_SKILL).toMatch(/避坑/)
-    expect(section).toContain('click-to-detail')
+    expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('click-to-detail')
+    expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('createTripAnimator(')
     expect(section).toContain('openLink(httpsUrl)')
     expect(OIU_DESIGN_SKILL).toMatch(/NEVER action\('sandbox_open_link'\)/)
   })

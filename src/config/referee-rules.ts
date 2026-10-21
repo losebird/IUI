@@ -188,7 +188,7 @@ export const INTENT_RULES: readonly IntentRule[] = [
       '(?:^|\\n)#{1,3}\\s*.*(地图|导航|路线)',
     ],
     successCriteria: [
-      '短 lead → ```iui-html 真 Leaflet。多站必须：灰阶地图 + 编号针 + 横滑站卡 + 点针/卡出详解（停留/票/怎么去/避坑）。',
+      '短 lead → ```iui-html 真 Leaflet。多站必须：彩色底图 + 编号针 + 横滑站卡 + 点针/卡出详解（停留/票/怎么去/避坑）。',
       '用 createTripAnimator；禁止纯文字道歉、只贴 URL、或只有针没有详情。',
     ],
     recipe: sb(
@@ -548,4 +548,90 @@ export function classifyIntentAsk(ask: string): IntentRule | null {
     }
   }
   return INTENT_RULES.find((rule) => rule.id === 'visual') ?? null
+}
+
+/**
+ * G6: page-type patterns moved out of the always-on system section. One note is
+ * injected as `[iui-pattern]` at step 0 when the ask loosely matches (askNeedsUi
+ * or an explicit page ask) — so the resident prompt stays short and cacheable.
+ */
+export interface PatternNote {
+  readonly id: string
+  readonly patterns: readonly string[]
+  /** Skip this note when one of these note ids already matched. */
+  readonly unless?: readonly string[]
+  readonly text: string
+}
+
+function askPatternsOf(...ids: string[]): string[] {
+  return ids.flatMap((id) => [...(getIntentRule(id)?.askPatterns ?? [])])
+}
+
+export const PATTERN_NOTES: readonly PatternNote[] = [
+  {
+    id: 'kanban',
+    patterns: ['kanban', '任务板', '任务看板', '看板.{0,6}(任务|待办|进度|泳道)', '(任务|待办|项目|进度).{0,6}看板', 'todo board', '待办'],
+    text: 'Kanban: .iui-kanban-3 > .iui-kanban-col > .iui-kanban-col-title (with a count) + .iui-kanban-card; move cards with ← → buttons (no drag-only); phones scroll the columns horizontally.',
+  },
+  {
+    id: 'map',
+    patterns: [...askPatternsOf('map'), '行程', '旅行', '旅游', '攻略', 'itinerary', 'trip'],
+    text: "Map / trip with 2+ places: real Leaflet in .iui-map-wrap (~300px, coloured basemap — no grayscale filter) with tiles `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}` (attribution 'Tiles © Esri'; invalidateSize after layout; wheel/touch gestures are handled by the host); numbered L.divIcon pins in --accent-fill; .iui-cards-strip of .iui-stop-card (photo + number + name + one line); click-to-detail: a pin or card opens an in-page detail panel (停留 / 票 / 怎么去 / 避坑). Optional `createTripAnimator({stopCount,durationMs:6000,pinElements,map,onFrame,onState})` → play/pause/replay/seek. Containers: .iui-itinerary / .iui-map-wrap / .iui-cards-strip > .iui-stop-card / .iui-chip. Photos: Wikimedia Commons HTTPS only (or get_trip_stop_images / get_place_images before the fence); never Unsplash/random hosts.",
+  },
+  {
+    id: 'weather',
+    patterns: askPatternsOf('weather'),
+    text: 'Weather: .iui-weather > .iui-weather-hero (city, ≥48px temp, icon, hi/lo) + .iui-weather-chip row (feels-like, humidity, wind, AQI/UV) + .iui-weather-chart (hourly Chart.js line) + .iui-weather-days > .iui-weather-day (7 days); clicking a day updates the hero. Sample data, badge it.',
+  },
+  {
+    id: 'compare',
+    patterns: [...askPatternsOf('compare'), '定价', '价格方案', '套餐', 'pricing', 'plans?'],
+    text: 'Pricing / plans: .iui-compare-3 with three .iui-tier (one .featured): name, .price + <small>/月</small>, <ul> features, CTA — 3 columns, phones stack. Two-option pros/cons: verdict on top, then two columns with the same rows so they line up.',
+  },
+  {
+    id: 'grid-table',
+    patterns: askPatternsOf('grid-table'),
+    text: "Sortable/filterable data table: `agGrid.createGrid(el,{columnDefs,rowData})`, el class `ag-theme-quartz ag-theme-iui`, few rows → domLayout:'autoHeight'. Not for itinerary budgets or 3-tier pricing.",
+  },
+  {
+    id: 'mindmap',
+    patterns: askPatternsOf('mindmap'),
+    text: 'Mindmap / flowchart: `<pre class="mermaid iui-mindmap">mindmap\\n  root((主题))…</pre>` then `mermaid.run()`.',
+  },
+  {
+    id: 'scene-3d',
+    patterns: ['3d', '三维', '立体', 'three(\\.js)?', 'webgl'],
+    text: "3D: inside a function `Promise.all([import('three'), import('three/addons/controls/OrbitControls.js')])`; key + fill + rim light, ShadowMaterial ground; fit the camera by projecting the mesh vertices (Box3/bounding sphere are too loose) so the object fills ≥40% of the frame; OrbitControls with damping; autoRotate only when not reducedMotion; renderer sized to the wrapper, pixelRatio ≤2.",
+  },
+  {
+    id: 'dashboard',
+    patterns: askPatternsOf('dashboard', 'resource'),
+    unless: ['kanban'],
+    text: 'Dashboard: .iui-hero with the headline metric + 3–4 .iui-sandbox-kpi (value, unit, ▲/▼ delta in semantic colour) + one main chart + a details list that filters when a KPI or chart point is clicked; a time-range segmented control is the primary control.',
+  },
+  {
+    id: 'form',
+    patterns: askPatternsOf('form', 'booking'),
+    text: 'Form / booking: labelled fields in 1–2 columns, inline validation under the field, a summary of the choice, one submit in `.iui-actions`; on submit show an in-page success state (no navigation).',
+  },
+]
+
+/** G6: pattern notes for an ask (max 2), or [] for plain / knowledge / opt-out asks. */
+export function patternNotesFor(ask: string, max = 2): PatternNote[] {
+  const text = ask.trim()
+  if (text.length === 0 || OPT_OUT_UI.test(text) || isPlainAsk(text) || isKnowledgeAsk(text)) return []
+  if (!isExplicitUiAsk(text) && !askNeedsUi(text)) return []
+  const out: PatternNote[] = []
+  for (const note of PATTERN_NOTES) {
+    if (out.length >= max) break
+    if (note.unless?.some((id) => out.some((o) => o.id === id))) continue
+    if (note.patterns.some((source) => safeRegExpTest(source, 'iu', text))) out.push(note)
+  }
+  return out
+}
+
+export function buildPatternNote(ask: string): string | null {
+  const notes = patternNotesFor(ask)
+  if (notes.length === 0) return null
+  return `[iui-pattern]\n${notes.map((n) => `- ${n.text}`).join('\n')}`
 }

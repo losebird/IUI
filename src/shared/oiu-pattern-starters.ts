@@ -116,14 +116,14 @@ const SCENE_3D_JS = `
     controls.enableDamping=true;controls.dampingFactor=0.08;
     var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
     controls.autoRotate=!still;controls.autoRotateSpeed=1.2;
-    // Auto-fit: the subject (object + plinth) is framed to ~90% of the frame by projecting its vertices, so the subject
+    // Auto-fit: the subject (object + plinth) is framed to ~93% of the frame by projecting its vertices, so the subject
     // (object + shadow) covers ≥ 40% of the canvas at any orbit angle (F25 template gate).
     function fit(){
       var box=new THREE.Box3().setFromObject(subject),c=box.getCenter(new THREE.Vector3());
       var sphere=box.getBoundingSphere(new THREE.Sphere());
       var dir=new THREE.Vector3(0.9,0.45,1.3).normalize(),d=sphere.radius*3,p=new THREE.Vector3();
       // Project the subject's actual vertices (a box is too loose) and pull the camera in until the
-      // silhouette spans ~90% of the frame.
+      // silhouette spans ~93% of the frame.
       var pts=[];
       subject.updateMatrixWorld(true);
       subject.traverse(function(m){
@@ -135,7 +135,7 @@ const SCENE_3D_JS = `
         camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();camera.updateMatrixWorld();
         var ext=0;
         for(var n=0;n<pts.length;n++){p.copy(pts[n]).project(camera);ext=Math.max(ext,Math.abs(p.x),Math.abs(p.y));}
-        d*=ext/0.9;
+        d*=ext/0.93;
       }
       camera.position.copy(c).addScaledVector(dir,d);
       camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();
@@ -227,7 +227,7 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   {
     id: 'itinerary-coast',
     title: '海岸行程（地图+播放+横滑+详解）',
-    summary: '灰阶 Leaflet、pin 落下、Pause/Replay、横滑站卡、点开停留/怎么去/避坑',
+    summary: '彩色 Leaflet、pin 落下、Pause/Replay、横滑站卡、点开停留/怎么去/避坑',
     spec: {
       title: '加州海岸三日',
       height: 560,

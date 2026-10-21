@@ -16,6 +16,7 @@ import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
 import { VENDOR_CDN_HOSTS, customCdnOrigin, getVendorSource, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
+import { normalizeAccent, pageAccentCss } from './page-accent.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
 /**
@@ -82,6 +83,8 @@ export type HtmlSandboxSpec = {
   title?: string
   /** F24: stable page identity across versions (`id:` header); falls back to the title. */
   id?: string
+  /** G2: optional page accent (`accent: #E4572E`); host derives a contrast-safe token set. */
+  accent?: string
   height?: number
   /** Streaming chrome placeholder (shown before css/html ready). */
   placeholder?: string
@@ -1215,15 +1218,15 @@ export function sanitizeSandboxMarkup(html: string): string {
     })
 }
 
-const SECTION_META = /^(title|height|placeholder|id|page)\s*[:：]\s*(.+)$/iu
+const SECTION_META = /^(title|height|placeholder|id|page|accent)\s*[:：]\s*(.+)$/iu
 
 function parseSections(raw: string): {
   sections: Record<'css' | 'html' | 'js', string>
   stages: Array<'css' | 'html' | 'js'>
   sawHeader: boolean
-  meta: { title?: string; height?: number; placeholder?: string; id?: string }
+  meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string }
 } {
-  const meta: { title?: string; height?: number; placeholder?: string; id?: string } = {}
+  const meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string } = {}
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
   const sections: Record<'css' | 'html' | 'js', string> = { css: '', html: '', js: '' }
   const stages: Array<'css' | 'html' | 'js'> = []
@@ -1255,6 +1258,7 @@ function parseSections(raw: string): {
         if (Number.isFinite(n)) meta.height = Math.min(1200, Math.max(120, n))
       } else if (key === 'title') meta.title = value
       else if (key === 'id' || key === 'page') meta.id = value.slice(0, 80)
+      else if (key === 'accent') { const a = normalizeAccent(value); if (a) meta.accent = a }
       else meta.placeholder = value
     }
   }
@@ -1437,6 +1441,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
         ...(jsExpressions && jsExpressions.length ? { jsExpressions } : {}),
         ...(typeof parsed.title === 'string' ? { title: parsed.title } : {}),
         ...(typeof parsed.id === 'string' && parsed.id.trim() ? { id: parsed.id.trim().slice(0, 80) } : {}),
+        ...(normalizeAccent(parsed.accent) ? { accent: normalizeAccent(parsed.accent)! } : {}),
         ...(height !== undefined ? { height } : {}),
       }
     } catch {
@@ -1460,6 +1465,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
       ...(meta.placeholder ? { placeholder: meta.placeholder } : {}),
       ...(meta.title ? { title: meta.title } : {}),
       ...(meta.id ? { id: meta.id } : {}),
+      ...(meta.accent ? { accent: meta.accent } : {}),
       ...(meta.height !== undefined ? { height: meta.height } : {}),
     }
   }
@@ -2342,6 +2348,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
           root.style.setProperty(key, val);
         }
       });
+      try { if (window.__iuiRethemeCharts) window.__iuiRethemeCharts(); } catch (eC) {}
+      try { if (window.__iuiRethemeEcharts) window.__iuiRethemeEcharts(); } catch (eE) {}
       measure();
     }
     if (data.type === 'bindings' && data.values && typeof data.values === 'object') {
@@ -2797,6 +2805,69 @@ function buildLeafletTileGuardScript(): string {
       };
       L.marker.__iuiCoordTap = true;
     }
+    // G8: cooperative gestures — a map never captures the chat's scroll wheel or one-finger swipe.
+    // Wheel zoom needs Ctrl/⌘ (or a click on the map first, until the pointer leaves); on touch
+    // screens one finger scrolls the page and two fingers move / zoom the map.
+    if (L.Map && L.Map.addInitHook && !L.Map.__iuiCoop) {
+      L.Map.__iuiCoop = true;
+      L.Map.addInitHook(function () {
+        var map = this;
+        try {
+          var el = map.getContainer();
+          if (!el || el.__iuiCoop) return;
+          el.__iuiCoop = 1;
+          var zh = /^zh/i.test(String((document.documentElement && document.documentElement.lang) || navigator.language || ''));
+          var mac = /Mac|iP(hone|ad|od)/.test(String(navigator.platform || navigator.userAgent || ''));
+          var coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+          if (map.scrollWheelZoom) map.scrollWheelZoom.disable();
+          if (coarse && map.dragging && map.options.iuiOneFingerDrag !== true) map.dragging.disable();
+          var hint = document.createElement('div');
+          hint.className = 'iui-map-hint';
+          hint.setAttribute('aria-hidden', 'true');
+          el.appendChild(hint);
+          var hideT = 0;
+          function show(text) {
+            hint.textContent = text;
+            hint.setAttribute('data-on', '1');
+            clearTimeout(hideT);
+            hideT = setTimeout(function () { hint.removeAttribute('data-on'); }, 1400);
+          }
+          var active = false;
+          el.addEventListener('click', function () {
+            if (active) return;
+            active = true;
+            if (map.scrollWheelZoom) map.scrollWheelZoom.enable();
+          });
+          el.addEventListener('mouseleave', function () {
+            if (!active) return;
+            active = false;
+            if (map.scrollWheelZoom) map.scrollWheelZoom.disable();
+          });
+          var lastZoom = 0;
+          el.addEventListener('wheel', function (ev) {
+            if (active) return;
+            if (ev.ctrlKey || ev.metaKey) {
+              ev.preventDefault();
+              var now = Date.now();
+              if (now - lastZoom < 160) return;
+              lastZoom = now;
+              try {
+                var pt = map.mouseEventToContainerPoint(ev);
+                var z = map.getZoom() + (ev.deltaY < 0 ? 1 : -1);
+                map.setZoomAround(pt, Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z)));
+              } catch (eZ) {}
+              return;
+            }
+            show(zh ? (mac ? '按住 ⌘ 滚动可缩放地图，或先点击地图' : '按住 Ctrl 滚动可缩放地图，或先点击地图') : (mac ? 'Hold ⌘ and scroll to zoom, or click the map first' : 'Hold Ctrl and scroll to zoom, or click the map first'));
+          }, { passive: false });
+          if (coarse) {
+            el.addEventListener('touchmove', function (ev) {
+              if (ev.touches && ev.touches.length === 1 && !(map.dragging && map.dragging.enabled())) show(zh ? '用两根手指移动地图' : 'Use two fingers to move the map');
+            }, { passive: true });
+          }
+        } catch (e) {}
+      });
+    }
     var origMap = L.map.bind(L);
     L.map = function () {
       var map = origMap.apply(this, arguments);
@@ -2935,6 +3006,15 @@ function buildLeafletTileGuardScript(): string {
     return true;
   }
   if (!patch()) {
+    // Leaflet's UMD build assigns window.L once fully built: patch right there, before author JS.
+    var curL = window.L;
+    try {
+      Object.defineProperty(window, 'L', {
+        configurable: true,
+        get: function () { return curL; },
+        set: function (v) { curL = v; try { patch(); } catch (eP) {} }
+      });
+    } catch (eT) {}
     window.addEventListener('load', patch);
     var n = 0, t = setInterval(function () { if (patch() || ++n > 80) clearInterval(t); }, 40);
   }
@@ -2962,11 +3042,94 @@ function buildChartGuardScript(): string {
       else if (++n > 250) clearInterval(t);
     }, 40);
   }
+  // G3: Chart.js follows the page tokens (font, ink, grid, tooltip, 8-colour series).
+  function tok(name, fb) {
+    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; } catch (e) { return fb; }
+  }
+  function palette() {
+    return [
+      tok('--iui-chart-1', '#185FA5'), tok('--iui-chart-2', '#3B6D11'), tok('--iui-chart-3', '#854F0B'), tok('--iui-chart-4', '#A32D2D'),
+      tok('--iui-chart-5', '#534AB7'), tok('--iui-chart-6', '#0F6E56'), tok('--iui-chart-7', '#B4457A'), tok('--iui-chart-8', '#5F5E58')
+    ];
+  }
+  window.iuiChartPalette = palette;
+  function alpha(c, a) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c).trim());
+    if (!m) return c;
+    var n = parseInt(m[1], 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function applyChartTheme(C) {
+    var d = C && C.defaults;
+    if (!d) return;
+    try {
+      d.font = d.font || {};
+      d.font.family = tok('--font-sans', 'system-ui, sans-serif');
+      d.font.size = 12;
+      d.color = tok('--color-text-secondary', '#5f5e58');
+      d.borderColor = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
+      if (d.scale && d.scale.grid) d.scale.grid.color = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
+      var p = d.plugins || {};
+      if (p.tooltip) {
+        p.tooltip.backgroundColor = tok('--color-text-primary', '#1a1a1a');
+        p.tooltip.titleColor = tok('--color-background-primary', '#ffffff');
+        p.tooltip.bodyColor = tok('--color-background-primary', '#ffffff');
+        p.tooltip.padding = 8; p.tooltip.cornerRadius = 8; p.tooltip.boxPadding = 4;
+        p.tooltip.titleFont = { weight: '600' };
+      }
+      if (p.legend && p.legend.labels) { p.legend.labels.usePointStyle = true; p.legend.labels.boxWidth = 8; p.legend.labels.boxHeight = 8; }
+      if (p.colors) p.colors.enabled = false;
+    } catch (e) {}
+  }
+  function paintDatasets(cfg) {
+    try {
+      var ds = cfg.data && cfg.data.datasets;
+      if (!Array.isArray(ds)) return;
+      var pal = palette();
+      var type = String(cfg.type || 'line');
+      ds.forEach(function (d, i) {
+        if (!d || d.borderColor || d.backgroundColor) return;
+        var t = String(d.type || type);
+        var c = pal[i % pal.length];
+        if (t === 'pie' || t === 'doughnut' || t === 'polarArea') {
+          var n = Array.isArray(d.data) ? d.data.length : 0;
+          d.backgroundColor = []; for (var k = 0; k < n; k++) d.backgroundColor.push(pal[k % pal.length]);
+          d.borderColor = tok('--color-background-primary', '#ffffff');
+          d.borderWidth = d.borderWidth == null ? 2 : d.borderWidth;
+        } else if (t === 'line' || t === 'radar') {
+          d.borderColor = c; d.backgroundColor = alpha(c, 0.12);
+          if (d.pointRadius == null) d.pointRadius = 2;
+          if (d.borderWidth == null) d.borderWidth = 2;
+        } else {
+          d.backgroundColor = c; d.borderColor = c;
+          if (d.borderRadius == null && t === 'bar') d.borderRadius = 4;
+        }
+      });
+    } catch (e) {}
+  }
+  function retheme() {
+    var C = window.__iuiChartOrig || window.Chart;
+    if (!C) return;
+    applyChartTheme(C);
+    try {
+      var all = C.instances ? Object.keys(C.instances).map(function (k) { return C.instances[k]; }) : [];
+      all.forEach(function (ch) { try { ch.update('none'); } catch (e) {} });
+    } catch (e) {}
+  }
+  window.__iuiRethemeCharts = retheme;
+  try {
+    if (window.matchMedia) {
+      var mq = matchMedia('(prefers-color-scheme: dark)');
+      if (mq.addEventListener) mq.addEventListener('change', function () { setTimeout(retheme, 0); });
+    }
+  } catch (e) {}
   window.iuiCreateChart = function (canvas, config) {
     var C = window.__iuiChartOrig || window.Chart;
     if (!C || !canvas) return null;
     var cfg = config && typeof config === 'object' ? config : { type: 'line', data: { labels: [], datasets: [] } };
     if (!cfg.options) cfg.options = {};
+    applyChartTheme(C);
+    paintDatasets(cfg);
     cfg.options.maintainAspectRatio = false;
     cfg.options.responsive = cfg.options.responsive !== false;
     try { if (window.__iuiReducedMotion && window.__iuiReducedMotion()) cfg.options.animation = false; } catch (e) {}
@@ -2993,24 +3156,40 @@ function buildChartGuardScript(): string {
       return null;
     }
   };
-  waitChart(function (C) {
+  function install(C) {
+    if (!C || C.__iuiPatched) return C;
     window.__iuiChartOrig = C;
-    buildMod();
+    applyChartTheme(C);
     // Soft-patch new Chart(...) to force maintainAspectRatio:false when omitted.
-    if (C && !C.__iuiPatched) {
-      var Orig = C;
-      var Wrapped = function (ctx, cfg) {
-        return window.iuiCreateChart(ctx, cfg);
-      };
-      Wrapped.prototype = Orig.prototype;
-      for (var k in Orig) if (Object.prototype.hasOwnProperty.call(Orig, k)) Wrapped[k] = Orig[k];
-      Wrapped.__iuiPatched = true;
-      Wrapped.getChart = Orig.getChart;
-      Wrapped.register = Orig.register;
-      Wrapped.defaults = Orig.defaults;
-      window.Chart = Wrapped;
-      buildMod();
-    }
+    var Orig = C;
+    var Wrapped = function (ctx, cfg) {
+      return window.iuiCreateChart(ctx, cfg);
+    };
+    Wrapped.prototype = Orig.prototype;
+    for (var k in Orig) if (Object.prototype.hasOwnProperty.call(Orig, k)) Wrapped[k] = Orig[k];
+    Wrapped.__iuiPatched = true;
+    Wrapped.getChart = Orig.getChart;
+    Wrapped.register = Orig.register;
+    Wrapped.defaults = Orig.defaults;
+    Wrapped.instances = Orig.instances;
+    return Wrapped;
+  }
+  // G3: trap the UMD assignment (window.Chart = factory()) so the theme + wrapper are in place
+  // before any author code can construct a chart.
+  if (!window.Chart) {
+    var curChart;
+    try {
+      Object.defineProperty(window, 'Chart', {
+        configurable: true,
+        get: function () { return curChart; },
+        set: function (v) { curChart = install(v); buildMod(); }
+      });
+    } catch (eT) {}
+  }
+  waitChart(function (C) {
+    if (!C.__iuiPatched) window.Chart = install(C);
+    retheme();
+    buildMod();
     // Recovery: weather canvas still empty ~1.5s after load → paint a tiny demo line so chrome is not blank.
     setTimeout(function () {
       try {
@@ -3027,7 +3206,7 @@ function buildChartGuardScript(): string {
           var data = [18,19,21,23,25,24,22,20];
           window.iuiCreateChart(cv, {
             type: 'line',
-            data: { labels: labels, datasets: [{ label: '温度', data: data, borderColor: '#185FA5', backgroundColor: 'rgba(24,95,165,.12)', fill: true, tension: 0.35, pointRadius: 2, borderWidth: 2 }] },
+            data: { labels: labels, datasets: [{ label: '温度', data: data, fill: true, tension: 0.35, pointRadius: 2, borderWidth: 2 }] },
             options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: false } } }
           });
           cv.__iuiChartOk = true;
@@ -3040,6 +3219,53 @@ function buildChartGuardScript(): string {
       } catch (e) {}
     }, 1600);
   });
+})();
+<\/script>`
+}
+
+/** G3: ECharts follows the page tokens via a registered `iui` theme (default for echarts.init). */
+function buildEchartsGuardScript(): string {
+  return `<script>
+(function () {
+  function tok(name, fb) {
+    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; } catch (e) { return fb; }
+  }
+  function theme() {
+    var ink = tok('--color-text-secondary', '#5f5e58');
+    var grid = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
+    var axis = { axisLine: { lineStyle: { color: tok('--color-border-secondary', 'rgba(0,0,0,0.3)') } }, axisTick: { lineStyle: { color: grid } }, axisLabel: { color: ink }, splitLine: { lineStyle: { color: grid } }, nameTextStyle: { color: ink } };
+    var pal = [];
+    for (var i = 1; i <= 8; i++) pal.push(tok('--iui-chart-' + i, ['#185FA5', '#3B6D11', '#854F0B', '#A32D2D', '#534AB7', '#0F6E56', '#B4457A', '#5F5E58'][i - 1]));
+    return {
+      color: pal,
+      backgroundColor: 'transparent',
+      textStyle: { fontFamily: tok('--font-sans', 'system-ui, sans-serif'), color: ink, fontSize: 12 },
+      title: { textStyle: { color: tok('--color-text-primary', '#1a1a1a') }, subtextStyle: { color: ink } },
+      legend: { textStyle: { color: ink }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+      tooltip: { backgroundColor: tok('--color-background-primary', '#ffffff'), borderColor: grid, textStyle: { color: tok('--color-text-primary', '#1a1a1a') } },
+      categoryAxis: axis, valueAxis: axis, timeAxis: axis, logAxis: axis
+    };
+  }
+  function patch(e) {
+    if (!e || e.__iuiPatched || typeof e.init !== 'function' || typeof e.registerTheme !== 'function') return false;
+    try { e.registerTheme('iui', theme()); } catch (err) {}
+    var orig = e.init;
+    e.init = function (el, th, opts) { return orig.call(e, el, th == null ? 'iui' : th, opts); };
+    e.__iuiPatched = true;
+    return true;
+  }
+  window.__iuiRethemeEcharts = function () { try { if (window.echarts) window.echarts.registerTheme('iui', theme()); } catch (e) {} };
+  if (patch(window.echarts)) return;
+  // UMD assigns window.echarts = {} and fills it synchronously: patch on the next microtask.
+  var cur = window.echarts;
+  try {
+    Object.defineProperty(window, 'echarts', {
+      configurable: true,
+      get: function () { return cur; },
+      set: function (v) { cur = v; Promise.resolve().then(function () { patch(cur); }); }
+    });
+  } catch (e) {}
+  var n = 0, t = setInterval(function () { if (patch(window.echarts) || ++n > 250) clearInterval(t); }, 40);
 })();
 <\/script>`
 }
@@ -3232,13 +3458,15 @@ function autoCdnTags(html: string, js: string, base?: string): string {
     (/\bChart\b/.test(all) && /(?:line|bar|doughnut|pie|radar|polarArea)/i.test(all)) ||
     /<canvas\b[^>]*(?:id|class)\s*=\s*["'][^"']*[Cc]hart/i.test(html) ||
     (/<canvas\b/i.test(html) && /(?:doughnut|pie|radar|polarArea|chart\.js)/i.test(all))
-  if (wantsChart && !hasChartUmdScript) {
-    tags.push(vendorScriptTag('chart', base))
-  }
+  // Guard first: it traps the window.Chart assignment so theming + wrapping never race author JS.
   if (wantsChart || hasChartUmdScript) {
     tags.push(buildChartGuardScript())
   }
+  if (wantsChart && !hasChartUmdScript) {
+    tags.push(vendorScriptTag('chart', base))
+  }
   if (need(/\becharts\s*\.\s*init\s*\(/, /echarts/i)) tags.push(vendorScriptTag('echarts', base))
+  if (/\becharts\s*\.\s*init\s*\(/.test(all)) tags.unshift(buildEchartsGuardScript())
   // Prefer UMD Leaflet (global L) over ESM importmap — srcdoc + import("leaflet") often yields empty maps.
   // Inject whenever map APIs / itinerary chrome appear, unless a real leaflet.js <script src> is already present.
   const hasLeafletUmdScript = /<script[^>]+src=["'][^"']*leaflet(?:\.js|\.min\.js)/i.test(html)
@@ -3248,11 +3476,11 @@ function autoCdnTags(html: string, js: string, base?: string): string {
     /\bid\s*=\s*["']map["']/i.test(all) ||
     /\bimport\s*(?:\*|\{?\s*L\s*\}?)\s*from\s*['"]leaflet['"]/.test(all) ||
     (/leaflet/i.test(all) && /(?:map|tile|marker|lat|lng)/i.test(all))
-  if (wantsLeaflet && !hasLeafletUmdScript) {
-    tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base))
-  }
   if (wantsLeaflet || hasLeafletUmdScript) {
     tags.push(buildLeafletTileGuardScript())
+  }
+  if (wantsLeaflet && !hasLeafletUmdScript) {
+    tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base))
   }
   if (need(/\bd3\s*\.\s*(?:select|scale|line|arc)/, /d3(?:@|\.min|\.v)/i)) tags.push(vendorScriptTag('d3', base))
   const hasAgGridScript = /<script[^>]+src=["'][^"']*ag-grid/i.test(html)
@@ -3371,6 +3599,7 @@ function buildHtmlSandboxSrcdocInner(
   let doc = `<!DOCTYPE html><html${langAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
+${pageAccentCss(spec.accent)}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}
 #iui-preview-root{min-width:0;max-width:100%;overflow-x:clip}
 .leaflet-container{min-height:280px;border-radius:var(--border-radius-lg,12px)}
@@ -3593,9 +3822,9 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
       title: '排序可视化',
       height: 360,
       placeholder: '准备动画…',
-      css: '.wrap{display:flex;flex-direction:column;gap:12px}.bars{display:flex;align-items:flex-end;gap:4px;height:160px}.bar{flex:1;background:var(--iui-pack-accent,#18181b);border-radius:6px 6px 0 0;transition:height .2s ease,background .2s ease}.bar.active{background:var(--iui-pack-warn,#d97706)}.bar.done{background:var(--iui-pack-ok,#16a34a)}',
-      html: '<div class="iui-sandbox-card wrap"><div class="iui-sandbox-toolbar"><strong>冒泡排序</strong><button type="button" id="run">开始</button><button type="button" class="secondary" id="shuffle">打乱</button><button type="button" data-iui-send-prompt="再做一个选择排序可视化">继续问</button></div><div class="bars" id="bars"></div><p class="iui-sandbox-muted" id="hint">本地动画，不调模型</p></div>',
-      js: 'var arr=[4,7,2,9,1,5,8,3],busy=false;function paint(active){var el=document.getElementById("bars");el.innerHTML="";var max=Math.max.apply(null,arr);arr.forEach(function(v,i){var d=document.createElement("div");d.className="bar"+(active===i?" active":"");d.style.height=Math.max(8,(v/max)*150)+"px";el.appendChild(d)})}function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}async function bubble(){if(busy)return;busy=true;var a=arr.slice();for(var i=0;i<a.length;i++){for(var j=0;j<a.length-i-1;j++){arr=a;paint(j);await sleep(120);if(a[j]>a[j+1]){var t=a[j];a[j]=a[j+1];a[j+1]=t}}}arr=a;paint(-1);document.querySelectorAll(".bar").forEach(function(b){b.classList.add("done")});busy=false;window.iuiSandbox.action("sort_done",{arr:arr})}document.getElementById("run").onclick=bubble;document.getElementById("shuffle").onclick=function(){if(busy)return;arr=arr.map(function(){return 1+Math.floor(Math.random()*9)});paint(-1)};paint(-1);',
+      css: '.wrap{display:flex;flex-direction:column;gap:12px}.bars{display:flex;align-items:flex-end;gap:6px;height:200px;padding:12px 12px 0;border-radius:var(--border-radius-lg);background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary)}.bar{flex:1;display:flex;justify-content:center;align-items:flex-start;padding-top:6px;color:var(--on-accent,#fff);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--accent-fill,var(--iui-pack-accent));border-radius:6px 6px 0 0;transition:height .2s ease,background .2s ease}.bar.active{background:var(--iui-pack-warn,#d97706)}.bar.done{background:var(--iui-pack-ok,#16a34a)}.stats{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}.stats b{font-size:20px;font-variant-numeric:tabular-nums;margin-right:4px}',
+      html: '<div class="iui-sandbox-card wrap"><div class="iui-sandbox-toolbar"><strong>冒泡排序</strong><button type="button" class="primary" id="run">开始</button><button type="button" class="secondary" id="shuffle">打乱</button><button type="button" data-iui-send-prompt="再做一个选择排序可视化">继续问</button></div><div class="bars" id="bars" aria-label="待排序的柱子"></div><div class="stats"><span><b id="cmp">0</b>次比较</span><span><b id="swp">0</b>次交换</span><span class="iui-sandbox-muted" id="hint">本地动画，不调模型</span></div></div>',
+      js: 'var arr=[4,7,2,9,1,5,8,3],busy=false,cmp=0,swp=0;function stat(){document.getElementById("cmp").textContent=cmp;document.getElementById("swp").textContent=swp}function paint(active){var el=document.getElementById("bars");el.innerHTML="";var max=Math.max.apply(null,arr);arr.forEach(function(v,i){var d=document.createElement("div");d.className="bar"+(active===i||active===i-1?" active":"");d.style.height=Math.max(24,(v/max)*180)+"px";d.textContent=v;el.appendChild(d)});stat()}function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}async function bubble(){if(busy)return;busy=true;cmp=0;swp=0;var a=arr.slice();var fast=window.iuiSandbox&&window.iuiSandbox.reducedMotion;for(var i=0;i<a.length;i++){for(var j=0;j<a.length-i-1;j++){arr=a;cmp++;paint(j+1);if(!fast)await sleep(120);if(a[j]>a[j+1]){var t=a[j];a[j]=a[j+1];a[j+1]=t;swp++}}}arr=a;paint(-9);document.querySelectorAll(".bar").forEach(function(b){b.classList.add("done")});busy=false;window.iuiSandbox.action("sort_done",{arr:arr})}document.getElementById("run").onclick=bubble;document.getElementById("shuffle").onclick=function(){if(busy)return;cmp=0;swp=0;arr=arr.map(function(){return 1+Math.floor(Math.random()*9)});paint(-9)};paint(-9);',
       stages: ['placeholder','css','html','js'],
       partial: false,
       cssComplete: true,

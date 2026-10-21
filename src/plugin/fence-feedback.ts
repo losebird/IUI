@@ -60,7 +60,7 @@ import {
   looksLikeJsonMasqueradeOpen,
   matchesForbiddenFirstPrefix,
 } from '../config/stream-heuristics.ts'
-import { getIntentRule, isExplicitUiAsk } from '../config/referee-rules.ts'
+import { buildPatternNote, getIntentRule, isExplicitUiAsk } from '../config/referee-rules.ts'
 import { recordFenceOp } from '../shared/fence-ops.ts'
 import { designLintNote, lintSandboxDesign, type DesignIssue } from '../shared/design-lint.ts'
 import { ingestToolResultBindings } from './binding-bridge.ts'
@@ -987,6 +987,12 @@ export function installFenceFeedback(
       if (pageNote !== null) {
         extras.push(createFeedbackMessage(pageNote, agent.session.header.version))
         ctx.logger?.info?.(`iui: injecting current-page note turn=${turn} chars=${pageNote.length}`)
+      }
+      // G6: page-type pattern (map / weather / kanban / 3D …) only when the ask matches.
+      const patternNote = askNow.trim() === '' ? null : buildPatternNote(askNow)
+      if (patternNote !== null) {
+        extras.push(createFeedbackMessage(patternNote, agent.session.header.version))
+        ctx.logger?.info?.(`iui: injecting pattern note turn=${turn} chars=${patternNote.length}`)
       }
       if (reminderApplies) {
         state.pendingNextTurnReminder = null

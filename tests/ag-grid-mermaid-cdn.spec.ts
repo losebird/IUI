@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildHtmlSandboxSrcdoc, getHtmlSandboxStarter, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
 import { buildOiuDesignSystemCss, OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system.ts'
-import { classifyIntentAsk, getIntentRule } from '../src/config/referee-rules.ts'
+import { buildPatternNote, classifyIntentAsk, getIntentRule } from '../src/config/referee-rules.ts'
 import { buildGenuiSectionText } from '../src/plugin/section-text.ts'
 
 function fence(html: string, js: string) {
@@ -80,8 +80,11 @@ describe('AG Grid / Mermaid CDN + token skin (narrow)', () => {
 
   it('system prompt mentions both without forcing every table', () => {
     const section = buildGenuiSectionText()
-    expect(section).toContain('agGrid.createGrid')
-    expect(section).toContain('iui-mindmap')
-    expect(section).toMatch(/Not for itinerary budgets or 3-tier pricing/)
+    expect(section).toContain('agGrid')
+    expect(section).toContain('mermaid')
+    const grid = buildPatternNote('做一个可排序的员工数据表')!
+    expect(grid).toContain('agGrid.createGrid')
+    expect(grid).toMatch(/Not for itinerary budgets or 3-tier pricing/)
+    expect(buildPatternNote('画个思维导图')).toContain('iui-mindmap')
   })
 })

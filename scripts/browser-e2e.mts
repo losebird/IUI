@@ -136,6 +136,7 @@ async function main(): Promise<void> {
     failures += await narrowOverflowCase(browser)
     failures += await keyboardAuditCase(browser)
     failures += await visualScoreCase(browser)
+    failures += await themingGesturesCase(browser)
   } finally {
     await browser.close()
   }
@@ -369,4 +370,70 @@ export async function keyboardAuditCase(browser: any): Promise<number> {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((e) => { console.error(e); process.exit(1) })
+}
+
+/**
+ * G2/G3/G8: Chart.js + ECharts pick up the host palette in light and dark, a declared
+ * accent keeps its fill with AA ink, and a Leaflet map ignores a plain wheel (hint
+ * shown) but zooms with Ctrl+wheel.
+ */
+async function themingGesturesCase(browser: any): Promise<number> {
+  const problems: string[] = []
+  const load = async (spec: any, opts: any = {}) => {
+    const p = await browser.newPage({ viewport: { width: 720, height: 900 }, ...opts })
+    await p.goto('about:blank')
+    await p.setContent(buildHtmlSandboxSrcdoc(spec, { frameId: 'g3', uiLang: 'zh' }), { waitUntil: 'load' })
+    await p.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+    await p.waitForTimeout(800)
+    await p.evaluate('window.__name = window.__name || function (f) { return f }')
+    return p
+  }
+  const chartSpec = { title: 'c', css: '', html: '<div style="height:220px"><canvas id="c"></canvas></div>', js: "new Chart(document.getElementById('c'),{type:'line',data:{labels:['a','b','c'],datasets:[{label:'x',data:[1,3,2]},{label:'y',data:[2,1,3]}]}})" }
+  const seen: Record<string, any> = {}
+  for (const scheme of ['light', 'dark']) {
+    const p = await load(chartSpec, { colorScheme: scheme })
+    const r = await p.evaluate(() => {
+      const C = (window as any).__iuiChartOrig || (window as any).Chart
+      const ch = C && C.getChart(document.getElementById('c'))
+      return { color: C?.defaults.color, ds0: ch?.data.datasets[0].borderColor, ds1: ch?.data.datasets[1].borderColor }
+    })
+    seen[scheme] = r
+    if (!r.ds0 || !r.ds1 || r.ds0 === r.ds1) problems.push(`chart ${scheme}: datasets not painted from palette ${JSON.stringify(r)}`)
+    await p.close()
+  }
+  if (seen.light?.color && seen.light.color === seen.dark?.color) problems.push(`chart text colour identical in light/dark (${seen.light.color})`)
+  {
+    const p = await load({ title: 'e', css: '', html: '<div id="c" style="height:200px"></div>', js: 'echarts.init(document.getElementById("c")).setOption({xAxis:{data:[1,2]},yAxis:{},series:[{type:"bar",data:[1,2]}]})' })
+    const r = await p.evaluate(() => { const e = (window as any).echarts; const i = e && e.getInstanceByDom(document.getElementById('c')); return { color0: i?.getOption().color?.[0] } })
+    if (!r.color0 || !/^#185fa5$/i.test(String(r.color0))) problems.push(`echarts not on iui theme (color0=${r.color0})`)
+    await p.close()
+  }
+  {
+    const p = await load({ title: 'a', css: '', html: '<div style="display:flex;gap:8px"><button class="primary">主操作</button></div>', js: '', accent: '#F2C94C' })
+    const r = await p.evaluate(() => { const bt = getComputedStyle(document.querySelector('button.primary')!); return { bg: bt.backgroundColor, ink: bt.color } })
+    if (r.bg !== 'rgb(242, 201, 76)' || r.ink !== 'rgb(17, 17, 17)') problems.push(`accent button ${JSON.stringify(r)}`)
+    await p.close()
+  }
+  {
+    const st = HTML_SANDBOX_STARTERS.find((s) => s.id === 'leaflet-map')
+    if (!st) problems.push('leaflet-map starter missing')
+    else {
+      const p = await load(st.spec)
+      const box = await p.evaluate(() => { const r = document.querySelector('.leaflet-container')!.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })
+      const getZ = () => p.evaluate(() => (document.querySelector('.leaflet-container .leaflet-proxy') as HTMLElement | null)?.style.transform ?? '')
+      await p.mouse.move(box.x, box.y)
+      const z0 = await getZ()
+      await p.mouse.wheel(0, -300); await p.waitForTimeout(500)
+      const z1 = await getZ()
+      const hint = await p.evaluate(() => document.querySelector('.iui-map-hint')?.hasAttribute('data-on') === true)
+      await p.keyboard.down('Control'); await p.mouse.wheel(0, -300); await p.keyboard.up('Control'); await p.waitForTimeout(600)
+      const z2 = await getZ()
+      if (z0 !== z1) problems.push('plain wheel zoomed the map')
+      if (!hint) problems.push('no Ctrl+wheel hint on plain wheel')
+      if (z1 === z2) problems.push('Ctrl+wheel did not zoom')
+      await p.close()
+    }
+  }
+  console.log(`${problems.length ? '✗' : '✓'} chart/echarts theming light+dark, accent ink, map cooperative gestures${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
 }
