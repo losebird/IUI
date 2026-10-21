@@ -33,6 +33,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { droppedNodeFailure } from './genui-diagnostic.ts'
 import { resolveFence } from '../shared/fence-resolve.ts'
 import { parseHtmlSandboxFence } from '../shared/html-sandbox.ts'
+import { parseSandboxPatch } from '../shared/sandbox-patch.ts'
+import { createPageMemory, currentPage, currentPageNote, looksLikePageEditAsk, trackPageFences, type PageMemory } from './page-memory.ts'
 import {
   planFormatRefereeCorrection,
   formatMarkersIn,
@@ -80,7 +82,7 @@ export const MAX_CORRECTIONS_PER_TURN = 1
 const LEGACY_MARKER_PREFIX = '[genui 自修 #'
 
 /** A fence opener is an info string of exactly `dsh-ui` (≤3 spaces indent). */
-const FENCE_OPEN = /^ {0,3}```[ \t]*(iui-html|iui|dsh-ui)[ \t]*$/u
+const FENCE_OPEN = /^ {0,3}```[ \t]*(iui-html|iui-patch|iui|dsh-ui)[ \t]*$/u
 /** Any fence closer (the renderer never nests fences in one body). */
 const FENCE_CLOSE = /^ {0,3}```[ \t]*$/u
 /** Upper bound on fences inspected per reply — a reply is text, not a corpus. */
@@ -95,7 +97,7 @@ export interface ExtractedFence {
   /** 1-based position among this reply's fences. */
   readonly index: number
   /** Info string of the opener. */
-  readonly lang?: 'iui-html' | 'iui' | 'dsh-ui'
+  readonly lang?: 'iui-html' | 'iui-patch' | 'iui' | 'dsh-ui'
 }
 
 /**
@@ -121,12 +123,12 @@ export function isLegacyFencesEnabled(): boolean {
 export function extractDshUiFences(text: string): ExtractedFence[] {
   const lines = text.split('\n')
   const fences: ExtractedFence[] = []
-  let open: { start: number; index: number; lang: 'iui-html' | 'iui' | 'dsh-ui' } | null = null
+  let open: { start: number; index: number; lang: 'iui-html' | 'iui-patch' | 'iui' | 'dsh-ui' } | null = null
   for (let line = 0; line < lines.length; line++) {
     const current = lines[line] ?? ''
     if (open === null) {
       const m = FENCE_OPEN.exec(current)
-      if (m !== null) open = { start: line + 1, index: fences.length + 1, lang: m[1] as 'iui-html' | 'iui' | 'dsh-ui' }
+      if (m !== null) open = { start: line + 1, index: fences.length + 1, lang: m[1] as 'iui-html' | 'iui-patch' | 'iui' | 'dsh-ui' }
       continue
     }
     if (!FENCE_CLOSE.test(current)) continue
@@ -174,6 +176,7 @@ function fenceFailureDetail(fence: ExtractedFence): string | null {
   if (!legacyFencesEnabled && (fence.lang === 'iui' || fence.lang === 'dsh-ui')) {
     return `error=deprecated_fence_language\nlanguage=${fence.lang}\nrequired=\`\`\`iui-html (same body; the browser shows \`\`\`${fence.lang} as plain code)`
   }
+  if (fence.lang === 'iui-patch') return patchFailureDetail(fence.raw)
   try { if (parseHtmlSandboxFence(fence.raw) !== null) return null } catch { /* fall through */ }
   const resolution = resolveFence(fence.raw, { settled: true })
   if (resolution.spec !== null) return null
@@ -183,6 +186,14 @@ function fenceFailureDetail(fence: ExtractedFence): string | null {
       ?? ['error=invalid_spec', ...resolution.processed.errors.map(error => `diagnostic=${JSON.stringify(error)}`)].join('\n')
   }
   return 'error=invalid_json\nrepair=failed'
+}
+
+/** F24: a patch is valid when it parses into edits (applying needs the page, checked in the browser). */
+function patchFailureDetail(raw: string): string | null {
+  const patch = parseSandboxPatch(raw)
+  if (patch === null) return 'error=empty_patch\nrequired=---css | ---replace #sel | ---append #sel | ---remove #sel | ---find + ---with | ---js blocks'
+  if (patch.errors.length > 0) return ['error=invalid_patch', ...patch.errors.map((e) => `diagnostic=${JSON.stringify(e)}`)].join('\n')
+  return null
 }
 
 /**
@@ -477,6 +488,39 @@ function textOfContent(content: unknown): string {
 }
 
 /** Latest direct human ask from a live session snapshot (fallback when state.lastUserAsk is empty). */
+/** F24: rebuild the current page (and its version) from the transcript. */
+export function pageMemoryFromSession(session: Session): PageMemory {
+  const memory = createPageMemory()
+  const snap = typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : null
+  if (snap == null) return memory
+  for (const event of snap) {
+    if (event.type === 'user/message') {
+      const data = event.data as { source?: { kind?: unknown; plugin?: unknown } }
+      if (isFeedbackSource(data.source)) continue
+      if (data.source?.kind !== undefined && data.source.kind !== 'user') continue
+      memory.asksSinceLatest++
+      continue
+    }
+    if (event.type !== 'assistant/message') continue
+    const text = textOfContent((event.data as { message?: { content?: unknown } }).message?.content)
+    if (text.includes('```')) trackPageFences(memory, extractDshUiFences(text))
+  }
+  return memory
+}
+
+/**
+ * F24: the `[iui-current-page]` note for an edit ask about the page still on
+ * screen (latest page delivered within the last two asks), else `null`.
+ */
+export function currentPageNoteFor(session: Session, ask: string): string | null {
+  if (!looksLikePageEditAsk(ask)) return null
+  const memory = pageMemoryFromSession(session)
+  const entry = currentPage(memory)
+  // The current ask is already in the transcript → it counts as 1.
+  if (entry === null || memory.asksSinceLatest > 2) return null
+  return currentPageNote(entry)
+}
+
 function latestUserAskFromSession(session: Session): string {
   const snap = typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : null
   if (snap == null) return ''
@@ -638,6 +682,7 @@ export function queueDesignNote(
     if (state.designLinted.has(fp)) continue
     state.designLinted.add(fp)
     if (state.designLinted.size > 64) state.designLinted.delete(state.designLinted.values().next().value!)
+    if (fence.lang === 'iui-patch') continue
     const spec = parseHtmlSandboxFence(fence.raw)
     if (spec === null) continue
     issues.push(...lintSandboxDesign({ html: spec.html, css: spec.css }))
@@ -938,6 +983,11 @@ export function installFenceFeedback(
         ctx.logger?.info?.(`iui: injecting design-lint note turn=${turn}`)
       }
       state.pendingDesignNote = null
+      const pageNote = askNow.trim() === '' ? null : currentPageNoteFor(agent.session, askNow)
+      if (pageNote !== null) {
+        extras.push(createFeedbackMessage(pageNote, agent.session.header.version))
+        ctx.logger?.info?.(`iui: injecting current-page note turn=${turn} chars=${pageNote.length}`)
+      }
       if (reminderApplies) {
         state.pendingNextTurnReminder = null
         extras.push(createFeedbackMessage(reminder, agent.session.header.version))

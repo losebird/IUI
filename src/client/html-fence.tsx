@@ -57,6 +57,8 @@ import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
+import { applySandboxPatch, pageFromSpec, parseSandboxPatch, sandboxPageId, serializeSandboxPage } from '../shared/sandbox-patch.ts'
+import { listPageVersions, pageVersionsRevision, registerPageVersion, resolvePatchBase, subscribePageVersions, type PageVersion } from './page-versions.ts'
 
 /** Memory-only state key when the page has no stable session identity. */
 function fenceStateKey(raw: string): string {
@@ -1294,14 +1296,188 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   return content
 }
 
+// ── F24: page versions + ```iui-patch ─────────────────────────────────────
+
+const VERSION_BAR: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 4,
+  margin: '0 0 4px',
+  fontSize: 12,
+  opacity: 0.85,
+}
+
+const VERSION_CHIP: CSSProperties = {
+  ...CHIP,
+  minHeight: 24,
+  padding: '0 8px',
+  cursor: 'pointer',
+}
+
+function fenceOrder(context: GenuiFenceContext | undefined): readonly number[] | undefined {
+  return context?.source?.order
+}
+
+/** Storage key for a page: explicit `id:` pages share state across versions. */
+function lineageStorageKey(sessionId: string | undefined, fenceKey: string, explicitId: string | undefined): string | null {
+  const id = explicitId ? sandboxPageId({ id: explicitId }) : null
+  return pageStateKey(sessionId, id ? `page:${id}` : fenceKey)
+}
+
+function usePageVersionsRevision(): number {
+  return useSyncExternalStore(subscribePageVersions, pageVersionsRevision, () => 0)
+}
+
+/** 「v1 · v2 · v3」 — switch which version this frame shows. */
+function VersionBar({ versions, current, active, onPick }: {
+  versions: readonly PageVersion[]
+  current: string
+  active: string
+  onPick: (fenceKey: string) => void
+}): ReactNode {
+  const t = useT()
+  if (versions.length < 2) return null
+  return (
+    <div style={VERSION_BAR} data-iui-page-versions={versions.length} role="group" aria-label={t('sandbox.versions')}>
+      {versions.map((v, i) => {
+        const on = v.fenceKey === active
+        return (
+          <button
+            key={v.fenceKey}
+            type="button"
+            style={{ ...VERSION_CHIP, ...(on ? { fontWeight: 600, outline: '1px solid currentColor' } : {}) }}
+            aria-pressed={on}
+            data-iui-version={i + 1}
+            title={v.fenceKey === current ? t('sandbox.versionThis') : undefined}
+            onClick={() => onPick(v.fenceKey)}
+          >
+            v{i + 1}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Shows `raw` (or a picked sibling version) with the version strip. */
+function VersionedFrame({ raw, streaming, storageKey, scope, fenceKey, pageId }: {
+  raw: string
+  streaming: boolean
+  storageKey: string | null
+  scope: string | undefined
+  fenceKey: string
+  pageId: string | null
+}): ReactNode {
+  usePageVersionsRevision()
+  const [picked, setPicked] = useState<string | null>(null)
+  const versions = streaming ? [] : listPageVersions(scope, pageId, fenceKey)
+  const shown = picked === null ? null : versions.find((v) => v.fenceKey === picked) ?? null
+  const showRaw = shown && shown.fenceKey !== fenceKey ? shown.raw : raw
+  return (
+    <div data-iui-page={pageId ?? undefined}>
+      <VersionBar versions={versions} current={fenceKey} active={shown?.fenceKey ?? fenceKey} onPick={(k) => setPicked(k === fenceKey ? null : k)} />
+      <HtmlSandboxFrame key={shown && shown.fenceKey !== fenceKey ? `v:${shown.fenceKey}` : 'self'} raw={showRaw} streaming={streaming} storageKey={storageKey} />
+    </div>
+  )
+}
+
+/** ```iui-html with version registration. */
+function SandboxPageFence({ raw, fenceKey, context }: { raw: string; fenceKey: string; context: GenuiFenceContext | undefined }): ReactNode {
+  const streaming = context?.streaming === true && context.source === undefined
+  const scope = context?.sessionId
+  const spec = useMemo(() => (streaming ? null : parseHtmlSandboxFence(raw)), [raw, streaming])
+  const pageId = spec ? sandboxPageId(spec) : null
+  const storageKey = spec ? lineageStorageKey(scope, fenceKey, spec.id) : pageStateKey(scope, fenceKey)
+  const order = fenceOrder(context)
+  useEffect(() => {
+    if (spec === null || isSandboxSpecEmpty(spec)) return
+    registerPageVersion(scope, { fenceKey, pageId, raw, page: pageFromSpec(spec), storageKey, ...(order ? { order } : {}) })
+  }, [scope, fenceKey, pageId, raw, spec, storageKey, order?.join(',')])
+  return <VersionedFrame raw={raw} streaming={streaming} storageKey={storageKey} scope={scope} fenceKey={fenceKey} pageId={pageId} />
+}
+
+/** Prompt asking the model to rewrite the whole page after a failed patch. */
+export function patchRewritePrompt(t: (key: string) => string, reason: string | null): string {
+  return `${t('sandbox.patchRewritePrompt')}${reason ? `\n${t('sandbox.reaskProblem')}${reason}` : ''}`
+}
+
+export type PatchMerge =
+  | { kind: 'ok'; raw: string; base: PageVersion; pageId: string | null; storageKey: string | null; applied: number }
+  | { kind: 'no-base'; reason: string }
+  | { kind: 'failed'; reason: string; base: PageVersion | null }
+
+/** Resolve + apply a patch fence against the registry (pure apart from the registry read). */
+export function mergePatchFence(raw: string, scope: string | undefined, fenceKey: string, order?: readonly number[]): PatchMerge {
+  const patch = parseSandboxPatch(raw)
+  if (patch === null) return { kind: 'failed', reason: 'empty patch (no ---css / ---replace / ---find … edits)', base: null }
+  const wanted = patch.page ? sandboxPageId({ id: patch.page }) : null
+  const base = resolvePatchBase(scope, wanted, { fenceKey, ...(order ? { order } : {}) })
+  if (base === null) {
+    return { kind: 'no-base', reason: wanted ? `no earlier page named "${patch.page}"` : 'no earlier iui-html page in this conversation' }
+  }
+  const result = applySandboxPatch(base.page, patch)
+  if (!result.ok) return { kind: 'failed', reason: result.errors.join('; ') || 'patch changed nothing', base }
+  const merged = { ...result.page, ...(base.page.id ? { id: base.page.id } : {}) }
+  return { kind: 'ok', raw: serializeSandboxPage(merged), base, pageId: base.pageId, storageKey: base.storageKey, applied: result.applied }
+}
+
+/** ```iui-patch: merge into the previous page and render the new version. */
+function SandboxPatchFence({ raw, fenceKey, context }: { raw: string; fenceKey: string; context: GenuiFenceContext | undefined }): ReactNode {
+  const t = useT()
+  const revision = usePageVersionsRevision()
+  const [showSource, setShowSource] = useState(false)
+  const streaming = context?.streaming === true && context.source === undefined
+  const scope = context?.sessionId
+  const order = fenceOrder(context)
+  const merge = useMemo(
+    () => (streaming ? null : mergePatchFence(raw, scope, fenceKey, order)),
+    // The registry revision re-resolves when the base page registers late.
+    [raw, streaming, scope, fenceKey, order?.join(','), revision],
+  )
+  const okRaw = merge?.kind === 'ok' ? merge.raw : null
+  useEffect(() => {
+    if (merge === null || merge.kind !== 'ok') return
+    const spec = parseHtmlSandboxFence(merge.raw)
+    if (spec === null) return
+    registerPageVersion(scope, { fenceKey, pageId: merge.pageId, raw: merge.raw, page: pageFromSpec(spec), storageKey: merge.storageKey, ...(order ? { order } : {}) })
+  }, [scope, fenceKey, okRaw, order?.join(',')])
+  if (streaming || merge === null) {
+    return <div data-iui-patch="streaming"><SandboxSkeleton label={t('sandbox.patchStreaming')} showProgress={false} height={120} /></div>
+  }
+  if (merge.kind === 'ok') {
+    return (
+      <div data-iui-patch="ok" data-iui-patch-applied={merge.applied}>
+        <VersionedFrame raw={merge.raw} streaming={false} storageKey={merge.storageKey} scope={scope} fenceKey={fenceKey} pageId={merge.pageId} />
+      </div>
+    )
+  }
+  return (
+    <div data-iui-patch={merge.kind}>
+      <ErrorState
+        kind="sandbox-patch-error"
+        title={merge.kind === 'no-base' ? t('sandbox.patchNoBase') : t('sandbox.patchFailed')}
+        detail={merge.reason}
+        actions={[
+          { label: t('sandbox.patchRewrite'), onClick: () => { void insertIntoComposer(patchRewritePrompt(t, merge.reason)) } },
+          { label: showSource ? t('sandbox.patchHideSource') : t('sandbox.patchShowSource'), onClick: () => setShowSource((v) => !v) },
+        ]}
+      />
+      {showSource ? <pre data-iui-patch-source="" style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 320, overflow: 'auto' }}>{raw}</pre> : null}
+    </div>
+  )
+}
+
+function keyString(key: Key): string {
+  return typeof key === 'string' ? key : String(key)
+}
+
 /** Registry-channel fence renderer for language `iui-html`. */
 export function renderHtmlFence(raw: string, key: Key, _context?: GenuiFenceContext): ReactNode {
-  return (
-    <HtmlSandboxFrame
-      key={key}
-      raw={raw}
-      streaming={_context?.streaming === true && _context.source === undefined}
-      storageKey={pageStateKey(_context?.sessionId, typeof key === 'string' ? key : String(key))}
-    />
-  )
+  return <SandboxPageFence key={key} raw={raw} fenceKey={keyString(key)} context={_context} />
+}
+
+/** F24: registry-channel fence renderer for language `iui-patch`. */
+export function renderPatchFence(raw: string, key: Key, context?: GenuiFenceContext): ReactNode {
+  return <SandboxPatchFence key={key} raw={raw} fenceKey={keyString(key)} context={context} />
 }

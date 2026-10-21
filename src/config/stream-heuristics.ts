@@ -32,7 +32,7 @@ export type StreamHeuristics = {
 }
 
 export const STREAM_HEURISTICS: StreamHeuristics = {
-  fenceLanguages: ['iui-html', 'iui', 'dsh-ui'],
+  fenceLanguages: ['iui-html', 'iui-patch', 'iui', 'dsh-ui'],
   forbiddenFirstPrefixes: [
     // Apology / tool-failure prose (Chinese + English)
     '^(抱歉|对不起|不好意思|很抱歉)',

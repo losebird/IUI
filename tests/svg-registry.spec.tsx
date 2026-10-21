@@ -24,11 +24,11 @@ import { apply } from '../src/client/index.tsx'
 afterEach(() => { cleanup(); registry.clear() })
 
 describe('SVG registry integration', () => {
-  it('registers SVG alongside dsh-ui, iui and iui-html and disposes all', () => {
+  it('registers SVG alongside dsh-ui, iui, iui-html and iui-patch and disposes all', () => {
     const ctx = { slots: { inject: () => () => {} }, inject: () => {} } as unknown as Context
     const dispose = apply(ctx)
     try {
-      expect([...registry.keys()].sort()).toEqual(['dsh-ui', 'iui', 'iui-html', 'svg'])
+      expect([...registry.keys()].sort()).toEqual(['dsh-ui', 'iui', 'iui-html', 'iui-patch', 'svg'])
       const renderer = registry.get('svg')!
       const { getByRole } = render(<>{renderer('<svg xmlns="http://www.w3.org/2000/svg" data-iui="1" viewBox="0 0 100 50"/>', 'svg')}</>)
       expect(getByRole('img')).not.toBeNull()

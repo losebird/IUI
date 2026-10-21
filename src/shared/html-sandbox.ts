@@ -80,6 +80,8 @@ export const IUI_MAP_TILE_FALLBACKS: readonly { url: string; attribution: string
 
 export type HtmlSandboxSpec = {
   title?: string
+  /** F24: stable page identity across versions (`id:` header); falls back to the title. */
+  id?: string
   height?: number
   /** Streaming chrome placeholder (shown before css/html ready). */
   placeholder?: string
@@ -1213,15 +1215,15 @@ export function sanitizeSandboxMarkup(html: string): string {
     })
 }
 
-const SECTION_META = /^(title|height|placeholder)\s*[:：]\s*(.+)$/iu
+const SECTION_META = /^(title|height|placeholder|id|page)\s*[:：]\s*(.+)$/iu
 
 function parseSections(raw: string): {
   sections: Record<'css' | 'html' | 'js', string>
   stages: Array<'css' | 'html' | 'js'>
   sawHeader: boolean
-  meta: { title?: string; height?: number; placeholder?: string }
+  meta: { title?: string; height?: number; placeholder?: string; id?: string }
 } {
-  const meta: { title?: string; height?: number; placeholder?: string } = {}
+  const meta: { title?: string; height?: number; placeholder?: string; id?: string } = {}
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
   const sections: Record<'css' | 'html' | 'js', string> = { css: '', html: '', js: '' }
   const stages: Array<'css' | 'html' | 'js'> = []
@@ -1252,6 +1254,7 @@ function parseSections(raw: string): {
         const n = Number.parseInt(value, 10)
         if (Number.isFinite(n)) meta.height = Math.min(1200, Math.max(120, n))
       } else if (key === 'title') meta.title = value
+      else if (key === 'id' || key === 'page') meta.id = value.slice(0, 80)
       else meta.placeholder = value
     }
   }
@@ -1433,6 +1436,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
         ...(jsFunctions ? { jsFunctions } : {}),
         ...(jsExpressions && jsExpressions.length ? { jsExpressions } : {}),
         ...(typeof parsed.title === 'string' ? { title: parsed.title } : {}),
+        ...(typeof parsed.id === 'string' && parsed.id.trim() ? { id: parsed.id.trim().slice(0, 80) } : {}),
         ...(height !== undefined ? { height } : {}),
       }
     } catch {
@@ -1455,6 +1459,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
       jsComplete: !partial,
       ...(meta.placeholder ? { placeholder: meta.placeholder } : {}),
       ...(meta.title ? { title: meta.title } : {}),
+      ...(meta.id ? { id: meta.id } : {}),
       ...(meta.height !== undefined ? { height: meta.height } : {}),
     }
   }
@@ -3456,10 +3461,10 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
     summary: '本地校验后回传 submit',
     spec: {
       title: '迷你表单',
-      height: 280,
-      css: '.f{display:flex;flex-direction:column;gap:8px}label{font-size:12px;color:#6b7280}',
-      html: '<div class="iui-sandbox-card f"><div><label>昵称</label><input id="name" placeholder="请输入"/></div><div><label>备注</label><textarea id="note" rows="3" placeholder="可选"></textarea></div><button type="button" id="go">提交</button><p class="iui-sandbox-muted" id="msg"></p></div>',
-      js: 'document.getElementById("go").onclick=function(){var name=(document.getElementById("name").value||"").trim();var note=document.getElementById("note").value||"";var msg=document.getElementById("msg");if(!name){msg.textContent="请填写昵称";return;}msg.textContent="已提交";window.iuiSandbox.action("submit_form",{name:name,note:note});};',
+      height: 360,
+      css: '.f{display:flex;flex-direction:column;gap:12px}.hero{padding:14px 16px;border-radius:var(--border-radius-lg);background:var(--color-background-info);color:var(--color-text-info)}.hero b{display:block;font-size:var(--fs-2xl);line-height:1.1;font-variant-numeric:tabular-nums}label{display:block;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}',
+      html: '<div class="iui-sandbox-card f"><h3>周六读书会报名</h3><div class="hero"><b id="left">12</b>个名额剩余 · 周六 14:00 · 示例数据</div><div><label for="name">昵称</label><input id="name" placeholder="请输入"/></div><div><label for="note">备注</label><textarea id="note" rows="3" placeholder="可选"></textarea></div><div class="iui-actions"><button type="button" class="primary" id="go">提交报名</button></div><p class="iui-sandbox-muted" id="msg" aria-live="polite"></p></div>',
+      js: 'var left=12;document.getElementById("go").onclick=function(){var name=(document.getElementById("name").value||"").trim();var note=document.getElementById("note").value||"";var msg=document.getElementById("msg");if(!name){msg.textContent="请填写昵称";return;}if(left>0)left--;document.getElementById("left").textContent=String(left);msg.textContent="已提交";window.iuiSandbox.action("submit_form",{name:name,note:note});};',
       stages: ['css', 'html', 'js'],
       partial: false,
     },
@@ -3471,10 +3476,10 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
     summary: '本地勾选 + action 回传',
     spec: {
       title: '待办清单',
-      height: 280,
-      css: '.todo{display:flex;flex-direction:column;gap:8px}.item{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px}.item.done{opacity:.55;text-decoration:line-through}',
-      html: '<div class="iui-sandbox-card todo"><div class="iui-sandbox-toolbar"><strong>今日待办</strong><button type="button" id="add">添加</button></div><div id="list"></div><p class="iui-sandbox-muted">勾选会回传 sandbox_todo</p></div>',
-      js: 'var items=[{id:1,t:"写周报",d:false},{id:2,t:"代码评审",d:false}];function paint(){var el=document.getElementById("list");el.innerHTML="";items.forEach(function(it){var row=document.createElement("label");row.className="item"+(it.d?" done":"");row.innerHTML="<input type=checkbox "+(it.d?"checked":"")+"> <span>"+it.t+"</span>";row.querySelector("input").onchange=function(){it.d=!!this.checked;paint();window.iuiSandbox.action("sandbox_todo",{items:items})};el.appendChild(row)})}document.getElementById("add").onclick=function(){var t=prompt("待办");if(!t)return;items.push({id:Date.now(),t:t,d:false});paint();window.iuiSandbox.action("sandbox_todo",{items:items})};paint();',
+      height: 360,
+      css: '.todo{display:flex;flex-direction:column;gap:10px}.hero{padding:14px 16px;border-radius:var(--border-radius-lg);background:var(--color-background-success);color:var(--color-text-success)}.hero b{font-size:var(--fs-2xl);line-height:1.1;font-variant-numeric:tabular-nums;margin-right:6px}.bar{height:6px;border-radius:3px;background:var(--color-background-primary);margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:currentColor}.add{display:flex;gap:8px}.add input{flex:1;min-width:0}.item{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--color-border-tertiary);border-radius:10px}.item.done span{color:var(--color-text-secondary);text-decoration:line-through}',
+      html: '<div class="iui-sandbox-card todo"><h3>今日待办</h3><div class="hero"><b id="done">1/3</b>已完成<div class="bar"><i id="bar" style="width:33%"></i></div></div><form class="add" id="f"><input id="t" placeholder="添加一条待办" aria-label="新待办"/><button type="submit" class="primary">添加</button></form><div id="list"></div><p class="iui-sandbox-muted">勾选会回传 sandbox_todo</p></div>',
+      js: 'var items=[{id:1,t:"写周报",d:true},{id:2,t:"代码评审",d:false},{id:3,t:"整理需求",d:false}];function paint(){var el=document.getElementById("list");el.innerHTML="";var n=0;items.forEach(function(it){if(it.d)n++;var row=document.createElement("label");row.className="item"+(it.d?" done":"");row.innerHTML="<input type=checkbox "+(it.d?"checked":"")+"> <span></span>";row.querySelector("span").textContent=it.t;row.querySelector("input").onchange=function(){it.d=!!this.checked;paint();window.iuiSandbox.action("sandbox_todo",{items:items})};el.appendChild(row)});document.getElementById("done").textContent=n+"/"+items.length;document.getElementById("bar").style.width=(items.length?Math.round(n*100/items.length):0)+"%"}document.getElementById("f").addEventListener("submit",function(e){e.preventDefault();var inp=document.getElementById("t");var t=(inp.value||"").trim();if(!t)return;items.push({id:Date.now(),t:t,d:false});inp.value="";paint();window.iuiSandbox.action("sandbox_todo",{items:items})});paint();',
       stages: ['css', 'html', 'js'],
       partial: false,
     },
@@ -3544,7 +3549,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
       title: '分段面板',
       height: 260,
       css: '',
-      html: '<div class="iui-sandbox-card iui-sandbox-tabs"><div class="iui-sandbox-tabbar" role="tablist"><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="true" data-tab="概览">概览</button><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="false" data-tab="明细">明细</button><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="false" data-tab="备注">备注</button></div><div class="iui-sandbox-stage" data-stage="概览" data-active="1"><p>本机状态正常。</p><div class="iui-sandbox-grid"><div class="iui-sandbox-kpi"><div class="label">CPU</div><div class="value" data-iui-bind="cpu">34%</div></div><div class="iui-sandbox-kpi"><div class="label">内存</div><div class="value" data-iui-bind="mem">62%</div></div></div></div><div class="iui-sandbox-stage" data-stage="明细" data-active="0"><p class="iui-sandbox-muted">进程表可用 ```iui 表格卡；此处仅示意。</p><ul><li>node · 12%</li><li>chrome · 18%</li></ul></div><div class="iui-sandbox-stage" data-stage="备注" data-active="0"><p class="iui-sandbox-muted">本地切换，不调模型。</p></div></div>',
+      html: '<div class="iui-sandbox-card iui-sandbox-tabs"><div class="iui-sandbox-tabbar" role="tablist"><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="true" data-tab="概览">概览</button><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="false" data-tab="明细">明细</button><button type="button" class="iui-sandbox-tab" role="tab" aria-selected="false" data-tab="备注">备注</button></div><div class="iui-sandbox-stage" data-stage="概览" data-active="1"><div class="iui-stats"><div class="iui-stat lg"><span class="iui-stat-value" data-iui-bind="cpu">34%</span><span class="iui-stat-label">CPU</span></div><div class="iui-stat lg"><span class="iui-stat-value" data-iui-bind="mem">62%</span><span class="iui-stat-label">内存</span></div><div class="iui-stat lg"><span class="iui-stat-value">1.2<span class="unit">GB/s</span></span><span class="iui-stat-label">磁盘</span></div></div><p class="iui-sandbox-muted">本机状态正常 · 示例数据</p></div><div class="iui-sandbox-stage" data-stage="明细" data-active="0"><p class="iui-sandbox-muted">进程明细（示例数据）</p><ul><li>node · 12%</li><li>chrome · 18%</li></ul></div><div class="iui-sandbox-stage" data-stage="备注" data-active="0"><p class="iui-sandbox-muted">本地切换，不调模型。</p></div></div>',
       js: 'document.querySelectorAll(".iui-sandbox-tab").forEach(function(btn){btn.onclick=function(){var id=btn.getAttribute("data-tab");document.querySelectorAll(".iui-sandbox-tab").forEach(function(b){b.setAttribute("aria-selected",b===btn?"true":"false")});document.querySelectorAll(".iui-sandbox-stage").forEach(function(s){s.setAttribute("data-active",s.getAttribute("data-stage")===id?"1":"0")});window.iuiSandbox.action("tab_change",{tab:id});window.iuiSandbox.resize()}});',
       stages: ['html', 'js'],
       partial: false,

@@ -15,6 +15,7 @@ import {
 import { resolveFence } from '../shared/fence-resolve.ts'
 import { looksLikeGenuiSpecBody } from '../shared/genui-shape.ts'
 import { parseHtmlSandboxFence } from '../shared/html-sandbox.ts'
+import { parseSandboxPatch } from '../shared/sandbox-patch.ts'
 import { safeRegExp } from '../shared/safe-regexp.ts'
 
 /** Sandbox-first recipe used by every prime/steer (catalog recipes removed). */
@@ -25,32 +26,34 @@ function isSandboxSpec(raw: string): boolean {
 }
 
 /** Exact fence opener (≤3 spaces) — keep in sync with fence-feedback. */
-const FENCE_OPEN_LINE = /^ {0,3}```[ \t]*(?:iui-html|iui|dsh-ui)[ \t]*$/u
+const FENCE_OPEN_LINE = /^ {0,3}```[ \t]*(iui-html|iui-patch|iui|dsh-ui)[ \t]*$/u
 const FENCE_CLOSE_LINE = /^ {0,3}```[ \t]*$/u
 const MAX_FENCES = 40
 
 interface ExtractedFence {
   readonly raw: string
   readonly closed: boolean
+  readonly lang?: string
 }
 
 function extractIuiFences(text: string): ExtractedFence[] {
   const lines = text.split('\n')
   const fences: ExtractedFence[] = []
-  let open: { start: number } | null = null
+  let open: { start: number; lang: string } | null = null
   for (let line = 0; line < lines.length; line++) {
     const current = lines[line] ?? ''
     if (open === null) {
-      if (FENCE_OPEN_LINE.test(current)) open = { start: line + 1 }
+      const m = FENCE_OPEN_LINE.exec(current)
+      if (m !== null) open = { start: line + 1, lang: m[1]! }
       continue
     }
     if (!FENCE_CLOSE_LINE.test(current)) continue
-    fences.push({ raw: lines.slice(open.start, line).join('\n'), closed: true })
+    fences.push({ raw: lines.slice(open.start, line).join('\n'), closed: true, lang: open.lang })
     open = null
     if (fences.length >= MAX_FENCES) return fences
   }
   if (open !== null && fences.length < MAX_FENCES) {
-    fences.push({ raw: lines.slice(open.start).join('\n'), closed: false })
+    fences.push({ raw: lines.slice(open.start).join('\n'), closed: false, lang: open.lang })
   }
   return fences
 }
@@ -396,6 +399,11 @@ const DEFAULT_MAX = 1
 export function replyHasValidFence(text: string): boolean {
   for (const fence of extractIuiFences(text)) {
     if (!fence.closed) continue
+    if (fence.lang === 'iui-patch') {
+      const patch = parseSandboxPatch(fence.raw)
+      if (patch !== null && patch.errors.length === 0) return true
+      continue
+    }
     if (isSandboxSpec(fence.raw)) return true
     if (resolveFence(fence.raw, { settled: true }).spec !== null) return true
   }

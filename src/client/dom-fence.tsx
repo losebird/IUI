@@ -60,7 +60,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GenuiActionContext, type GenuiActionHandler } from './action-context.ts'
 import css from './GenuiBlock.module.css'
 import { renderSvgFence } from './svg-fence.tsx'
-import { renderHtmlFence } from './html-fence.tsx'
+import { renderHtmlFence, renderPatchFence } from './html-fence.tsx'
 import { repairFenceJson, trimToBalancedRoot } from '../shared/fence-repair.ts'
 import { isJsonFenceLang, isJsonMasqueradingAsIui, isStrictSandboxJson, isStrictSandboxValue, looksLikeHtmlSandboxBody } from '../shared/genui-shape.ts'
 import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
@@ -159,7 +159,7 @@ interface Mount {
   block: HTMLElement
   lastRaw: string
   lastSettled: boolean
-  language: 'iui' | 'dsh-ui' | 'svg' | 'iui-html'
+  language: 'iui' | 'dsh-ui' | 'svg' | 'iui-html' | 'iui-patch'
   lastNode: ReactNode
   /** True while this mount is the streaming skeleton (no component yet). */
   skeleton: boolean
@@ -201,6 +201,11 @@ function isHtmlFenceLang(lang: string | null | undefined): lang is 'iui-html' {
   return lang === 'iui-html'
 }
 
+/** F24: ```iui-patch — edits merged into the previous page. */
+function isPatchFenceLang(lang: string | null | undefined): lang is 'iui-patch' {
+  return lang === 'iui-patch'
+}
+
 /** Weak models emit ```json with a GenUI or sandbox body — treat as IUI for mount. */
 function isJsonAsIui(lang: string | null | undefined, raw: string): boolean {
   return isJsonMasqueradingAsIui(lang, raw)
@@ -230,12 +235,12 @@ function tagTextBodyOf(block: Element): string | null {
  * must not self-identify through a nested block's label either (issue #13:
  * the shared markdown root was mistaken for a dsh-ui fence and hid the whole
  * message, losing every other code block). */
-function infostringOf(block: Element): 'iui' | 'dsh-ui' | 'svg' | 'iui-html' | null {
+function infostringOf(block: Element): 'iui' | 'dsh-ui' | 'svg' | 'iui-html' | 'iui-patch' | null {
   const pre = block.querySelector('pre')
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
     const lang = el.textContent?.trim()
-    if (lang !== 'iui' && lang !== 'dsh-ui' && lang !== 'svg' && lang !== 'iui-html') continue
+    if (lang !== 'iui' && lang !== 'dsh-ui' && lang !== 'svg' && lang !== 'iui-html' && lang !== 'iui-patch') continue
     if (pre !== null && pre.contains(el)) continue
     // A leaf label that belongs to a NESTED known code surface is that
     // surface's banner, not `block`'s own banner. Only accept labels whose
@@ -259,7 +264,7 @@ function infostringOf(block: Element): 'iui' | 'dsh-ui' | 'svg' | 'iui-html' | n
  */
 const KNOWN_LANGUAGE_LABELS = new Set([
   // 插件自有语言
-  'iui', 'dsh-ui', 'svg', 'iui-html',
+  'iui', 'dsh-ui', 'svg', 'iui-html', 'iui-patch',
   // 数据 / 标记 / 纯文本
   'json', 'json5', 'yaml', 'yml', 'toml', 'ini', 'xml', 'html', 'css', 'scss', 'sass', 'less',
   'markdown', 'md', 'text', 'txt', 'plain', 'plaintext', 'log', 'console', 'diff', 'patch',
@@ -525,6 +530,7 @@ function fenceIndexOf(ctx: Context, row: Element, block: Element, sourceLanguage
         if (
           !isUiFenceLang(language)
           && !isHtmlFenceLang(language)
+          && !isPatchFenceLang(language)
           && !(language === undefined && isGenericGenuiFence(candidate, candRaw))
           && !isJsonAsIui(language, candRaw)
           && !looksLikeHtmlSandboxBody(candRaw)
@@ -547,6 +553,7 @@ function fenceIndexOf(ctx: Context, row: Element, block: Element, sourceLanguage
       if (
         !isUiFenceLang(language)
         && !isHtmlFenceLang(language)
+        && !isPatchFenceLang(language)
         && !(language === undefined && isGenericGenuiFence(candidate, candRaw))
         && !isJsonAsIui(language, candRaw)
         && !looksLikeHtmlSandboxBody(candRaw)
@@ -1021,16 +1028,18 @@ export function installDomFenceRenderer(
       return
     }
     clearOffer(block)
-    if (!isUiFenceLang(language) && language !== 'svg' && !isHtmlFenceLang(language) && !genericGenui && !sandboxShaped) return
+    if (!isUiFenceLang(language) && language !== 'svg' && !isHtmlFenceLang(language) && !isPatchFenceLang(language) && !genericGenui && !sandboxShaped) return
     // Streaming: allow explicit ```iui/dsh-ui/iui-html, or a host-hidden sandbox body.
-    if (!settled && !isUiFenceLang(language) && !isHtmlFenceLang(language) && !sandboxShaped) return
+    if (!settled && !isUiFenceLang(language) && !isHtmlFenceLang(language) && !isPatchFenceLang(language) && !sandboxShaped) return
     if (raw.trim() === '') {
       if (settled) warnOnce(block, `settled ${language ?? 'iui'} fence has an empty body; keeping the code block`)
       return
     }
     const { key, context } = contextOf(row, block, settled)
-    const acceptedLanguage: 'iui' | 'dsh-ui' | 'svg' | 'iui-html' = language === 'svg'
+    const acceptedLanguage: 'iui' | 'dsh-ui' | 'svg' | 'iui-html' | 'iui-patch' = language === 'svg'
       ? 'svg'
+      : isPatchFenceLang(language) && !forced
+        ? 'iui-patch'
       : language === 'iui-html' || sandboxShaped || genericGenui
         ? 'iui-html'
         : (language === 'dsh-ui' ? 'dsh-ui' : 'iui')
@@ -1040,7 +1049,9 @@ export function installDomFenceRenderer(
       ? renderSvgFence(raw, key)
       : acceptedLanguage === 'iui-html'
         ? renderHtmlFence(raw, key, context)
-        : renderResolvedFenceNode(raw, key, context)
+        : acceptedLanguage === 'iui-patch'
+          ? renderPatchFence(raw, key, context)
+          : renderResolvedFenceNode(raw, key, context)
     // Null = no finished component yet (streaming half) or unrepairable: the
     // stock code block stays visible. A settled unrepairable body also gets a
     // VISIBLE diagnostic — console-only reporting left the defect invisible
@@ -1183,7 +1194,9 @@ export function installDomFenceRenderer(
           ? renderSvgFence(raw, key)
           : mount.language === 'iui-html'
             ? renderHtmlFence(raw, key, context)
-            : renderResolvedFenceNode(raw, key, context)
+            : mount.language === 'iui-patch'
+              ? renderPatchFence(raw, key, context)
+              : renderResolvedFenceNode(raw, key, context)
         if (node === null) {
           if (mount.skeleton && !settled) {
             // Still streaming and still incomplete: keep the skeleton mounted
