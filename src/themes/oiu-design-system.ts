@@ -108,6 +108,10 @@ export const OIU_THEME_CSS = `
   --dsl-g-surface: var(--color-background-primary);
   --dsl-g-muted-fg: var(--color-text-secondary);
   --dsl-g-border: var(--color-border-tertiary);
+  /* Prompt-trim aliases: short names authors often guess. */
+  --bg: var(--color-background-primary); --surface: var(--color-background-secondary); --card: var(--color-background-secondary);
+  --text: var(--color-text-primary); --fg: var(--color-text-primary); --muted: var(--color-text-secondary);
+  --border: var(--color-border-tertiary); --radius: var(--border-radius-lg);
   --iui-chart-1: #185FA5;
   --iui-chart-2: #3B6D11;
   --iui-chart-3: #854F0B;

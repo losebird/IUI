@@ -69,3 +69,14 @@ describe('R5-2 visual corrections', () => {
     expect(it.html).not.toContain('>Pause<')
   })
 })
+
+describe('resident prompt trim', () => {
+  it('resident prompt stays short; host CSS answers common token guesses', async () => {
+    const { GENUI_SECTION_TEXT } = await import('../src/plugin/section-text.ts')
+    expect(GENUI_SECTION_TEXT.length).toBeLessThan(3600)
+    expect(GENUI_SECTION_TEXT).toContain('write layout CSS only')
+    expect(GENUI_SECTION_TEXT).toContain('[iui-current-page]')
+    const css = buildOiuDesignSystemCss()
+    for (const t of ['--bg:', '--surface:', '--text:', '--muted:', '--border:', '--radius:']) expect(css).toContain(t)
+  })
+})

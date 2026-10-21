@@ -97,7 +97,7 @@ describe('G1 / G5 / G8 CSS', () => {
 
 describe('G6 slim prompt + pattern notes', () => {
   it('resident section is short and carries the 7 design principles', () => {
-    expect(GENUI_SECTION_TEXT.length).toBeLessThan(4600)
+    expect(GENUI_SECTION_TEXT.length).toBeLessThan(3600)
     expect(GENUI_SECTION_TEXT).toContain('accent:')
     expect(GENUI_SECTION_TEXT).toContain('.iui-empty')
     expect(GENUI_SECTION_TEXT).toContain('[iui-pattern]')
