@@ -4,6 +4,7 @@
  * empty/partial placeholders, auto-height + action loop.
  */
 import { createDownloadLimiter, hostCopy, hostDownload, type DelegateVerdict } from './sandbox-delegate.ts'
+import { buildOfflineExport, OFFLINE_EXPORT_MAX_BYTES, type SandboxResource } from './offline-export.ts'
 import {
   useEffect,
   useMemo,
@@ -49,7 +50,7 @@ import {
 } from './theme/apply-theme.ts'
 import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
-import { SandboxSkeleton, sandboxStreamProgress } from './sandbox-skeleton.tsx'
+import { SandboxSkeleton, SandboxStreamingPill, sandboxStreamProgress, streamedLineCount } from './sandbox-skeleton.tsx'
 import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { getCdnSource, getRuntimeConfigSnapshot, setCdnPresetOverride, subscribeRuntimeConfig } from './runtime-config.ts'
 import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
@@ -196,9 +197,19 @@ function useDesignTokens(): Record<string, string> {
   return useSyncExternalStore(subscribeActiveTheme, readDesignTokens, readDesignTokens)
 }
 
-function clampHeight(height: number, fallback: number): number {
+/** F22: auto height up to this; taller pages scroll inside the frame until 展开全部. */
+export const SANDBOX_AUTO_HEIGHT_MAX = 2400
+/** F22: hard cap when expanded (bridge reports at most this). */
+export const SANDBOX_EXPANDED_HEIGHT_MAX = 20000
+
+function clampHeight(height: number, fallback: number, max: number = SANDBOX_AUTO_HEIGHT_MAX): number {
   if (!Number.isFinite(height)) return fallback
-  return Math.min(2400, Math.max(120, Math.round(height)))
+  return Math.min(max, Math.max(120, Math.round(height)))
+}
+
+/** F22: frame height for a reported content height; `expanded` lifts the 2400 cap. */
+export function sandboxFrameHeight(contentHeight: number, expanded: boolean): number {
+  return clampHeight(contentHeight, 360, expanded ? SANDBOX_EXPANDED_HEIGHT_MAX : SANDBOX_AUTO_HEIGHT_MAX)
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -223,6 +234,11 @@ export function newSandboxFrameId(): string {
   return `iui-html-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
 }
 
+function shareFileName(title: string | undefined, suffix?: string): string {
+  const stem = (title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'
+  return `${stem}${suffix ? '-' + suffix : ''}.html`
+}
+
 function downloadText(filename: string, content: string): void {
   try {
     const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
@@ -239,7 +255,7 @@ function downloadText(filename: string, content: string): void {
   } catch { /* ignore */ }
 }
 
-type ShareSnapshot = { html: string; css: string; state: Record<string, unknown> }
+type ShareSnapshot = { html: string; css: string; state: Record<string, unknown>; resources: SandboxResource[] }
 
 function requestSandboxSnapshot(
   iframe: HTMLIFrameElement | null,
@@ -268,7 +284,10 @@ function requestSandboxSnapshot(
       const state = data.state && typeof data.state === 'object' && !Array.isArray(data.state)
         ? data.state as Record<string, unknown>
         : {}
-      finish({ html: data.html, css: data.css, state })
+      const resources: SandboxResource[] = Array.isArray(data.resources)
+        ? (data.resources as unknown[]).filter((r): r is SandboxResource => !!r && typeof (r as SandboxResource).url === 'string' && typeof (r as SandboxResource).type === 'string').slice(0, 800)
+        : []
+      finish({ html: data.html, css: data.css, state, resources })
     }
     const timer = window.setTimeout(() => finish(null), timeoutMs)
     window.addEventListener('message', onMessage)
@@ -428,6 +447,9 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [hung, setHung] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [autoHeight, setAutoHeight] = useState<number | null>(null)
+  // F22: raw content height from the bridge + 展开全部 toggle for pages taller than 2400px.
+  const [contentHeight, setContentHeight] = useState<number | null>(null)
+  const [heightExpanded, setHeightExpanded] = useState(false)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<SandboxFailKind | null>(null)
@@ -435,6 +457,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [errorInFrame, setErrorInFrame] = useState(false)
   useEffect(() => { if (error === null) setErrorInFrame(false) }, [error])
   const [copied, setCopied] = useState(false)
+  /** F20: offline export progress / result shown on the menu item. */
+  const [offlineNote, setOfflineNote] = useState<string | null>(null)
   /** F11: native = Fullscreen API; overlay = fixed in place; portal = fixed under body (transformed ancestor). */
   const [fsMode, setFsMode] = useState<FullscreenMode>('off')
   const fullscreen = fsMode !== 'off'
@@ -449,6 +473,9 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const lockedFinalRef = useRef(false)
   const [forceFinalSrcdoc, setForceFinalSrcdoc] = useState(false)
   const effectiveRaw = starterOverride ?? raw
+  /** F21:「正在生成 · 已写 N 行」. */
+  const streamLabel = (phase: string, body: string): string =>
+    `${phase} · ${t('sandbox.stream.lines').replace('{n}', String(streamedLineCount(body)))}`
   const parsed = useMemo(() => parseHtmlSandboxFence(effectiveRaw), [effectiveRaw])
   const cssComplete = parsed?.cssComplete === true
   // Section-format bodies (`---css/---html/---js`) cannot tell a finished js
@@ -643,7 +670,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         return
       }
       if (event.data.type === 'resize') {
-        setAutoHeight(clampHeight(event.data.height, baseHeight))
+        setAutoHeight(clampHeight(event.data.height, baseHeight, SANDBOX_EXPANDED_HEIGHT_MAX))
+        setContentHeight(Number.isFinite(event.data.height) ? Math.round(event.data.height) : null)
         return
       }
       if (event.data.type === 'ready' || event.data.type === 'bridgeReady') {
@@ -882,7 +910,12 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     const prog = sandboxStreamProgress(parsed)
     return (
       <div style={SHELL_STYLE} data-iui-html-sandbox="empty">
-        <SandboxSkeleton label={t(`sandbox.skeleton.${prog.phase}`)} pct={prog.pct} height={clampHeight(baseHeight, 220)} />
+        <SandboxSkeleton
+          label={streamLabel(t(`sandbox.skeleton.${prog.phase}`), raw)}
+          pct={prog.pct}
+          height={clampHeight(baseHeight, 220)}
+          {...(parsed.title ? { title: parsed.title } : {})}
+        />
       </div>
     )
   }
@@ -917,7 +950,10 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     )
   }
 
-  const height = autoHeight ?? clampHeight(baseHeight, 360)
+  const tallPage = contentHeight !== null && contentHeight > SANDBOX_AUTO_HEIGHT_MAX
+  const height = autoHeight !== null
+    ? sandboxFrameHeight(autoHeight, heightExpanded)
+    : clampHeight(baseHeight, 360)
   const stages = sandboxStageLabels(parsed)
   const requestMeasure = (): void => {
     try {
@@ -1045,12 +1081,60 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                     mergePackTokens: false,
                     ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
                   })
-                  const name = `${(parsed.title ?? 'iui-sandbox').replace(/[^\w\u4e00-\u9fff-]+/g, '_').slice(0, 48) || 'iui-sandbox'}.html`
-                  downloadText(name, html)
+                  downloadText(shareFileName(parsed.title), html)
                 })()
               }}
             >
               {t('sandbox.download')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={MENU_ITEM}
+              disabled={offlineNote === t('sandbox.offlinePacking')}
+              onClick={() => {
+                if (offlineNote) return
+                setOfflineNote(t('sandbox.offlinePacking'))
+                void (async () => {
+                  // F20: bake the live page, then inline what it fetched.
+                  const snap = await requestSandboxSnapshot(iframeRef.current, frameId)
+                  const assetBase = sandboxAssetBase()
+                  const cdnSource = getCdnSource()
+                  const live = snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}
+                  const common = {
+                    designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
+                    frameId: 'download',
+                    uiLang: currentLocale() === 'zh' ? 'zh-CN' : 'en',
+                    brandId: getActivePackId(),
+                    mergePackTokens: false,
+                    cdnSource,
+                    ...live,
+                  }
+                  const doc = buildHtmlSandboxSrcdoc(parsed, { ...common, ...(assetBase ? { assetBase } : {}) })
+                  let note: string
+                  try {
+                    const out = await buildOfflineExport(doc, snap?.resources ?? [], {
+                      ...(assetBase ? { assetBase } : {}), cdnSource, lang: currentLocale(),
+                    })
+                    if (out.tooLarge) {
+                      downloadText(shareFileName(parsed.title), buildSandboxDownloadHtml(parsed, common))
+                      note = t('sandbox.offlineTooLarge').replace('{max}', String(Math.round(OFFLINE_EXPORT_MAX_BYTES / 1048576)))
+                    } else {
+                      downloadText(shareFileName(parsed.title, 'offline'), out.html)
+                      note = t(out.failed.length ? 'sandbox.offlineDonePartial' : 'sandbox.offlineDone')
+                        .replace('{size}', (out.bytes / 1048576).toFixed(1))
+                        .replace('{n}', String(out.failed.length))
+                    }
+                  } catch {
+                    downloadText(shareFileName(parsed.title), buildSandboxDownloadHtml(parsed, common))
+                    note = t('sandbox.offlineFailed')
+                  }
+                  setOfflineNote(note)
+                  window.setTimeout(() => { setOfflineNote(null); setMenuOpen(false) }, 2600)
+                })()
+              }}
+            >
+              {offlineNote ?? t('sandbox.downloadOffline')}
             </button>
             <button
               type="button"
@@ -1153,10 +1237,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           }}
         />}
         {!storageReady && <SandboxSkeleton label={t('sandbox.skeleton.loading')} height={fullscreen ? '100%' : height} showProgress={false} />}
-        {storageReady && parsed.partial && !stopped && parsed.html.trim() === '' && (() => {
+        {storageReady && (parsed.partial || holdSectionJs) && !stopped && parsed.html.trim() === '' && (() => {
           const prog = sandboxStreamProgress(parsed)
-          return <SandboxSkeleton overlay label={t(`sandbox.skeleton.${prog.phase}`)} pct={prog.pct} />
+          return <SandboxSkeleton overlay label={streamLabel(t(`sandbox.skeleton.${prog.phase}`), raw)} pct={prog.pct} {...(parsed.title ? { title: parsed.title } : {})} />
         })()}
+        {storageReady && (parsed.partial || holdSectionJs) && !stopped && parsed.html.trim() !== '' && (
+          <SandboxStreamingPill label={streamLabel(t('sandbox.stream.static'), raw)} />
+        )}
         {hung && !stopped && (
           <div
             data-iui-sandbox-hung="1"
@@ -1178,6 +1265,20 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           </div>
         )}
       </div>
+      {tallPage && !fullscreen && contentHeight !== null && (
+        <div data-iui-sandbox-expand={heightExpanded ? 'expanded' : 'collapsed'} style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+          <button
+            type="button"
+            style={TOOLBAR_BTN}
+            aria-expanded={heightExpanded}
+            onClick={() => setHeightExpanded((v) => !v)}
+          >
+            {heightExpanded
+              ? t('sandbox.collapseHeight')
+              : t('sandbox.expandHeight', { height: String(Math.min(contentHeight, SANDBOX_EXPANDED_HEIGHT_MAX)) })}
+          </button>
+        </div>
+      )}
     </div>
   )
 

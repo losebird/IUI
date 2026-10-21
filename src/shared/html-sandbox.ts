@@ -202,7 +202,7 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number; strip?: boolean }
   | { source: 'iui-html'; type: 'stripAction'; frameId: string; action: 'reload' | 'reask' | 'switchCdn'; detail?: string }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
-  | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown> }
+  | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown>; resources?: Array<{ url: string; type: string }> }
   /** F10: debounced full snapshot of the page's persistent storage items. */
   | { source: 'iui-html'; type: 'storageSet'; frameId: string; items: Record<string, string> }
 
@@ -337,6 +337,10 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
     return typeof record.html === 'string' && record.html.length <= 200_064
       && typeof record.css === 'string' && record.css.length <= 200_064
       && typeof record.state === 'object' && record.state !== null && !Array.isArray(record.state)
+      && (record.resources === undefined || (Array.isArray(record.resources) && record.resources.length <= 800
+        && record.resources.every((r) => r !== null && typeof r === 'object'
+          && typeof (r as { url?: unknown }).url === 'string' && ((r as { url: string }).url).length <= 2000
+          && typeof (r as { type?: unknown }).type === 'string' && ((r as { type: string }).type).length <= 40)))
   }
   return false
 }
@@ -1513,17 +1517,34 @@ a{color:var(--iui-pack-accent,${accent})}
 .iui-sandbox-card{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius,${d.radius});padding:var(--iui-pack-pad,${d.pad});background:var(--iui-pack-surface);box-shadow:var(--iui-pack-elev,${e[1]});min-width:0;max-width:100%}
 .iui-sandbox-muted{color:var(--iui-pack-muted-fg);font-size:var(--iui-pack-font-sm,${d.fontSizeSm})}
 .iui-sandbox-toolbar{display:flex;gap:var(--iui-pack-gap-sm,${d.gapSm});flex-wrap:wrap;margin-bottom:var(--iui-pack-gap,${d.gap});align-items:center}
-.iui-sandbox-grid{display:grid;gap:var(--iui-pack-gap,${d.gap});grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.iui-sandbox-grid{display:grid;gap:var(--iui-pack-gap,${d.gap});grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))}
 .iui-sandbox-kpi{padding:var(--iui-pack-pad,${d.pad});border-radius:var(--iui-pack-radius-sm,${d.radiusSm});border:1px solid var(--iui-pack-border);background:var(--iui-pack-surface);box-shadow:var(--iui-pack-elev,${e[1]})}
 .iui-sandbox-kpi .label{font-size:var(--iui-pack-font-sm,${d.fontSizeSm});color:var(--iui-pack-muted-fg)}
 .iui-sandbox-kpi .value{font-size:var(--iui-pack-font-stat,${d.fontStat});font-weight:700;letter-spacing:-0.02em;color:var(--iui-pack-fg)}
-.iui-sandbox-compare{display:grid;gap:var(--iui-pack-gap,${d.gap});grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.iui-sandbox-compare{display:grid;gap:var(--iui-pack-gap,${d.gap});grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))}
 .iui-sandbox-tabs{display:flex;flex-direction:column;gap:var(--iui-pack-gap,${d.gap})}
 .iui-sandbox-tabbar{display:inline-flex;gap:var(--iui-pack-gap-xs,${d.gapXs});padding:var(--iui-pack-gap-xs,${d.gapXs});border-radius:var(--iui-pack-segment-radius,999px);background:var(--iui-pack-surface-muted);align-self:flex-start}
 .iui-sandbox-tab{appearance:none;border:none;background:transparent;padding:6px 12px;border-radius:var(--iui-pack-segment-radius,999px);font:inherit;font-size:var(--iui-pack-font,${d.fontSize});cursor:pointer;color:var(--iui-pack-muted-fg);min-height:auto}
 .iui-sandbox-tab[aria-selected="true"]{background:var(--iui-pack-surface);color:var(--iui-pack-accent,${accent});box-shadow:var(--iui-pack-elev,${e[1]});font-weight:600}
 .iui-sandbox-stage{display:none}
 .iui-sandbox-stage[data-active="1"]{display:block}
+/* F22 responsive defaults: grids use minmax(0,1fr); ≤560px dense (4+ col) grids → 2 cols; ≤480px → 1 col. Chat bubbles are ~680px, so 3-col stays until phone width. */
+.iui-cols-2,.iui-cols-3,.iui-cols-4{display:grid;gap:var(--iui-pack-gap,${d.gap})}
+.iui-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.iui-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.iui-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+video,iframe{max-width:100%}
+pre{max-width:100%;overflow-x:auto}
+p,li,dd,dt,h1,h2,h3,h4,blockquote,figcaption{overflow-wrap:anywhere}
+.iui-scroll-x{display:block;max-width:100%;overflow-x:auto}
+@media (max-width:560px){
+.iui-cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+[style*="repeat(4"],[style*="repeat(5"],[style*="repeat(6"],[style*="repeat(7"],[style*="repeat(8"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+[style*="repeat(4"]>*,[style*="repeat(5"]>*,[style*="repeat(6"]>*,[style*="repeat(7"]>*,[style*="repeat(8"]>*{grid-column:auto!important}
+}
+@media (max-width:480px){
+.iui-cols-2,.iui-cols-3,.iui-sandbox-compare{grid-template-columns:minmax(0,1fr)}
+[style*="repeat(2"],[style*="repeat(3"],[style*="1fr 1fr"]{grid-template-columns:minmax(0,1fr)!important}
+[style*="repeat(2"]>*,[style*="repeat(3"]>*,[style*="1fr 1fr"]>*{grid-column:auto!important}
+}
 /* Polished defaults for raw elements so un-styled model markup never looks like a default browser page */
 :root{--iui-chart-1:#3b82f6;--iui-chart-2:#10b981;--iui-chart-3:#f59e0b;--iui-chart-4:#ef4444;--iui-chart-5:#8b5cf6;--iui-chart-6:#06b6d4}
 h1,h2,h3,h4{margin:0 0 8px;line-height:1.25;letter-spacing:-0.015em;color:var(--iui-pack-fg)}
@@ -1688,6 +1709,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
       return false;
     });
   }
+  // F20: keep enough resource entries for the offline export (default buffer is 250).
+  try { performance.setResourceTimingBufferSize(1000); } catch (eRT) {}
   // F6: watchdog heartbeat — the host shows「页面无响应」after 5s of silence.
   try { setInterval(function () { post({ type: 'heartbeat' }); }, 1000); post({ type: 'heartbeat' }); } catch (e) {}
   // F11: forward Escape so overlay fullscreen can close while the page has focus.
@@ -1704,6 +1727,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     ? function (cb) { return window.requestAnimationFrame(cb); }
     : function (cb) { return setTimeout(cb, 16); };
   function measureNow(force) {
+    __iuiFitWide();
     var body = document.body;
     // Content height (not viewport): bottom of the lowest rendered child + body padding,
     // so frames shrink to fit and 100vh layouts cannot feed back into growth.
@@ -1720,10 +1744,24 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (lowest) bottom += parseFloat(getComputedStyle(lowest).marginBottom) || 0;
       bottom += parseFloat(getComputedStyle(body).paddingBottom) || 0;
     }
-    var h = Math.min(2400, Math.ceil(Math.max(bottom || (body ? body.scrollHeight : 0), 120)));
+    // F22: report the real content height (host scrolls past 2400 and offers 展开全部).
+    var h = Math.min(20000, Math.ceil(Math.max(bottom || (body ? body.scrollHeight : 0), 120)));
     if (!force && __iuiLastHeight >= 0 && Math.abs(h - __iuiLastHeight) < 2) return;
     __iuiLastHeight = h;
     post({ type: 'resize', height: h });
+  }
+  // F22: a table / pre wider than its column scrolls sideways instead of widening the page.
+  function __iuiFitWide() {
+    try {
+      // html/body clip overflow-x, so check the wide elements themselves.
+      var els = document.querySelectorAll('table,pre');
+      for (var i = 0; i < els.length && i < 200; i++) {
+        var el = els[i];
+        var parent = el.parentElement;
+        if (!parent || el.classList.contains('iui-scroll-x')) continue;
+        if (el.scrollWidth > parent.clientWidth + 1) el.classList.add('iui-scroll-x');
+      }
+    } catch (e) { /* best effort */ }
   }
   function measure(force) {
     if (force === true) __iuiMeasureForce = true;
@@ -2327,7 +2365,16 @@ export function buildSandboxBridgeScript(frameId: string): string {
         var snap = window.iuiSandbox && window.iuiSandbox.captureShareSnapshot
           ? window.iuiSandbox.captureShareSnapshot()
           : { html: '', css: '', state: {} };
-        post({ type: 'snapshot', html: snap.html || '', css: snap.css || '', state: snap.state || {} });
+        // F20: what the page actually fetched (libs, modules, images, tiles) for the offline export.
+        var resources = [];
+        try {
+          var ents = performance.getEntriesByType('resource') || [];
+          for (var ri = 0; ri < ents.length && resources.length < 800; ri++) {
+            var rn = String(ents[ri].name || '');
+            if (/^https?:/i.test(rn) && rn.length <= 2000) resources.push({ url: rn, type: String(ents[ri].initiatorType || '') });
+          }
+        } catch (eR) {}
+        post({ type: 'snapshot', html: snap.html || '', css: snap.css || '', state: snap.state || {}, resources: resources });
       } catch (eS) {
         try { post({ type: 'snapshot', html: '', css: '', state: {} }); } catch (eS2) {}
       }

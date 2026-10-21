@@ -7,12 +7,15 @@
  *   background whose WCAG ratio is below 4.5:1 (3:1 for large text)
  * - stat-label: a number and its caption glued in one text run inside a
  *   stat/kpi/value element (must be two layers: big number, small caption)
+ * - narrow-overflow (F22): a fixed width / min-width or fixed grid tracks wider
+ *   than a 360px phone viewport (the browser check in scripts/browser-e2e.mts
+ *   renders the starters at 360 / 720px)
  *
  * Results feed a non-steering design note for the NEXT UI turn — never a
  * same-turn correction, so a working page is never re-generated for style.
  */
 
-export type DesignIssueKind = 'min-font' | 'contrast' | 'stat-label'
+export type DesignIssueKind = 'min-font' | 'contrast' | 'stat-label' | 'narrow-overflow'
 
 export type DesignIssue = {
   readonly kind: DesignIssueKind
@@ -25,6 +28,8 @@ export type DesignLintInput = {
 }
 
 export const DESIGN_MIN_FONT_PX = 12
+/** F22: narrowest supported viewport; fixed boxes wider than this overflow on phones. */
+export const DESIGN_NARROW_VIEWPORT_PX = 360
 export const DESIGN_TYPE_SCALE_PX = [12, 14, 16, 20, 28, 40] as const
 const MAX_ISSUES = 6
 
@@ -106,13 +111,13 @@ function parseDecls(body: string): Decl[] {
   return out
 }
 
-type Rule = { selector: string; decls: Decl[] }
+type Rule = { selector: string; decls: Decl[]; wideOnly?: boolean }
 
 /** Flat rule list; @media / @supports blocks are unwrapped, @keyframes / @font-face skipped. */
 function parseCssRules(css: string): Rule[] {
   const src = css.replace(/\/\*[\s\S]*?\*\//gu, '')
   const rules: Rule[] = []
-  const walk = (text: string, depth: number): void => {
+  const walk = (text: string, depth: number, wideOnly = false): void => {
     let i = 0
     while (i < text.length && depth < 4) {
       const open = text.indexOf('{', i)
@@ -126,8 +131,8 @@ function parseCssRules(css: string): Rule[] {
         j++
       }
       const body = text.slice(open + 1, j - 1)
-      if (/^@(media|supports|container|layer)/iu.test(selector)) walk(body, depth + 1)
-      else if (!selector.startsWith('@')) rules.push({ selector: selector.replace(/^[;}\s]+/u, ''), decls: parseDecls(body) })
+      if (/^@(media|supports|container|layer)/iu.test(selector)) walk(body, depth + 1, wideOnly || /min-width\s*:/iu.test(selector))
+      else if (!selector.startsWith('@')) rules.push({ selector: selector.replace(/^[;}\s]+/u, ''), decls: parseDecls(body), wideOnly })
       i = j
     }
   }
@@ -138,6 +143,11 @@ function parseCssRules(css: string): Rule[] {
 /** Selectors whose text is decorative / not body copy (SVG labels, sub/sup, scrollbars, map chrome). */
 function exemptSelector(selector: string): boolean {
   return /(^|[\s>+~,(])(svg|text|tspan|sup|sub|canvas)\b|::?-webkit-|::?-moz-|::?placeholder|\.leaflet-|\bkbd\b|\[aria-hidden/iu.test(selector)
+}
+
+/** Media / scrollers size themselves (max-width:100% in base css, or scroll inside). */
+function narrowExempt(selector: string): boolean {
+  return /(^|[\s>+~,(])(img|canvas|video|iframe|table|pre|html|body)\b|::?(before|after)|overflow|scroll|carousel|strip|marquee/iu.test(selector)
 }
 
 function largeText(decls: Decl[]): boolean {
@@ -153,7 +163,63 @@ function largeText(decls: Decl[]): boolean {
   return px !== null && (px >= 24 || (bold && px >= 18.66))
 }
 
-function checkDecls(where: string, decls: Decl[], issues: DesignIssue[]): void {
+/** Minimum px a grid-template-columns value needs (px tracks + minmax() px minimums). */
+export function gridMinTrackPx(value: string): number {
+  const v = value.toLowerCase().replace(/\s+/gu, ' ')
+  if (/\bmin\(/u.test(v) && /%|vw/u.test(v)) return 0
+  const trackPx = (track: string): number => {
+    const mm = /^minmax\(\s*(\d*\.?\d+)px\s*,/u.exec(track.trim())
+    if (mm) return Number(mm[1])
+    const px = /^(\d*\.?\d+)px$/u.exec(track.trim())
+    return px ? Number(px[1]) : 0
+  }
+  const splitTracks = (text: string): string[] => {
+    const out: string[] = []
+    let depth = 0
+    let cur = ''
+    for (const ch of text) {
+      if (ch === '(') depth++
+      if (ch === ')') depth--
+      if (ch === ' ' && depth === 0) { if (cur) out.push(cur); cur = ''; continue }
+      cur += ch
+    }
+    if (cur) out.push(cur)
+    return out
+  }
+  let total = 0
+  for (const track of splitTracks(v)) {
+    const rep = /^repeat\(\s*([^,]+?)\s*,\s*(.+)\)$/u.exec(track)
+    if (rep) {
+      const count = /^\d+$/u.test(rep[1]!) ? Number(rep[1]) : 1 // auto-fit / auto-fill: one track minimum
+      const inner = splitTracks(rep[2]!).reduce((sum, t) => sum + trackPx(t), 0)
+      total += Math.min(count, 12) * inner
+    } else {
+      total += trackPx(track)
+    }
+  }
+  return total
+}
+
+function checkNarrow(where: string, decls: Decl[], issues: DesignIssue[]): void {
+  const capped = decls.some((d) => d.prop === 'max-width' && (/%|vw|min\(/u.test(d.value) || (fontSizeToPx(d.value) ?? Infinity) <= DESIGN_NARROW_VIEWPORT_PX))
+  for (const d of decls) {
+    if ((d.prop === 'width' || d.prop === 'min-width') && !capped) {
+      const m = /^(\d*\.?\d+)px$/u.exec(d.value.trim().toLowerCase())
+      if (m && Number(m[1]) > DESIGN_NARROW_VIEWPORT_PX) {
+        issues.push({ kind: 'narrow-overflow', detail: `${where} ${d.prop} ${m[1]}px > ${DESIGN_NARROW_VIEWPORT_PX}px` })
+      }
+    } else if (d.prop === 'grid-template-columns' || d.prop === 'grid-template') {
+      const need = gridMinTrackPx(d.prop === 'grid-template' ? (d.value.split('/')[1] ?? '') : d.value)
+      if (need > DESIGN_NARROW_VIEWPORT_PX) {
+        issues.push({ kind: 'narrow-overflow', detail: `${where} grid columns need ${Math.round(need)}px > ${DESIGN_NARROW_VIEWPORT_PX}px` })
+      }
+    }
+  }
+}
+
+function checkDecls(where: string, decls: Decl[], issues: DesignIssue[], media = false): void {
+  // Rules inside a min-width @media only apply on wide screens.
+  if (!media) checkNarrow(where, decls, issues)
   for (const d of decls) {
     const px = d.prop === 'font-size' ? fontSizeToPx(d.value) : d.prop === 'font' ? fontShorthandPx(d.value) : null
     if (px !== null && px > 0 && px < DESIGN_MIN_FONT_PX - 0.01) {
@@ -214,8 +280,11 @@ export function lintSandboxDesign(input: DesignLintInput): DesignIssue[] {
   })
   for (const block of styleBlocks) {
     for (const rule of parseCssRules(block.slice(0, 200_000))) {
-      if (exemptSelector(rule.selector)) continue
-      checkDecls(shortSel(rule.selector), rule.decls, issues)
+      if (exemptSelector(rule.selector) || narrowExempt(rule.selector)) {
+        if (!exemptSelector(rule.selector)) checkDecls(shortSel(rule.selector), rule.decls, issues, true)
+        continue
+      }
+      checkDecls(shortSel(rule.selector), rule.decls, issues, rule.wideOnly === true)
     }
   }
   const bodyHtml = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, '').replace(/<svg\b[\s\S]*?<\/svg>/giu, '')
@@ -223,7 +292,7 @@ export function lintSandboxDesign(input: DesignLintInput): DesignIssue[] {
   let m: RegExpExecArray | null
   while ((m = inline.exec(bodyHtml)) !== null) {
     if (/^(sup|sub|text|tspan)$/iu.test(m[1]!)) continue
-    checkDecls(`<${m[1]!.toLowerCase()} style>`, parseDecls(m[3] ?? m[4] ?? ''), issues)
+    checkDecls(`<${m[1]!.toLowerCase()} style>`, parseDecls(m[3] ?? m[4] ?? ''), issues, /^(img|canvas|svg|video|iframe|table|pre)$/iu.test(m[1]!))
   }
   checkStatLabels(bodyHtml, issues)
   // De-duplicate by kind+detail, keep order.
@@ -246,6 +315,7 @@ export function designLintNote(issues: readonly DesignIssue[]): string {
   const rules: string[] = []
   if (kinds.has('min-font')) rules.push('字号只用 12/14/16/20/28/40（--fs-xs…--fs-2xl），任何文字不小于 12px')
   if (kinds.has('contrast')) rules.push('正文与背景对比度 ≥ 4.5:1（大字 ≥ 3:1），优先用 --color-text-* 与 --color-background-* 变量')
+  if (kinds.has('narrow-overflow')) rules.push('页面要在 360px 宽的手机上不横向溢出：固定宽度改成 max-width/百分比，网格用 repeat(auto-fit,minmax(min(160px,100%),1fr)) 或 .iui-cols-2/3/4（自带断点）')
   if (kinds.has('stat-label')) rules.push('统计数字用 .iui-stat：.iui-stat-value 大号数字（单位放 <span class="unit">）在上，.iui-stat-label 小号说明在下，不要写在同一行')
   const lines = issues.slice(0, 4).map((i) => `- ${i.kind}: ${i.detail}`)
   return [

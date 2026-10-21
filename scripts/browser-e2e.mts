@@ -11,7 +11,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildHtmlSandboxSrcdoc, type HtmlSandboxSpec } from '../src/shared/html-sandbox.ts'
+import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS, type HtmlSandboxSpec } from '../src/shared/html-sandbox.ts'
 
 const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
 
@@ -132,6 +132,7 @@ async function main(): Promise<void> {
       await page.close()
     }
     failures += await bridgeDelegationCase(browser)
+    failures += await narrowOverflowCase(browser)
   } finally {
     await browser.close()
   }
@@ -198,4 +199,66 @@ addEventListener('message', function (e) { var d = e.data; if (!d || d.source !=
   return problems.length ? 1 : 0
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+/**
+ * F22: every built-in starter renders at 360px (phone) and 720px (chat column)
+ * without horizontal overflow. Overflow = page scrollWidth wider than the
+ * viewport, reported with the widest offending elements.
+ */
+export async function measureOverflow(page: any): Promise<{ overflow: number; culprits: string[] }> {
+  // tsx keeps function names via an injected __name helper that the page lacks.
+  await page.evaluate('window.__name = window.__name || function (f) { return f }')
+  return await page.evaluate(() => {
+    // html/body use overflow-x:clip, so scrollWidth hides overflow: measure element boxes,
+    // skipping descendants of their own scroll/clip containers (tables, carousels, maps).
+    const vw = document.documentElement.clientWidth
+    const clipped = (el: Element): boolean => {
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        if (p.id === 'iui-preview-root') continue
+        const ox = getComputedStyle(p).overflowX
+        if (ox !== 'visible' && ox !== 'clip') return true
+        if (ox === 'clip') return true
+      }
+      return false
+    }
+    let overflow = 0
+    const culprits: string[] = []
+    for (const el of Array.from(document.body.querySelectorAll('*'))) {
+      if (el.closest('script,style,template,.leaflet-container,[aria-hidden="true"]')) continue
+      const r = (el as HTMLElement).getBoundingClientRect()
+      if (r.width === 0 || r.height === 0 || r.right <= vw + 1) continue
+      const pos = getComputedStyle(el).position
+      if (pos === 'fixed') continue
+      if (clipped(el)) continue
+      const parent = el.parentElement
+      const parentOver = parent && parent !== document.body && parent.getBoundingClientRect().right > vw + 1 && !clipped(parent)
+      overflow = Math.max(overflow, Math.round(r.right - vw))
+      if (!parentOver && culprits.length < 4) {
+        const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : ''
+        culprits.push(`${el.tagName.toLowerCase()}${cls} → ${Math.round(r.right)}px`)
+      }
+    }
+    return { overflow, culprits }
+  })
+}
+
+async function narrowOverflowCase(browser: any): Promise<number> {
+  const widths = [360, 720]
+  const problems: string[] = []
+  for (const width of widths) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } })
+    for (const starter of HTML_SANDBOX_STARTERS) {
+      await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f22-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
+      await page.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+      await page.waitForTimeout(250)
+      const { overflow, culprits } = await measureOverflow(page)
+      if (overflow > 1) problems.push(`${starter.id} @${width}px overflows by ${overflow}px: ${culprits.join(', ')}`)
+    }
+    await page.close()
+  }
+  console.log(`${problems.length ? '✗' : '✓'} narrow widths 360/720 · ${HTML_SANDBOX_STARTERS.length} starters without horizontal overflow${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((e) => { console.error(e); process.exit(1) })
+}

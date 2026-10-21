@@ -995,6 +995,7 @@ Layout helpers already injected:
 - .iui-compare-3 / .iui-tier / .iui-tier.featured  (MUST be 3 side-by-side columns in chat bubbles)
 - .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards)
 - .iui-weather / .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days
+- .iui-cols-2 / .iui-cols-3 / .iui-cols-4  (equal columns with built-in breakpoints: 4→2 at ≤560px, all→1 at ≤480px; no horizontal overflow at 360px)
 - Legacy kit still works: .iui-sandbox-card .iui-sandbox-grid .iui-sandbox-kpi .iui-sandbox-compare …
 
 css parameter = widget-specific styles ONLY (theme/forms/SVG already loaded).
