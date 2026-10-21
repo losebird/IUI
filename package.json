@@ -191,6 +191,7 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && tsdown && node scripts/vendor-assets.mjs",
     "test": "vitest run",
     "test:browser": "tsx scripts/browser-e2e.mts",
+    "test:visual": "tsx scripts/visual-score.mts",
     "check": "node scripts/clean.mjs && tsc -p tsconfig.json && vitest run && tsdown && node scripts/vendor-assets.mjs && node scripts/check-standalone.mjs",
     "check:host-api": "node scripts/check-host-api.mjs",
     "prepack": "node scripts/prepack.mjs",

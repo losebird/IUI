@@ -12,6 +12,7 @@ import { existsSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS, type HtmlSandboxSpec } from '../src/shared/html-sandbox.ts'
+import { visualScoreCase } from './visual-score.mts'
 
 const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
 
@@ -134,6 +135,7 @@ async function main(): Promise<void> {
     failures += await bridgeDelegationCase(browser)
     failures += await narrowOverflowCase(browser)
     failures += await keyboardAuditCase(browser)
+    failures += await visualScoreCase(browser)
   } finally {
     await browser.close()
   }
@@ -249,8 +251,7 @@ async function narrowOverflowCase(browser: any): Promise<number> {
     const page = await browser.newPage({ viewport: { width, height: 900 } })
     for (const starter of HTML_SANDBOX_STARTERS) {
       await page.goto('about:blank') // fresh window: setContent reuses globals
-      await page.goto('about:blank') // fresh window: setContent reuses globals
-    await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f22-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
+      await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f22-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
       await page.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
       await page.waitForTimeout(250)
       const { overflow, culprits } = await measureOverflow(page)

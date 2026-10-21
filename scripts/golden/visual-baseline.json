@@ -1,0 +1,255 @@
+{
+  "counter": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 83,
+      "hero": 100
+    },
+    "total": 97
+  },
+  "kpi-grid": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 88,
+      "hero": 0
+    },
+    "total": 81
+  },
+  "mini-form": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 57,
+      "hero": 98
+    },
+    "total": 93
+  },
+  "todo": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "spark": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 57,
+      "hero": 100
+    },
+    "total": 93
+  },
+  "leaflet-map": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "links": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 93,
+      "hero": 0
+    },
+    "total": 82
+  },
+  "compare-cards": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 0
+    },
+    "total": 83
+  },
+  "tabs-panel": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 83,
+      "hero": 100
+    },
+    "total": 97
+  },
+  "echarts-mini": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 61,
+      "hero": 100
+    },
+    "total": 94
+  },
+  "ds-kit": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 0
+    },
+    "total": 83
+  },
+  "sort-viz": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 96,
+      "hero": 0
+    },
+    "total": 83
+  },
+  "bento-dash": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 84,
+      "hero": 46
+    },
+    "total": 88
+  },
+  "particle": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 99,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "form-bridge": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 58,
+      "hero": 0
+    },
+    "total": 76
+  },
+  "itinerary-coast": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "weather-dense": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "pricing-3col": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "hotel-covers": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 45
+    },
+    "total": 91
+  },
+  "ag-grid-sheet": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  },
+  "mermaid-mindmap": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 41,
+      "hero": 100
+    },
+    "total": 90
+  },
+  "scene-3d": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 95,
+      "hero": 100
+    },
+    "total": 99
+  },
+  "meeting-rooms": {
+    "scores": {
+      "minFont": 100,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 100
+    },
+    "total": 100
+  }
+}

@@ -106,22 +106,40 @@ const SCENE_3D_JS = `
     var rim=new THREE.DirectionalLight(0xffffff,1.2);rim.position.set(-2,4,-5);
     scene.add(key,fill,rim);
     var obj=new THREE.Mesh(new THREE.TorusKnotGeometry(0.8,0.28,220,32),new THREE.MeshStandardMaterial({color:0x185FA5,roughness:0.32,metalness:0.2}));
-    obj.castShadow=true;obj.position.y=1.15;scene.add(obj);
+    obj.castShadow=true;obj.position.y=1.35;
+    var plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.6,0.24,64),new THREE.MeshStandardMaterial({color:0xd9d4ca,roughness:0.85}));
+    plinth.position.y=0.12;plinth.receiveShadow=true;plinth.castShadow=true;
+    var subject=new THREE.Group();subject.add(obj,plinth);scene.add(subject);
     var ground=new THREE.Mesh(new THREE.CircleGeometry(4,64),new THREE.ShadowMaterial({opacity:0.22}));
     ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
     var controls=new OC(camera,renderer.domElement);
     controls.enableDamping=true;controls.dampingFactor=0.08;
     var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
     controls.autoRotate=!still;controls.autoRotateSpeed=1.2;
-    // Auto-fit: the object's bounding sphere fills ~70% of the smaller frame side (never < 40%).
+    // Auto-fit: the subject (object + plinth) is framed to ~90% of the frame by projecting its vertices, so the subject
+    // (object + shadow) covers ≥ 40% of the canvas at any orbit angle (F25 template gate).
     function fit(){
-      var sphere=new THREE.Box3().setFromObject(obj).getBoundingSphere(new THREE.Sphere());
-      var v=camera.fov*Math.PI/360,hz=Math.atan(Math.tan(v)*camera.aspect);
-      var d=sphere.radius/Math.sin(0.7*Math.min(v,hz));
-      var dir=new THREE.Vector3(1,0.65,1.2).normalize();
-      camera.position.copy(sphere.center).addScaledVector(dir,d);
+      var box=new THREE.Box3().setFromObject(subject),c=box.getCenter(new THREE.Vector3());
+      var sphere=box.getBoundingSphere(new THREE.Sphere());
+      var dir=new THREE.Vector3(0.9,0.45,1.3).normalize(),d=sphere.radius*3,p=new THREE.Vector3();
+      // Project the subject's actual vertices (a box is too loose) and pull the camera in until the
+      // silhouette spans ~90% of the frame.
+      var pts=[];
+      subject.updateMatrixWorld(true);
+      subject.traverse(function(m){
+        if(!m.isMesh)return;var a=m.geometry.attributes.position,step=Math.max(1,Math.floor(a.count/1500));
+        for(var i=0;i<a.count;i+=step)pts.push(new THREE.Vector3().fromBufferAttribute(a,i).applyMatrix4(m.matrixWorld));
+      });
+      for(var k=0;k<4;k++){
+        camera.position.copy(c).addScaledVector(dir,d);camera.lookAt(c);
+        camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();camera.updateMatrixWorld();
+        var ext=0;
+        for(var n=0;n<pts.length;n++){p.copy(pts[n]).project(camera);ext=Math.max(ext,Math.abs(p.x),Math.abs(p.y));}
+        d*=ext/0.9;
+      }
+      camera.position.copy(c).addScaledVector(dir,d);
       camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();
-      controls.target.copy(sphere.center);controls.minDistance=d*0.5;controls.maxDistance=d*3;controls.update();
+      controls.target.copy(c);controls.minDistance=d*0.5;controls.maxDistance=d*3;controls.update();
     }
     fit();
     controls.addEventListener('start',function(){controls.autoRotate=false;sync();});
@@ -173,6 +191,7 @@ function render(){
   document.getElementById('sTotal').firstChild.nodeValue=String(total);
   document.getElementById('sUse').firstChild.nodeValue=String(Math.round(used/(rooms.length*12)*100));
   var grid=document.getElementById('rooms');grid.innerHTML='';
+  var gantt=document.getElementById('gantt');gantt.innerHTML='';
   rooms.forEach(function(r,i){
     var st=state(r);
     if(filter!=='all'&&!(filter==='free'?st.k!=='busy':st.k==='busy'))return;
@@ -182,10 +201,12 @@ function render(){
     el.className='room';
     el.innerHTML='<div class="top"><div class="iui-card-title">'+r.n+'</div><span class="st '+st.k+'">'+st.t+'</span></div>'+
       '<div class="iui-card-summary">'+r.f+' · '+r.cap+' 人 · '+line+'</div>'+
-      '<div class="tl" aria-label="8:00–20:00 预订情况">'+bars+'<b style="left:'+((NOW-8)/12*100)+'%"></b></div>'+
-      '<div class="ticks"><span>8:00</span><span>14:00</span><span>20:00</span></div>'+
       '<button type="button" class="iui-card-foot'+(st.k==='busy'?' secondary':' primary')+'" data-i="'+i+'">'+(st.k==='busy'?'查看日程':'预订')+'</button>';
     grid.appendChild(el);
+    var row=document.createElement('div');
+    row.className='gr';
+    row.innerHTML='<span class="nm">'+r.n+'</span><div class="tl" aria-label="'+r.n+' 8:00–20:00 预订情况">'+bars+'<b style="left:'+((NOW-8)/12*100)+'%"></b></div>';
+    gantt.appendChild(row);
   });
 }
 document.getElementById('rooms').onclick=function(e){
@@ -312,9 +333,9 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
     summary: '三点光源 + 阴影 + 自动取景 + OrbitControls 阻尼 + 加载占位',
     spec: {
       title: '3D 展示台',
-      height: 440,
+      height: 500,
       css: '',
-      html: "<div class=\"iui-sandbox-stack\"><div><h2 style=\"margin:0\">3D 展示台</h2><div class=\"iui-sandbox-muted\">三点光源 + 柔和阴影，物体自动居中占画面约 70%</div></div><div class=\"iui-3d-wrap\" id=\"stage\"><div class=\"iui-3d-loading\">正在加载 3D 场景…</div></div><div class=\"iui-sandbox-row\"><button type=\"button\" id=\"reset\" class=\"secondary\">重置视角</button><button type=\"button\" id=\"spin\" class=\"secondary\" aria-pressed=\"true\">暂停旋转</button><span class=\"iui-sandbox-muted\">拖动旋转 · 滚轮或双指缩放</span></div></div>",
+      html: "<div class=\"iui-sandbox-stack\"><div><h2 style=\"margin:0\">3D 展示台</h2><div class=\"iui-sandbox-muted\">三点光源 + 柔和阴影，物体按轮廓自动取景、占满画面约 90%</div></div><div class=\"iui-3d-wrap\" id=\"stage\" style=\"height:380px\"><div class=\"iui-3d-loading\">正在加载 3D 场景…</div></div><div class=\"iui-sandbox-row\"><button type=\"button\" id=\"reset\" class=\"secondary\">重置视角</button><button type=\"button\" id=\"spin\" class=\"secondary\" aria-pressed=\"true\">暂停旋转</button><span class=\"iui-sandbox-muted\">拖动旋转 · 滚轮或双指缩放</span></div></div>",
       js: SCENE_3D_JS,
       stages: ['html', 'js'],
       partial: false,
@@ -329,9 +350,9 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
     summary: '数据型风格 + 上下两层数字 + 等高卡片 + 时间轴',
     spec: {
       title: '会议室看板',
-      height: 620,
-      css: ".head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}.room{gap:8px;padding:14px;border-radius:var(--border-radius-lg);background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary)}.room .top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.st{flex:none;font-size:var(--fs-xs);font-weight:600;padding:2px 8px;border-radius:999px}.st.free{background:var(--color-background-success);color:var(--color-text-success)}.st.busy{background:var(--color-background-danger);color:var(--color-text-danger)}.st.soon{background:var(--color-background-warning);color:var(--color-text-warning)}.tl{position:relative;height:8px;border-radius:4px;background:var(--color-background-tertiary);margin-top:4px}.tl i{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--accent-fill)}.tl b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--color-text-danger);border-radius:1px}.ticks{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--color-text-tertiary)}.room button{width:100%}#rooms{margin-top:12px}",
-      html: "<div data-iui-style=\"data\"><div class=\"head\"><div><h2 style=\"margin:0\">会议室看板</h2><div class=\"iui-sandbox-muted\">今天 · 当前 10:30（示例数据）</div></div><div class=\"iui-sandbox-tabbar\" id=\"flt\" role=\"tablist\"><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"all\" aria-selected=\"true\">全部</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"free\" aria-selected=\"false\">可用</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"busy\" aria-selected=\"false\">使用中</button></div></div><div class=\"iui-stats\"><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sFree\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">现在可用</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sBusy\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">使用中</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sTotal\">0<span class=\"unit\">场</span></div><div class=\"iui-stat-label\">今日预订</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sUse\">0<span class=\"unit\">%</span></div><div class=\"iui-stat-label\">今日利用率（8:00–20:00）</div></div></div><div class=\"iui-card-grid\" id=\"rooms\"></div></div>",
+      height: 820,
+      css: ".head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}.room{gap:8px;padding:14px;border-radius:var(--border-radius-lg);background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary)}.room .top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.st{flex:none;font-size:var(--fs-xs);font-weight:600;padding:2px 8px;border-radius:999px}.st.free{background:var(--color-background-success);color:var(--color-text-success)}.st.busy{background:var(--color-background-danger);color:var(--color-text-danger)}.st.soon{background:var(--color-background-warning);color:var(--color-text-warning)}.gantt{margin-top:12px;padding:12px 14px;border-radius:var(--border-radius-lg);background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary)}.gantt h3{margin:0 0 6px}.gr{display:grid;grid-template-columns:minmax(64px,96px) 1fr;align-items:center;gap:10px;min-height:30px}.gr .nm{font-size:var(--fs-xs);color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tl{position:relative;height:16px;border-radius:4px;background:var(--color-background-secondary)}.tl i{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--accent-fill)}.tl b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--color-text-danger);border-radius:1px}.ticks{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--color-text-secondary)}.room button{width:100%}#rooms{margin-top:12px}",
+      html: "<div data-iui-style=\"data\"><div class=\"head\"><div><h2 style=\"margin:0\">会议室看板</h2><div class=\"iui-sandbox-muted\">今天 · 当前 10:30（示例数据）</div></div><div class=\"iui-sandbox-tabbar\" id=\"flt\" role=\"tablist\"><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"all\" aria-selected=\"true\">全部</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"free\" aria-selected=\"false\">可用</button><button type=\"button\" class=\"iui-sandbox-tab\" data-f=\"busy\" aria-selected=\"false\">使用中</button></div></div><div class=\"iui-stats\"><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sFree\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">现在可用</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sBusy\">0<span class=\"unit\">间</span></div><div class=\"iui-stat-label\">使用中</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sTotal\">0<span class=\"unit\">场</span></div><div class=\"iui-stat-label\">今日预订</div></div><div class=\"iui-stat\"><div class=\"iui-stat-value\" id=\"sUse\">0<span class=\"unit\">%</span></div><div class=\"iui-stat-label\">今日利用率（8:00–20:00）</div></div></div><section class=\"gantt\" data-iui-hero aria-label=\"今日占用\"><h3>今日占用 · 红线为现在</h3><div id=\"gantt\"></div><div class=\"gr\"><span></span><div class=\"ticks\"><span>8:00</span><span>11:00</span><span>14:00</span><span>17:00</span><span>20:00</span></div></div></section><div class=\"iui-card-grid\" id=\"rooms\"></div></div>",
       js: MEETING_ROOMS_JS,
       stages: ['css', 'html', 'js'],
       partial: false,

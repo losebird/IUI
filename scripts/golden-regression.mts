@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { scoreSrcdoc } from './visual-score.mts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
@@ -237,6 +238,18 @@ async function shootLive(page, url, prompt, shotPath, expect) {
     await page.screenshot({ path: shotPath, fullPage: false })
   }
 
+  // F25: score the rendered page (informational — does not flip pass/fail).
+  let visual = null
+  try {
+    const srcdoc = await page.evaluate(() => {
+      const f = [...document.querySelectorAll('[data-iui-html-sandbox] iframe')].pop()
+      return f?.getAttribute('srcdoc') || null
+    })
+    if (srcdoc) visual = await scoreSrcdoc(page.context().browser(), srcdoc)
+  } catch (e) {
+    visual = { error: String(e?.message || e) }
+  }
+
   const authorFail = !!(iframeProbe.authorFail || info.authorFailHost)
   const hostFail = !!(iframeProbe.hostFail || info.hostFailHost)
   const iframeReady = info.iframes > 0 && info.grew && info.state === 'ready'
@@ -251,6 +264,7 @@ async function shootLive(page, url, prompt, shotPath, expect) {
   return {
     pass,
     rateLimited: !!info.rateLimited,
+    visual,
     seconds: Math.round((Date.now() - T0) / 1000),
     checks: {
       iframeReady,
@@ -304,7 +318,7 @@ for (const c of cases) {
   }
   const row = { id: c.id, mode: c.mode, pass: !!result.pass, ...result, shot: shotPath }
   results.push(row)
-  console.log(JSON.stringify({ id: c.id, pass: row.pass, checks: row.checks, seconds: row.seconds, rateLimited: row.rateLimited }))
+  console.log(JSON.stringify({ id: c.id, pass: row.pass, checks: row.checks, visual: row.visual?.total, seconds: row.seconds, rateLimited: row.rateLimited }))
 }
 
 await browser.close()
@@ -327,11 +341,14 @@ writeFileSync(join(args.outDir, 'REPORT.zh-CN.md'), [
   `- URL：${summary.url || '(fixture-only)'}`,
   `- 通过：${summary.passed} / 失败：${summary.failed}`,
   ``,
-  `| id | mode | pass | notes |`,
-  `|----|------|------|-------|`,
+  `| id | mode | pass | visual | notes |`,
+  `|----|------|------|--------|-------|`,
   ...results.map((r) => {
     const notes = r.rateLimited ? 'rate_limited' : (r.checks ? Object.entries(r.checks).filter(([, v]) => !v).map(([k]) => k).join(',') || 'ok' : (r.detail?.error || ''))
-    return `| ${r.id} | ${r.mode} | ${r.pass ? 'PASS' : 'FAIL'} | ${notes} |`
+    const v = r.visual?.total !== undefined
+      ? `${r.visual.total}${Object.entries(r.visual.scores || {}).filter(([, n]) => n < 75).map(([k, n]) => ` 🔴${k} ${n}`).join('')}`
+      : (r.visual?.error ? 'err' : '—')
+    return `| ${r.id} | ${r.mode} | ${r.pass ? 'PASS' : 'FAIL'} | ${v} | ${notes} |`
   }),
   ``,
 ].join('\n'))

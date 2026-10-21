@@ -355,6 +355,9 @@ a:hover { text-decoration: underline; }
   height: 100%; width: 100%; min-height: 280px;
 }
 .leaflet-container .leaflet-tile-pane { filter: saturate(0.82) contrast(1.02); }
+/* F25: Leaflet's 0.75rem chrome text renders ~10.5px — keep map labels, popups and tooltips at 12px. */
+body .leaflet-container { font-size: var(--fs-xs, 12px); }
+body .leaflet-popup-content, body .leaflet-tooltip { font-size: max(12px, 1em); }
 [data-iui-map-style="mono"] .leaflet-tile-pane, .leaflet-container[data-iui-map-style="mono"] .leaflet-tile-pane {
   filter: grayscale(1) contrast(1.12) brightness(1.02);
 }
