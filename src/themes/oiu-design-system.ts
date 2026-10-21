@@ -366,7 +366,9 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   min-width: 0; max-width: 100%;
 }
-.iui-itinerary-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
+.iui-itinerary-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: flex-start; }
+/* Title block takes the slack so trailing chips (3 天 · 3 站) group on the right instead of spreading. */
+.iui-itinerary-head > :first-child { margin-right: auto; }
 .iui-itinerary-title { font-size: 18px; font-weight: 600; letter-spacing: -0.015em; color: var(--color-text-primary); }
 .iui-itinerary-sub { font-size: 13px; color: var(--color-text-secondary); }
 .iui-chip {
@@ -386,11 +388,16 @@ a:hover { text-decoration: underline; }
   height: 100%; width: 100%; min-height: 280px;
 }
 .leaflet-container .leaflet-tile-pane { filter: saturate(0.82) contrast(1.02); }
+/* leaflet.css sets plus-lighter on tiles (zoom-gap fix); at rest on DPR 2 it leaves a light hairline between tile rows. Keep it only while zoom-animating. */
+html body .leaflet-container img.leaflet-tile { mix-blend-mode: normal; }
+html body .leaflet-container .leaflet-zoom-anim img.leaflet-tile { mix-blend-mode: plus-lighter; }
 /* F25: Leaflet's 0.75rem chrome text renders ~10.5px — keep map labels, popups and tooltips at 12px. */
 body .leaflet-container { font-size: var(--fs-xs, 12px); }
 body .leaflet-popup-content, body .leaflet-tooltip { font-size: max(12px, 1em); }
 /* G3: Leaflet chrome on tokens (popup, tooltip, zoom / attribution controls). */
 .leaflet-container { font-family: var(--font-sans); background: var(--color-background-tertiary); }
+/* Vendor leaflet.css loads after this sheet and resets the family to Helvetica: out-specify it. */
+html body .leaflet-container, html body .leaflet-popup-content-wrapper, html body .leaflet-tooltip { font-family: var(--font-sans); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--color-background-primary); color: var(--color-text-primary); box-shadow: var(--shadow-3); }
 .leaflet-popup-content-wrapper { border-radius: var(--border-radius-lg); }
 .leaflet-popup-content { margin: 10px 14px; line-height: 1.5; }

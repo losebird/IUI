@@ -84,8 +84,66 @@ export function deriveAccentSet(raw: string, scheme: 'light' | 'dark'): AccentSe
   }
 }
 
-function block(sel: string, s: AccentSet): string {
-  return `${sel}{--accent:${s.accent}!important;--accent-fill:${s.fill}!important;--accent-strong:${s.strong}!important;--accent-soft:${s.soft}!important;--on-accent:${s.onAccent}!important;--iui-chart-1:${s.fill}!important}`
+function toHsl(hex: string): [number, number, number] {
+  const c = parseHex(hex) ?? { r: 128, g: 128, b: 128 }
+  const r = c.r / 255, g = c.g / 255, b = c.b / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return [h * 60, s, l]
+}
+
+function fromHsl(h: number, s: number, l: number): string {
+  const hh = (((h % 360) + 360) % 360) / 360
+  const ss = Math.max(0, Math.min(1, s)), ll = Math.max(0, Math.min(1, l))
+  if (ss === 0) return rgbToHex({ r: ll * 255, g: ll * 255, b: ll * 255 })
+  const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss
+  const p = 2 * ll - q
+  const f = (t: number) => {
+    const x = t < 0 ? t + 1 : t > 1 ? t - 1 : t
+    if (x < 1 / 6) return p + (q - p) * 6 * x
+    if (x < 1 / 2) return q
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6
+    return p
+  }
+  return rgbToHex({ r: f(hh + 1 / 3) * 255, g: f(hh) * 255, b: f(hh - 1 / 3) * 255 })
+}
+
+/**
+ * Screenshot review: with an accent declared, series 2+ used the stock palette
+ * (orange accent + stock green clashed). Derive a harmonised 8-step series:
+ * 1 accent fill · 2 muted same-hue (the usual "previous period" comparison) ·
+ * 3/4 analogous ±35° · 5 muted complement · 6/7 ±70° · 8 warm neutral.
+ * Achromatic accents only override series 1–2. Every step keeps ≥ 3:1 against the page surface (WCAG non-text contrast).
+ */
+export function deriveSeriesPalette(fill: string, scheme: 'light' | 'dark'): string[] {
+  const [h, s0, l0] = toHsl(fill)
+  const s = Math.max(0.35, Math.min(0.8, s0))
+  const l = scheme === 'light' ? Math.max(0.36, Math.min(0.52, l0)) : Math.max(0.55, Math.min(0.7, l0))
+  const surface = scheme === 'light' ? LIGHT_SURFACE : DARK_SURFACE
+  const toward = scheme === 'light' ? '#000000' : '#ffffff'
+  const muted = scheme === 'light' ? fromHsl(h, s * 0.28, 0.6) : fromHsl(h, s * 0.25, 0.52)
+  // Achromatic accents (black/grey) have no hue to rotate: keep the stock series 3+.
+  if (s0 < 0.12) return [fill, scheme === 'light' ? '#8a8984' : '#8f8e88']
+  const raw = [
+    fill,
+    muted,
+    fromHsl(h + 35, s * 0.9, l),
+    fromHsl(h - 35, s * 0.9, l),
+    fromHsl(h + 180, s * 0.55, l),
+    fromHsl(h + 70, s * 0.75, l),
+    fromHsl(h - 70, s * 0.75, l),
+    scheme === 'light' ? '#6b6a64' : '#a3a199',
+  ]
+  return raw.map((c, i) => (i === 0 ? c : ensureContrast(c, surface, toward, 3)))
+}
+
+function block(sel: string, s: AccentSet, scheme: 'light' | 'dark'): string {
+  const series = deriveSeriesPalette(s.fill, scheme).map((c, i) => `--iui-chart-${i + 1}:${c}!important`).join(';')
+  return `${sel}{--accent:${s.accent}!important;--accent-fill:${s.fill}!important;--accent-strong:${s.strong}!important;--accent-soft:${s.soft}!important;--on-accent:${s.onAccent}!important;${series}}`
 }
 
 /** CSS for a declared page accent (beats personality presets; dark via media query). */
@@ -93,5 +151,5 @@ export function pageAccentCss(raw: unknown): string {
   const hex = normalizeAccent(raw)
   if (hex === null) return ''
   const sel = ':root,[data-iui-style]'
-  return `${block(sel, deriveAccentSet(hex, 'light'))}@media (prefers-color-scheme: dark){${block(sel, deriveAccentSet(hex, 'dark'))}}`
+  return `${block(sel, deriveAccentSet(hex, 'light'), 'light')}@media (prefers-color-scheme: dark){${block(sel, deriveAccentSet(hex, 'dark'), 'dark')}}`
 }

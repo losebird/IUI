@@ -2,6 +2,7 @@
 
 ## 0.13.0-iui.27
 
+- **Screenshot polish (R5-0):** a declared `accent` now drives a harmonised 8-step chart series (muted same-hue comparison series, analogous hues, ≥ 3:1 contrast; black/grey accents keep stock series 3+); Leaflet tiles no longer show a light hairline between rows on DPR 2 screens (`plus-lighter` kept only while zoom-animating); Leaflet popups/tooltips use `--font-sans`; `.iui-itinerary-head` groups trailing chips on the right.
 - **Shared author bindings (F1):** top-level `const/let/function` from one author JS chunk are visible to later chunks, so split pages no longer throw `xxx is not defined`.
 - **Function hoisting across chunks (F27):** pure top-level function declarations are peeled to the front of their chunk, so calls before the declaration in an earlier chunk resolve.
 - **Never soft-repair valid JS (F28):** `hardenAuthorJs` first checks `new Function` parse; valid code skips brace/quote repair that used to break it.
