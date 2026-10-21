@@ -15,7 +15,7 @@ import {
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
-import { VENDOR_CDN_HOSTS, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, type VendorId } from './vendor-registry.ts'
+import { VENDOR_CDN_HOSTS, customCdnOrigin, getVendorSource, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
 /**
@@ -103,6 +103,8 @@ export type HtmlSandboxSpec = {
 }
 
 export type HtmlSandboxBuildOptions = {
+  /** F19: library source preset (Settings → IUI → 资源源); default `local`. */
+  cdnSource?: VendorSource
   /**
    * F17: plugin UI language (`<html lang>`). The in-frame failure strip, code
    * tools and photo credits follow it instead of `navigator.language`.
@@ -185,7 +187,9 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'sendPrompt'; frameId: string; text: string }
   | { source: 'iui-html'; type: 'openLink'; frameId: string; url: string }
   /** D8: copy from an opaque-origin frame (host writes the clipboard on the same click). */
-  | { source: 'iui-html'; type: 'copyText'; frameId: string; text: string }
+  | { source: 'iui-html'; type: 'copyText'; frameId: string; text: string; reqId?: string }
+  /** F18: host-delegated file download (the frame has no allow-downloads). */
+  | { source: 'iui-html'; type: 'download'; frameId: string; filename: string; mime: string; data: string | ArrayBuffer; reqId?: string }
   /** @deprecated Prefer bridgeReady — kept as handshake alias. Does NOT mean libs/author ready. */
   | { source: 'iui-html'; type: 'ready'; frameId: string }
   | { source: 'iui-html'; type: 'bridgeReady'; frameId: string }
@@ -196,7 +200,7 @@ export type IuiSandboxHostMessage =
   | { source: 'iui-html'; type: 'escape'; frameId: string }
   | { source: 'iui-html'; type: 'authorSettled'; frameId: string; ok: boolean; failedChunks?: number }
   | { source: 'iui-html'; type: 'error'; frameId: string; message: string; kind?: 'author' | 'host'; chunkIndex?: number; chunkTotal?: number; strip?: boolean }
-  | { source: 'iui-html'; type: 'stripAction'; frameId: string; action: 'reload' | 'reask'; detail?: string }
+  | { source: 'iui-html'; type: 'stripAction'; frameId: string; action: 'reload' | 'reask' | 'switchCdn'; detail?: string }
   | { source: 'iui-html'; type: 'localState'; frameId: string; state: Record<string, unknown> }
   | { source: 'iui-html'; type: 'snapshot'; frameId: string; html: string; css: string; state: Record<string, unknown> }
   /** F10: debounced full snapshot of the page's persistent storage items. */
@@ -220,6 +224,11 @@ export type IuiSandboxFrameCommand =
   | { source: 'iui-html-host'; type: 'storageInit'; frameId: string; items: Record<string, string> }
   /** F10: the last storageSet exceeded the per-page quota and was not saved. */
   | { source: 'iui-html-host'; type: 'storageQuota'; frameId: string; limit: number }
+  /** F18: reply to a delegated download / copy (`reason`: gesture | blocked | tooLarge | rate | failed). */
+  | { source: 'iui-html-host'; type: 'hostResult'; frameId: string; reqId: string; ok: boolean; reason?: string }
+
+/** F18: delegated download cap (10 MB; strings are checked by length first). */
+export const SANDBOX_DOWNLOAD_MAX_CHARS = 10 * 1024 * 1024
 
 export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrameCommand {
   if (data === null || typeof data !== 'object') return false
@@ -266,6 +275,10 @@ export function isIuiSandboxFrameCommand(data: unknown): data is IuiSandboxFrame
     return typeof record.items === 'object' && record.items !== null && !Array.isArray(record.items)
   }
   if (record.type === 'storageQuota') return typeof record.limit === 'number'
+  if (record.type === 'hostResult') {
+    return typeof record.reqId === 'string' && record.reqId.length <= 40 && typeof record.ok === 'boolean'
+      && (record.reason === undefined || (typeof record.reason === 'string' && record.reason.length <= 40))
+  }
   return false
 }
 
@@ -288,8 +301,15 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
   if (record.type === 'openLink') {
     return typeof record.url === 'string' && record.url.length > 0 && record.url.length <= 2000
   }
+  if (record.reqId !== undefined && (typeof record.reqId !== 'string' || record.reqId.length > 40)) return false
   if (record.type === 'copyText') {
     return typeof record.text === 'string' && record.text.length <= 200_064
+  }
+  if (record.type === 'download') {
+    if (typeof record.filename !== 'string' || record.filename.length > 300) return false
+    if (typeof record.mime !== 'string' || record.mime.length > 200) return false
+    if (typeof record.data === 'string') return record.data.length <= SANDBOX_DOWNLOAD_MAX_CHARS
+    return record.data instanceof ArrayBuffer && record.data.byteLength <= SANDBOX_DOWNLOAD_MAX_CHARS
   }
   if (record.type === 'ready' || record.type === 'bridgeReady' || record.type === 'libsReady' || record.type === 'heartbeat' || record.type === 'escape') return true
   if (record.type === 'authorSettled') {
@@ -304,7 +324,7 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
     return true
   }
   if (record.type === 'stripAction') {
-    return (record.action === 'reload' || record.action === 'reask')
+    return (record.action === 'reload' || record.action === 'reask' || record.action === 'switchCdn')
       && (record.detail === undefined || (typeof record.detail === 'string' && record.detail.length <= 2000))
   }
   if (record.type === 'localState') {
@@ -1599,6 +1619,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
         toastTimer = setTimeout(function () { try { toastEl && toastEl.remove(); } catch (e) {} }, 3200);
       } catch (e) {}
     }
+    window.__iuiToast = function (m) { var w = warned; warned = true; toast(m); warned = w; };
     try {
       window.alert = function (m) { toast(m); };
       window.confirm = function (m) { toast(m); return false; };
@@ -1606,6 +1627,67 @@ export function buildSandboxBridgeScript(frameId: string): string {
       window.print = function () {};
     } catch (e) {}
   })();
+  // F18: host-delegated work (download / copy) as request → hostResult reply.
+  var __iuiReqSeq = 0;
+  var __iuiPendingReq = {};
+  function __iuiZh() {
+    try { return /^zh/i.test(String((document.documentElement && document.documentElement.lang) || navigator.language || '')); } catch (e) { return true; }
+  }
+  function __iuiHostCall(msg, timeoutMs) {
+    return new Promise(function (resolve) {
+      var id = 'q' + (++__iuiReqSeq);
+      var timer = setTimeout(function () { delete __iuiPendingReq[id]; resolve({ ok: false, reason: 'timeout' }); }, timeoutMs || 5000);
+      __iuiPendingReq[id] = function (res) { clearTimeout(timer); delete __iuiPendingReq[id]; resolve(res); };
+      post(Object.assign({ reqId: id }, msg));
+    });
+  }
+  var __IUI_DOWNLOAD_MAX = 10 * 1024 * 1024;
+  function __iuiDelegateFail(kind, reason) {
+    var zh = __iuiZh();
+    var msg;
+    if (reason === 'gesture') msg = zh ? '请点击按钮后再' + (kind === 'copy' ? '复制' : '下载') : 'Click a button to ' + (kind === 'copy' ? 'copy' : 'download');
+    else if (reason === 'tooLarge') msg = zh ? '文件超过 10MB，无法下载' : 'File is larger than 10 MB';
+    else if (reason === 'blocked') msg = zh ? '这种文件类型不允许下载' : 'This file type cannot be downloaded';
+    else if (reason === 'rate') msg = zh ? '下载太频繁，请稍后再试' : 'Too many downloads — try again shortly';
+    else msg = kind === 'copy' ? (zh ? '复制失败，请手动选中文字复制' : 'Copy failed — select the text and copy it manually') : (zh ? '下载失败' : 'Download failed');
+    try { window.__iuiToast(msg); } catch (e) {}
+  }
+  function __iuiDownload(filename, content, mime) {
+    var name = String(filename == null || filename === '' ? 'download' : filename).slice(0, 300);
+    var type = String(mime || (content && typeof content === 'object' && content.type) || '').slice(0, 200);
+    var job;
+    try {
+      if (typeof Blob !== 'undefined' && content instanceof Blob) {
+        job = content.arrayBuffer ? content.arrayBuffer() : new Response(content).arrayBuffer();
+      } else if (content instanceof ArrayBuffer) {
+        job = Promise.resolve(content);
+      } else if (content && ArrayBuffer.isView(content)) {
+        job = Promise.resolve(content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength));
+      } else if (content !== null && typeof content === 'object') {
+        if (!type) type = 'application/json';
+        job = Promise.resolve(JSON.stringify(content, null, 2));
+      } else {
+        job = Promise.resolve(String(content == null ? '' : content));
+      }
+    } catch (e) { job = Promise.reject(e); }
+    if (!type) type = /\\.json$/i.test(name) ? 'application/json' : /\\.csv$/i.test(name) ? 'text/csv;charset=utf-8' : /\\.(txt|md)$/i.test(name) ? 'text/plain;charset=utf-8' : /\\.html?$/i.test(name) ? 'text/html;charset=utf-8' : 'application/octet-stream';
+    return job.then(function (data) {
+      var size = typeof data === 'string' ? data.length : data.byteLength;
+      if (size > __IUI_DOWNLOAD_MAX) { __iuiDelegateFail('download', 'tooLarge'); return false; }
+      return __iuiHostCall({ type: 'download', filename: name, mime: type, data: data }, 5000).then(function (res) {
+        if (!res || !res.ok) { __iuiDelegateFail('download', res && res.reason); return false; }
+        return true;
+      });
+    }, function () { __iuiDelegateFail('download', 'failed'); return false; });
+  }
+  function __iuiCopy(text) {
+    var s = String(text == null ? '' : text).slice(0, 200000);
+    return __iuiHostCall({ type: 'copyText', text: s }, 3000).then(function (res) {
+      if (res && res.ok) return true;
+      __iuiDelegateFail('copy', res && res.reason);
+      return false;
+    });
+  }
   // F6: watchdog heartbeat — the host shows「页面无响应」after 5s of silence.
   try { setInterval(function () { post({ type: 'heartbeat' }); }, 1000); post({ type: 'heartbeat' }); } catch (e) {}
   // F11: forward Escape so overlay fullscreen can close while the page has focus.
@@ -1721,6 +1803,10 @@ export function buildSandboxBridgeScript(frameId: string): string {
       }
       post({ type: 'action', action: act, payload: data });
     },
+    /** F18: save a file through the host (≤10 MB, needs a click). Resolves true when saved. */
+    download: function (filename, content, mime) { return __iuiDownload(filename, content, mime); },
+    /** F18: copy text through the host clipboard (needs a click). Resolves true when copied. */
+    copy: function (text) { return __iuiCopy(text); },
     sendPrompt: function (text) {
       var t = String(text || '').trim();
       if (!t) return;
@@ -1968,6 +2054,160 @@ export function buildSandboxBridgeScript(frameId: string): string {
     ev.preventDefault();
     window.iuiSandbox.submitForm(form);
   }, true);
+  // F18: without allow-forms Chromium never fires "submit" (Enter becomes a
+  // click on the default button). Re-create the event so author handlers run,
+  // then announce the form data as "iui:submit".
+  function __iuiFormData(form, submitter) {
+    var out = {};
+    try {
+      var fd;
+      try { fd = submitter ? new FormData(form, submitter) : new FormData(form); } catch (e0) { fd = new FormData(form); }
+      fd.forEach(function (v, k) {
+        var val = typeof v === 'string' ? v : (v && v.name ? v.name : '');
+        if (Object.prototype.hasOwnProperty.call(out, k)) {
+          if (!Array.isArray(out[k])) out[k] = [out[k]];
+          out[k].push(val);
+        } else out[k] = val;
+      });
+    } catch (e) {}
+    return out;
+  }
+  function __iuiSubmit(form, submitter, skipValidation) {
+    if (!form || form.__iuiSubmitting) return;
+    var novalidate = skipValidation || form.noValidate || (submitter && submitter.formNoValidate);
+    if (!novalidate && typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+    var ev;
+    try { ev = new SubmitEvent('submit', { bubbles: true, cancelable: true, submitter: submitter || null }); }
+    catch (e) { ev = document.createEvent('Event'); ev.initEvent('submit', true, true); }
+    form.__iuiSubmitting = true;
+    var proceed = true;
+    try { proceed = form.dispatchEvent(ev); } finally { form.__iuiSubmitting = false; }
+    try {
+      form.dispatchEvent(new CustomEvent('iui:submit', { bubbles: true, detail: {
+        data: __iuiFormData(form, submitter),
+        submitter: submitter ? (submitter.name || submitter.id || null) : null,
+        handled: !proceed
+      } }));
+    } catch (e2) {}
+    if (proceed) { try { console.info('[iui] form submit stays in the page (no navigation in the sandbox); listen for "submit" or "iui:submit".'); } catch (e3) {} }
+  }
+  function __iuiSubmitterOf(target) {
+    var b = target && target.closest ? target.closest('button, input[type="submit"], input[type="image"]') : null;
+    if (!b || !b.form || b.disabled) return null;
+    if (b.tagName === 'BUTTON' && String(b.getAttribute('type') || 'submit').toLowerCase() !== 'submit') return null;
+    return b;
+  }
+  var __iuiPendingSubmit = null;
+  function __iuiFlushSubmit(ev) {
+    var pend = __iuiPendingSubmit;
+    if (!pend || pend.ev !== ev) return;
+    __iuiPendingSubmit = null;
+    if (ev.defaultPrevented) return;
+    try { ev.preventDefault(); } catch (e) {}
+    __iuiSubmit(pend.form, pend.submitter, false);
+  }
+  window.addEventListener('click', function (ev) {
+    var b = __iuiSubmitterOf(ev.target);
+    if (!b) return;
+    __iuiPendingSubmit = { ev: ev, form: b.form, submitter: b };
+    setTimeout(function () { __iuiFlushSubmit(ev); }, 0);
+  }, true);
+  window.addEventListener('click', function (ev) { __iuiFlushSubmit(ev); }, false);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' || ev.isComposing || ev.shiftKey || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    var t = ev.target;
+    if (!t || t.tagName !== 'INPUT' || !t.form) return;
+    if (/^(button|submit|reset|image|checkbox|radio|file|color|range)$/i.test(String(t.type || ''))) return;
+    var form = t.form;
+    if (form.querySelector('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]')) return; // the browser clicks the default button
+    setTimeout(function () { if (!ev.defaultPrevented) __iuiSubmit(form, null, false); }, 0);
+  }, true);
+  try {
+    var __iuiProtoForm = HTMLFormElement.prototype;
+    __iuiProtoForm.requestSubmit = function (submitter) { __iuiSubmit(this, submitter || null, false); };
+    var __iuiFormSubmit = __iuiProtoForm.submit;
+    __iuiProtoForm.submit = function () {
+      try { this.dispatchEvent(new CustomEvent('iui:submit', { bubbles: true, detail: { data: __iuiFormData(this, null), submitter: null, handled: false } })); } catch (e) {}
+      void __iuiFormSubmit;
+    };
+  } catch (e) {}
+
+  // F18: <a download> / blob: links cannot download in the sandbox — route
+  // them through iuiSandbox.download. Blobs are looked up synchronously so a
+  // revokeObjectURL right after a.click() still works.
+  var __iuiBlobs = {};
+  try {
+    var __iuiCreateUrl = URL.createObjectURL;
+    var __iuiRevokeUrl = URL.revokeObjectURL;
+    URL.createObjectURL = function (obj) {
+      var u = __iuiCreateUrl.call(URL, obj);
+      try { if (typeof Blob !== 'undefined' && obj instanceof Blob) __iuiBlobs[u] = obj; } catch (e) {}
+      return u;
+    };
+    URL.revokeObjectURL = function (u) {
+      var key = String(u);
+      setTimeout(function () { delete __iuiBlobs[key]; }, 15000);
+      return __iuiRevokeUrl.call(URL, u);
+    };
+  } catch (e) {}
+  function __iuiDataUrl(href) {
+    var m = /^data:([^,]*),([\\s\\S]*)$/i.exec(href);
+    if (!m) return null;
+    var meta = m[1] || '';
+    var b64 = /;base64$/i.test(meta);
+    var type = meta.replace(/;base64$/i, '').split(';')[0] || 'text/plain';
+    try {
+      if (b64) {
+        var bin = atob(m[2].replace(/\\s+/g, ''));
+        var u8 = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        return { content: u8, type: type };
+      }
+      return { content: decodeURIComponent(m[2]), type: type };
+    } catch (e) { return null; }
+  }
+  function __iuiLinkName(a, href) {
+    var n = a.getAttribute('download');
+    if (n) return n;
+    if (/^(blob|data):/i.test(href)) return 'download';
+    try { return decodeURIComponent(new URL(href, location.href).pathname.split('/').pop() || 'download'); } catch (e) { return 'download'; }
+  }
+  function __iuiIsDownloadLink(a) {
+    if (!a || a.tagName !== 'A') return false;
+    var href = a.getAttribute('href') || '';
+    if (!href) return false;
+    return a.hasAttribute('download') || /^blob:/i.test(href);
+  }
+  function __iuiHandleDownloadLink(a) {
+    var href = a.href || a.getAttribute('href') || '';
+    var name = __iuiLinkName(a, href);
+    if (/^blob:/i.test(href)) {
+      var blob = __iuiBlobs[href];
+      if (blob) { __iuiDownload(name, blob, blob.type); return true; }
+      window.__iuiToast(__iuiZh() ? '这个下载链接已失效，请重新生成' : 'This download link expired — generate it again');
+      return true;
+    }
+    if (/^data:/i.test(href)) {
+      var d = __iuiDataUrl(href);
+      if (d) { __iuiDownload(name, d.content, d.type); return true; }
+      return true;
+    }
+    if (/^https:/i.test(href)) { post({ type: 'openLink', url: href.slice(0, 2000) }); return true; }
+    return false;
+  }
+  window.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a') : null;
+    if (!__iuiIsDownloadLink(a) || ev.defaultPrevented) return;
+    if (__iuiHandleDownloadLink(a)) ev.preventDefault();
+  }, true);
+  try {
+    var __iuiAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      // Detached anchors never reach the window listener above.
+      if (!this.isConnected && __iuiIsDownloadLink(this) && __iuiHandleDownloadLink(this)) return;
+      return __iuiAnchorClick.call(this);
+    };
+  } catch (e) {}
   window.addEventListener('load', function () { measure(true); });
 ` + DESIGN_ENHANCE_JS + `
   // F13: size changes come from ResizeObserver (html, body, page root); the
@@ -1994,6 +2234,11 @@ export function buildSandboxBridgeScript(frameId: string): string {
   window.addEventListener('message', function (ev) {
     var data = ev && ev.data;
     if (!data || data.source !== 'iui-html-host' || data.frameId !== FRAME_ID) return;
+    if (data.type === 'hostResult') {
+      var cb = typeof data.reqId === 'string' ? __iuiPendingReq[data.reqId] : null;
+      if (cb) cb({ ok: data.ok === true, reason: data.reason });
+      return;
+    }
     if (data.type === 'measure' || data.type === 'ping') measure(true);
     if (data.type === 'theme' && data.tokens && typeof data.tokens === 'object') {
       var root = document.documentElement;
@@ -2129,6 +2374,8 @@ function cdnCspOrigins(assetBase?: string): string {
   const hosts = [...new Set<string>([...HTML_SANDBOX_CDN_ALLOWLIST, ...VENDOR_CDN_HOSTS])].map((h) => `https://${h}`)
   const local = vendorBaseOrigin(assetBase)
   if (local) hosts.push(local)
+  const custom = customCdnOrigin()
+  if (custom && !hosts.includes(custom)) hosts.push(custom)
   return hosts.join(' ')
 }
 
@@ -2826,8 +3073,16 @@ function buildVendorBootScript(base?: string): string {
     agGridTheme: vendorCssUrls('agGrid', base)[1]![0]!,
     mermaidJs: vendorJsUrls('mermaid', base)[0]!,
   }
+  // F19: full candidate lists so the runtime loader can fall back too, plus
+  // the active preset for the "switch source and retry" strip.
+  const lists: Record<string, string[]> = {
+    leafletJsList: vendorJsUrls('leaflet', base),
+    chartJsList: vendorJsUrls('chart', base),
+    agGridJsList: vendorJsUrls('agGrid', base),
+    mermaidJsList: vendorJsUrls('mermaid', base),
+  }
   return `<script>
-window.__iuiVendor = ${JSON.stringify(map)};
+window.__iuiVendor = ${JSON.stringify({ ...map, ...lists, preset: getVendorSource().preset })};
 window.__iuiCdnNext = function (el) {
   if (!el || el.getAttribute('data-iui-done') === '1') return;
   var rest = String(el.getAttribute('data-iui-fallback') || '').split(' ').filter(Boolean);
@@ -2924,6 +3179,13 @@ function autoCdnTags(html: string, js: string, base?: string): string {
 export function buildHtmlSandboxSrcdoc(
   spec: HtmlSandboxSpec,
   options: HtmlSandboxBuildOptions = {},
+): string {
+  return withVendorSource(options.cdnSource, () => buildHtmlSandboxSrcdocInner(spec, options))
+}
+
+function buildHtmlSandboxSrcdocInner(
+  spec: HtmlSandboxSpec,
+  options: HtmlSandboxBuildOptions,
 ): string {
   const title = spec.title ? escapeHtml(spec.title) : 'IUI sandbox'
   const truncatedParts: Array<'css' | 'js' | 'html'> = []

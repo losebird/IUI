@@ -50,7 +50,7 @@ const LINES: readonly string[] = [
   "- Sortable/filterable data table: `agGrid.createGrid(el,{columnDefs,rowData})`, el class `ag-theme-quartz ag-theme-iui`, few rows → domLayout:'autoHeight'. Not for itinerary budgets or 3-tier pricing.",
   "- Mindmap / flowchart: `<pre class=\"mermaid iui-mindmap\">mindmap\\n  root((主题))…</pre>` then `mermaid.run()`.",
   "",
-  "**Bridge:** `window.iuiSandbox.openLink(httpsUrl)` for outbound links; `sendPrompt(text)` / `action(name,payload)` only on user click, never on load. Never action('sandbox_open_link').",
+  "**Bridge:** `window.iuiSandbox.openLink(httpsUrl)` for outbound links; `sendPrompt(text)` / `action(name,payload)` only on user click, never on load. Never action('sandbox_open_link'). In a click handler: `iuiSandbox.download(name, text|Blob|object)` (≤10MB) and `iuiSandbox.copy(text)`; persist with `iuiSandbox.storage.get/set(key, value)`. Forms never navigate: listen for `submit` + `preventDefault()`.",
   "",
   "**Design bar (looks finished on first paint):**",
   "- Information-dense, not a thin demo: a header (title + one-line context), a summary row (KPIs / chips / totals), the main visualization or controls, and a detail area that responds to clicks. Realistic, specific sample data (real names, units, plausible numbers).",

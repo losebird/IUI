@@ -64,6 +64,17 @@ Chart.js 或 ECharts；首屏就有真实示例数据；数字校验 `Number.isF
 ### 脑图（Mermaid）
 脑图 / 流程图用 `<pre class="mermaid iui-mindmap">` 或 `mermaid.run`。不要手绘树、不要 Markdown 缩进树。宿主探测到 mermaid 会挂 UMD 并用 `--color-*` 初始化。
 
+### 沙箱能力表（页面在 `sandbox="allow-scripts"` iframe 里）
+| 想做 | 沙箱里直接做 | 改用 |
+|---|---|---|
+| 下载文件 | `<a download>` / `blob:` 链接无效（宿主会自动接管） | 点击里调 `iuiSandbox.download(文件名, 文本/Blob/对象)`，≤10MB |
+| 复制 | `navigator.clipboard` 不可用 | 点击里调 `iuiSandbox.copy(text)`，失败会提示 |
+| 保存数据 | `localStorage` 可用但别依赖 | `iuiSandbox.storage.get/set/remove/keys`（JSON，刷新/切会话仍在） |
+| 表单提交 | 不会跳转、不会刷新 | 监听 `submit` 并 `preventDefault()`，或监听 `iui:submit`（`e.detail.data`） |
+| 弹窗 | `alert/confirm/prompt` 只变成提示条 | 页面内对话框 / 提示 |
+| 打开链接 | 不能导航 | `iuiSandbox.openLink(httpsUrl)` |
+| 联网取数 | fetch/XHR 被 CSP 拦 | 内嵌示例数据并标「示例数据」 |
+
 ## 禁止
 - 旧 ```iui 组件树、```json 冒充 UI、Markdown 表格冒充界面。
 - 只写说明书不出围栏；把页面写进文件。

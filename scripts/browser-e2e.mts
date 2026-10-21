@@ -131,6 +131,7 @@ async function main(): Promise<void> {
       console.log(`${ok ? '✓' : '✗'} ${c.name}  nodes=${first.nodes} stats=${JSON.stringify(first.stats)}${ok ? '' : '\n    ' + [...new Set(problems)].join('\n    ')}`)
       await page.close()
     }
+    failures += await bridgeDelegationCase(browser)
   } finally {
     await browser.close()
   }
@@ -140,6 +141,61 @@ async function main(): Promise<void> {
   }
   console.log('browser e2e: all passed')
   process.exit(0)
+}
+
+/**
+ * F18: inside a real `sandbox="allow-scripts"` iframe, a submit button fires
+ * the author's submit handler + iui:submit, Enter submits a button-less form,
+ * blob/data download links and iuiSandbox.copy reach the host, and a call
+ * without a user gesture is refused with a toast.
+ */
+async function bridgeDelegationCase(browser: any): Promise<number> {
+  const html = '<form id="f1"><input name="q" value="hi" required><button id="go">Go</button></form>'
+    + '<form id="f2"><input id="solo" name="solo" value="s"></form>'
+    + '<button id="dl">DL</button><button id="cp">CP</button><button id="late">LATE</button><a id="dla" download="n.txt">a</a>'
+  const js = [
+    "window.log = [];",
+    "document.getElementById('dla').setAttribute('href', 'data:text/plain;base64,aGVsbG8=');",
+    "document.getElementById('f1').addEventListener('submit', function (e) { e.preventDefault(); log.push('submit:' + (e.submitter && e.submitter.id)); });",
+    "document.addEventListener('iui:submit', function (e) { log.push('iui:' + e.target.id + ':' + JSON.stringify(e.detail.data)); });",
+    "document.getElementById('dl').onclick = function () { var u = URL.createObjectURL(new Blob(['a,b'], { type: 'text/csv' })); var a = document.createElement('a'); a.href = u; a.download = 't.csv'; a.click(); URL.revokeObjectURL(u); };",
+    "document.getElementById('cp').onclick = function () { iuiSandbox.copy('x').then(function (ok) { log.push('copy:' + ok); }); };",
+    "document.getElementById('late').onclick = function () { setTimeout(function () { iuiSandbox.download('late.txt', 'x').then(function (ok) { log.push('late:' + ok); }); }, 5500); };",
+  ].join('\n')
+  const doc = buildHtmlSandboxSrcdoc({ html, css: '', js } as HtmlSandboxSpec, { frameId: 'f18', uiLang: 'en' })
+  const page = await browser.newPage()
+  await page.setContent(`<iframe id="fr" sandbox="allow-scripts" style="width:600px;height:400px"></iframe><script>
+window.got = [];
+addEventListener('message', function (e) { var d = e.data; if (!d || d.source !== 'iui-html' || (d.type !== 'download' && d.type !== 'copyText')) return;
+  var ok = !navigator.userActivation || navigator.userActivation.isActive; got.push(d.type + ':' + (d.filename || '') + ':' + ok);
+  if (d.reqId) e.source.postMessage({ source: 'iui-html-host', type: 'hostResult', frameId: 'f18', reqId: d.reqId, ok: ok, reason: ok ? undefined : 'gesture' }, '*'); });
+</script>`)
+  await page.evaluate((d: string) => { (document.getElementById('fr') as HTMLIFrameElement).srcdoc = d }, doc)
+  const frameEl = page.frameLocator('#fr')
+  await frameEl.locator('#go').waitFor()
+  await page.waitForTimeout(500)
+  await frameEl.locator('#go').click()
+  await frameEl.locator('#solo').press('Enter')
+  await frameEl.locator('#dl').click()
+  await frameEl.locator('#cp').click()
+  await frameEl.locator('#dla').click()
+  await frameEl.locator('#late').click()
+  await page.waitForTimeout(6500)
+  const frame = page.frames().find((f: any) => f !== page.mainFrame())
+  const log: string[] = await frame.evaluate(() => (window as any).log)
+  const toast: string | null = await frame.evaluate(() => document.querySelector('[data-iui-toast]')?.textContent ?? null)
+  const got: string[] = await page.evaluate(() => (window as any).got)
+  const want = {
+    log: ['submit:go', 'iui:f1:{"q":"hi"}', 'iui:f2:{"solo":"s"}', 'copy:true', 'late:false'],
+    got: ['download:t.csv:true', 'copyText::true', 'download:n.txt:true', 'download:late.txt:false'],
+  }
+  const problems: string[] = []
+  if (JSON.stringify(log) !== JSON.stringify(want.log)) problems.push(`frame log ${JSON.stringify(log)}`)
+  if (JSON.stringify(got) !== JSON.stringify(want.got)) problems.push(`host got ${JSON.stringify(got)}`)
+  if (!toast || !/click/i.test(toast)) problems.push(`gesture toast missing (${toast})`)
+  await page.close()
+  console.log(`${problems.length ? '✗' : '✓'} bridge delegation (forms / download / copy)${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

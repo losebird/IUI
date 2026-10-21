@@ -34,20 +34,83 @@ export const VENDOR_LIBS = {
 export type VendorId = keyof typeof VENDOR_LIBS
 
 /** CDN hosts used as fallbacks (also added to the sandbox CSP). */
-export const VENDOR_CDN_HOSTS = ['cdn.jsdelivr.net', 'registry.npmmirror.com'] as const
+export const VENDOR_CDN_HOSTS = ['cdn.jsdelivr.net', 'registry.npmmirror.com', 'unpkg.com'] as const
+
+/**
+ * F19: where sandbox libraries come from (Settings → IUI → 资源源).
+ * - `local`  plugin asset route → jsDelivr → npmmirror (default)
+ * - `china`  plugin asset route → npmmirror → jsDelivr (no overseas-first hop)
+ * - `global` jsDelivr → unpkg → plugin asset route
+ * - `custom` user template → plugin asset route → jsDelivr → npmmirror
+ */
+export type CdnPreset = 'local' | 'china' | 'global' | 'custom'
+export const CDN_PRESETS: readonly CdnPreset[] = ['local', 'china', 'global', 'custom']
+
+export interface VendorSource {
+  readonly preset: CdnPreset
+  /** custom only: `https://my.cdn/{name}@{version}/{file}` */
+  readonly template?: string
+}
+
+export function normalizeCdnPreset(value: unknown): CdnPreset {
+  return typeof value === 'string' && (CDN_PRESETS as readonly string[]).includes(value) ? value as CdnPreset : 'local'
+}
+
+/** A custom template must be https and contain `{file}` (plus `{name}` / `{version}` to be useful). */
+export function isValidCdnTemplate(template: unknown): template is string {
+  if (typeof template !== 'string' || template.length > 300 || !template.includes('{file}')) return false
+  try {
+    const u = new URL(template.replace(/\{(?:name|version|file)\}/g, 'x'))
+    return u.protocol === 'https:' && u.hostname.length > 0 && !/["'<>\s]/.test(template)
+  } catch {
+    return false
+  }
+}
+
+let activeSource: VendorSource = { preset: 'local' }
+
+/** Current source (module-level; set around a srcdoc build). */
+export function getVendorSource(): VendorSource {
+  return activeSource
+}
+
+/** Run `fn` with a different library source (srcdoc builds are synchronous). */
+export function withVendorSource<T>(source: VendorSource | undefined, fn: () => T): T {
+  if (!source) return fn()
+  const prev = activeSource
+  activeSource = { preset: normalizeCdnPreset(source.preset), ...(isValidCdnTemplate(source.template) ? { template: source.template } : {}) }
+  try { return fn() } finally { activeSource = prev }
+}
+
+/** Origin of the custom template, when the active preset uses one. */
+export function customCdnOrigin(source: VendorSource = activeSource): string | null {
+  if (source.preset !== 'custom' || !isValidCdnTemplate(source.template)) return null
+  try { return new URL(source.template.replace(/\{(?:name|version|file)\}/g, 'x')).origin } catch { return null }
+}
 
 function joinBase(base: string): string {
   return base.replace(/\/+$/, '')
 }
 
-/** Ordered candidate URLs for one file: local (if base) → jsDelivr → npmmirror. */
+/** Ordered candidate URLs for one file, following the active {@link CdnPreset}. */
 export function vendorUrls(id: VendorId, file: string, assetBase?: string, cdnFile?: string): string[] {
   const lib: VendorLib = VENDOR_LIBS[id]
-  const urls: string[] = []
-  if (assetBase) urls.push(`${joinBase(assetBase)}/vendor/${lib.pkg}@${lib.version}/${file}`)
-  urls.push(`https://cdn.jsdelivr.net/npm/${lib.pkg}@${lib.version}/${cdnFile ?? file}`)
-  urls.push(`https://registry.npmmirror.com/${lib.pkg}/${lib.version}/files/${file}`)
-  return urls
+  const local = assetBase ? `${joinBase(assetBase)}/vendor/${lib.pkg}@${lib.version}/${file}` : null
+  const jsd = `https://cdn.jsdelivr.net/npm/${lib.pkg}@${lib.version}/${cdnFile ?? file}`
+  const npmm = `https://registry.npmmirror.com/${lib.pkg}/${lib.version}/files/${file}`
+  const unpkg = `https://unpkg.com/${lib.pkg}@${lib.version}/${cdnFile ?? file}`
+  const src = activeSource
+  let order: Array<string | null>
+  if (src.preset === 'china') order = [local, npmm, jsd]
+  else if (src.preset === 'global') order = [jsd, unpkg, local]
+  else if (src.preset === 'custom' && isValidCdnTemplate(src.template)) {
+    const custom = src.template
+      .replace(/\{name\}/g, lib.pkg)
+      .replace(/\{version\}/g, lib.version)
+      .replace(/\{file\}/g, file)
+    order = [custom, local, jsd, npmm]
+  } else order = [local, jsd, npmm]
+  return [...new Set(order.filter((u): u is string => u !== null))]
 }
 
 export function vendorJsUrls(id: VendorId, assetBase?: string): string[] {
@@ -122,21 +185,28 @@ export function vendorCopyList(): Array<{ pkg: string; version: string; path: st
  */
 export function buildVendorImportMap(assetBase?: string): { imports: Record<string, string> } {
   const three = VENDOR_LIBS.three.version
+  const src = activeSource
+  // F19: china keeps every ESM hop on npmmirror (esm.sh is often unreachable).
+  const gsapRoot = src.preset === 'china'
+    ? 'https://registry.npmmirror.com/gsap/3.12.5/files/'
+    : 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/'
   const imports: Record<string, string> = {
     three: `https://esm.sh/three@${three}`,
     'three/': `https://esm.sh/three@${three}/`,
-    gsap: 'https://esm.sh/gsap@3.12.5',
-    'gsap/': 'https://esm.sh/gsap@3.12.5/',
+    gsap: `${gsapRoot}index.js`,
+    'gsap/': gsapRoot,
     d3: `https://esm.sh/d3@${VENDOR_LIBS.d3.version}`,
     'd3/': `https://esm.sh/d3@${VENDOR_LIBS.d3.version}/`,
     'chart.js': `https://esm.sh/chart.js@${VENDOR_LIBS.chart.version}`,
     'chart.js/': `https://esm.sh/chart.js@${VENDOR_LIBS.chart.version}/`,
   }
-  if (assetBase) {
-    const root = `${joinBase(assetBase)}/vendor/three@${three}`
-    imports.three = `${root}/build/three.module.js`
-    imports['three/addons/'] = `${root}/examples/jsm/`
-    imports['three/examples/jsm/'] = `${root}/examples/jsm/`
-  }
+  // three: first candidate of the active preset (local route, mirror or CDN);
+  // three.module.js pulls ./three.core.js relative to itself.
+  const mod = vendorUrls('three', 'build/three.module.js', assetBase)[0]!
+  const root = mod.replace(/build\/three\.module\.js$/, '')
+  imports.three = mod
+  imports['three/'] = root
+  imports['three/addons/'] = `${root}examples/jsm/`
+  imports['three/examples/jsm/'] = `${root}examples/jsm/`
   return { imports }
 }

@@ -320,6 +320,18 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   var AGGRID_CSS = VND.agGridCss || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css';
   var AGGRID_THEME = VND.agGridTheme || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
   var MERMAID_JS = VND.mermaidJs || 'https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js';
+  // F19: every candidate for a library (active preset order); the loader tries
+  // them in turn with a per-source timeout.
+  function libList(list, first) {
+    var out = Array.isArray(list) ? list.filter(function (u) { return typeof u === 'string' && u; }) : [];
+    if (!out.length) out = [first];
+    return out;
+  }
+  var LEAFLET_JS_LIST = libList(VND.leafletJsList, LEAFLET_JS);
+  var CHART_JS_LIST = libList(VND.chartJsList, CHART_JS);
+  var AGGRID_JS_LIST = libList(VND.agGridJsList, AGGRID_JS);
+  var MERMAID_JS_LIST = libList(VND.mermaidJsList, MERMAID_JS);
+  var LIB_SOURCE_TIMEOUT_MS = 8000;
   var state = { phase: 'boot', ran: false, lastOpts: null };
   // F2: host helpers use the DOM native captured before author code runs, so
   // an author (or a library) patching querySelector cannot fool library
@@ -574,6 +586,25 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     (document.head || document.documentElement).appendChild(link);
   }
 
+  // F19: try each candidate URL (load → next on error / 8 s silence).
+  function ensureScriptList(list, done) {
+    var i = 0;
+    var finished = false;
+    function finish(ok, src) { if (finished) return; finished = true; done(ok, src); }
+    (function attempt() {
+      if (i >= list.length) { finish(false, list[list.length - 1]); return; }
+      var src = list[i++];
+      var timedOut = false;
+      var timer = setTimeout(function () { timedOut = true; attempt(); }, LIB_SOURCE_TIMEOUT_MS);
+      ensureScript(src, function (ok) {
+        if (timedOut) return;
+        clearTimeout(timer);
+        if (ok) finish(true, src);
+        else attempt();
+      });
+    })();
+  }
+
   function ensureScript(src, done) {
     var existing = hq('script[src="' + src + '"]');
     if (existing) {
@@ -664,9 +695,43 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     (document.head || document.documentElement).appendChild(style);
   }
 
+  function sourceHost(src) {
+    try { return new URL(String(src), location.href).host || 'local'; } catch (e) { return String(src || '').slice(0, 80); }
+  }
+  // F19: library failures name the library and the source, and offer to switch
+  // to the next source preset instead of a blank card.
+  function showLibFailure(label, src) {
+    showFailureStrip({ kind: 'lib', lib: label, src: src, err: { name: 'LibError', message: label + ' failed to load from ' + sourceHost(src) } });
+  }
+
+  // F19: ESM libraries (three / gsap via importmap) fail as a rejected dynamic
+  // import; name the library and offer the same switch-source strip.
+  try {
+    window.addEventListener('unhandledrejection', function (ev) {
+      var r = ev && ev.reason;
+      var m = String(r && r.message ? r.message : r || '');
+      var hit = /(?:Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed)[^h]*(https?:[^\\s]+)?/i.exec(m);
+      if (!hit) return;
+      var url = hit[1] || '';
+      var lib = /three/i.test(url) ? 'three.js' : /gsap/i.test(url) ? 'GSAP' : /d3/i.test(url) ? 'd3' : /chart/i.test(url) ? 'Chart.js' : 'ESM';
+      if (document.querySelector('[data-iui-lib-fail="' + lib + '"]')) return;
+      showLibFailure(lib, url || location.href);
+    });
+  } catch (eUR) {}
+
   function showFailureStrip(opts) {
     opts = opts || {};
-    var kind = opts.kind === 'host' ? 'host' : 'author';
+    // F19: one surface per cause — after a library strip, "L is not defined"
+    // style author errors are console-only.
+    if (opts.kind !== 'lib' && opts.kind !== 'host' && document.querySelector('[data-iui-lib-fail]')) {
+      var em = String(opts.err && opts.err.message ? opts.err.message : opts.err || '');
+      if (/\\b(?:L|Chart|agGrid|mermaid|THREE|gsap|d3)\\b is not defined|Cannot read properties of undefined \\(reading '(?:map|createGrid|initialize|run)'\\)/.test(em)) {
+        try { console.warn('[iui-html] suppressed (library failed):', em); } catch (eW) {}
+        return;
+      }
+    }
+    var isLib = opts.kind === 'lib';
+    var kind = opts.kind === 'host' || isLib ? 'host' : 'author';
     var index = typeof opts.index === 'number' ? opts.index : -1;
     var total = typeof opts.total === 'number' ? opts.total : 0;
     var err = opts.err;
@@ -685,7 +750,12 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     body.className = 'iui-fail-body';
     var title = document.createElement('div');
     title.className = 'iui-fail-title';
-    if (kind === 'host') {
+    if (isLib) {
+      strip.setAttribute('data-iui-lib-fail', String(opts.lib || ''));
+      title.textContent = zh
+        ? (opts.lib + ' 库加载失败（可能是网络原因）')
+        : (opts.lib + ' failed to load (probably the network)');
+    } else if (kind === 'host') {
       title.textContent = zh
         ? '插件出错（不是页面脚本的问题）'
         : 'Plugin error (not the page script)';
@@ -701,7 +771,13 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     var meta = document.createElement('div');
     meta.className = 'iui-fail-meta';
     var missingEl = kind === 'author' && /of null|null is not an object|is null\b/.test(msg);
-    meta.textContent = missingEl
+    var curPreset = String(VND.preset || 'local');
+    var nextPreset = curPreset === 'china' ? 'global' : 'china';
+    meta.textContent = isLib
+      ? (zh
+        ? ('当前资源源：' + sourceHost(opts.src) + '。可在 设置 → IUI → 资源源 切换（国内网络选「国内镜像」），或直接点「' + (nextPreset === 'china' ? '切换国内源并重试' : '切换海外源并重试') + '」。')
+        : ('Source: ' + sourceHost(opts.src) + '. Switch in Settings → IUI → Library source, or use the button to switch and retry.'))
+      : missingEl
       ? (zh
         ? '页面脚本找不到某个元素：JS 里的 id / 选择器和 HTML 对不上。可点「重新生成」让模型修正。'
         : 'Page script could not find an element: an id/selector in the JS does not match the HTML. Regenerate to let the model fix it.')
@@ -744,8 +820,16 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       });
       strip.appendChild(b);
     };
-    addStripAction('reload', zh ? '重新加载' : 'Reload');
-    addStripAction('reask', zh ? '重新生成' : 'Regenerate');
+    if (isLib) {
+      stripDetail = nextPreset;
+      addStripAction('switchCdn', zh
+        ? (nextPreset === 'china' ? '切换国内源并重试' : '切换海外源并重试')
+        : (nextPreset === 'china' ? 'Use China mirror & retry' : 'Use global CDN & retry'));
+      addStripAction('reload', zh ? '重新加载' : 'Reload');
+    } else {
+      addStripAction('reload', zh ? '重新加载' : 'Reload');
+      addStripAction('reask', zh ? '重新生成' : 'Regenerate');
+    }
 
     try {
       var root = document.getElementById('iui-preview-root');
@@ -835,9 +919,9 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     if (wantsLeaflet(probe) && typeof L === 'undefined') {
       chain.push(function (next) {
         ensureCss(LEAFLET_CSS);
-        ensureScript(LEAFLET_JS, function (ok) {
+        ensureScriptList(LEAFLET_JS_LIST, function (ok, usedSrc) {
           if (!ok) {
-            showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Leaflet CDN failed to load' } });
+            showLibFailure('Leaflet', usedSrc);
           }
           if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof L !== 'undefined'; }, function (ready) {
@@ -855,9 +939,9 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }
     if (wantsChart(probe) && typeof Chart === 'undefined') {
       chain.push(function (next) {
-        ensureScript(CHART_JS, function (ok) {
+        ensureScriptList(CHART_JS_LIST, function (ok, usedSrc) {
           if (!ok) {
-            showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Chart.js CDN failed to load' } });
+            showLibFailure('Chart.js', usedSrc);
           }
           if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof Chart !== 'undefined'; }, function (ready) {
@@ -877,8 +961,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       chain.push(function (next) {
         ensureCss(AGGRID_CSS);
         ensureCss(AGGRID_THEME);
-        ensureScript(AGGRID_JS, function (ok) {
-          if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'AG Grid CDN failed to load' } });
+        ensureScriptList(AGGRID_JS_LIST, function (ok, usedSrc) {
+          if (!ok) showLibFailure('AG Grid', usedSrc);
           if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof agGrid !== 'undefined'; }, function (ready) {
             if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'agGrid global not ready' } });
@@ -893,8 +977,8 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     }
     if (wantsMermaid(probe) && typeof mermaid === 'undefined') {
       chain.push(function (next) {
-        ensureScript(MERMAID_JS, function (ok) {
-          if (!ok) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'Mermaid CDN failed to load' } });
+        ensureScriptList(MERMAID_JS_LIST, function (ok, usedSrc) {
+          if (!ok) showLibFailure('Mermaid', usedSrc);
           if (!ok) { next(); return; } // C4: one strip, no extra 5s wait
           waitGlobal(function () { return typeof mermaid !== 'undefined'; }, function (ready) {
             if (!ready) showFailureStrip({ kind: 'host', err: { name: 'HostError', message: 'mermaid global not ready' } });

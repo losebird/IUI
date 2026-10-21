@@ -44,6 +44,8 @@ export type IuiSettingsSectionValue = {
   formatReferee?: boolean
   strictImagePolicy?: boolean
   legacyFences?: boolean
+  cdnPreset?: 'local' | 'china' | 'global' | 'custom'
+  cdnTemplate?: string
   customTokensJson?: string
   userTemplatesJson?: string
   gatewayMode?: 'in-process' | 'sidecar' | 'off'
@@ -67,6 +69,8 @@ type CardSnapshot = SettingsFormShell & {
   formatReferee: SettingsFieldState
   strictImagePolicy: SettingsFieldState
   legacyFences: SettingsFieldState
+  cdnPreset: SettingsFieldState
+  cdnTemplate: SettingsFieldState
   customTokensJson: SettingsFieldState
   userTemplatesJson: SettingsFieldState
   gatewayMode: SettingsFieldState
@@ -356,6 +360,37 @@ export function IuiSettingsSection(props: {
               {t('pageStorageClear')}
             </button>
           </div>
+        </section>
+
+        <section className={styles.group}>
+          <h3 className={styles.groupTitle}>{t('cdnSource')}</h3>
+          <p className={styles.groupHint}>{t('cdnSourceHint')}</p>
+          <label className={styles.overrideField}>
+            <span className={styles.overrideLabel}>{t('cdnPreset')}</span>
+            <select
+              className={styles.select}
+              disabled={!state.writable}
+              value={['local', 'china', 'global', 'custom'].includes(state.cdnPreset.text) ? state.cdnPreset.text : 'local'}
+              onChange={(event) => props.edit('cdnPreset', event.currentTarget.value)}
+            >
+              <option value="local">{t('cdnPresetLocal')}</option>
+              <option value="china">{t('cdnPresetChina')}</option>
+              <option value="global">{t('cdnPresetGlobal')}</option>
+              <option value="custom">{t('cdnPresetCustom')}</option>
+            </select>
+          </label>
+          <label className={styles.overrideField}>
+            <span className={styles.overrideLabel}>{t('cdnTemplate')}</span>
+            <input
+              className={styles.colorText}
+              type="url"
+              disabled={!state.writable || state.cdnPreset.text !== 'custom'}
+              placeholder="https://cdn.example.com/npm/{name}@{version}/{file}"
+              value={state.cdnTemplate.text}
+              onChange={(event) => props.edit('cdnTemplate', event.currentTarget.value)}
+            />
+            <span className={styles.hint}>{t('cdnTemplateHint')}</span>
+          </label>
         </section>
 
         <section className={styles.group}>
@@ -812,6 +847,8 @@ export class IuiSettingsCardController {
       boolField('formatReferee'),
       boolField('strictImagePolicy'),
       boolField('legacyFences'),
+      enumField('cdnPreset', ['local', 'china', 'global', 'custom']),
+      settingsTextField('cdnTemplate'),
       enumField('gatewayMode', ['in-process', 'sidecar', 'off']),
       settingsTextField('gatewaySidecarUrl'),
       boolField('instanceStorePersist'),
@@ -835,6 +872,8 @@ export class IuiSettingsCardController {
       formatReferee: this.form.field('formatReferee'),
       strictImagePolicy: this.form.field('strictImagePolicy'),
       legacyFences: this.form.field('legacyFences'),
+      cdnPreset: this.form.field('cdnPreset'),
+      cdnTemplate: this.form.field('cdnTemplate'),
       gatewayMode: this.form.field('gatewayMode'),
       gatewaySidecarUrl: this.form.field('gatewaySidecarUrl'),
       instanceStorePersist: this.form.field('instanceStorePersist'),

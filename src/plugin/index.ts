@@ -86,6 +86,8 @@ let runtimeConfig: RuntimeConfigPayload = buildRuntimeConfig({
   formatReferee: true,
   strictImagePolicy: false,
   legacyFences: false,
+  cdnPreset: 'local',
+  cdnTemplate: '',
   customTokensJson: '',
   userTemplatesJson: '',
   jevEnabled: false,

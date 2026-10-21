@@ -6,6 +6,7 @@ import { DEFAULT_THEME_ID } from '../config/defaults.ts'
 import { setActiveThemeId, setCustomTokens } from './theme/apply-theme.ts'
 import { setActivePackId } from './theme/apply-pack.ts'
 import { isVisualPreviewLocked } from './theme/preview-lock.ts'
+import { normalizeCdnPreset, type CdnPreset, type VendorSource } from '../shared/vendor-registry.ts'
 
 export type RuntimeConfigSnapshot = {
   themeId: string
@@ -16,6 +17,9 @@ export type RuntimeConfigSnapshot = {
   strictImagePolicy?: boolean
   /** F16: deprecated ```iui / ```dsh-ui fences still render (default off). */
   legacyFences?: boolean
+  /** F19: library source preset + custom template. */
+  cdnPreset?: CdnPreset
+  cdnTemplate?: string
   customTokensJson: string
   userTemplatesJson: string
   frameChannelMount?: boolean
@@ -40,6 +44,12 @@ let snapshot: RuntimeConfigSnapshot = {
 let inflight: Promise<void> | undefined
 
 function publish(next: RuntimeConfigSnapshot): void {
+  const preset = normalizeCdnPreset(next.cdnPreset)
+  if (lastConfigPreset !== undefined && lastConfigPreset !== preset) {
+    memoryCdnOverride = null
+    try { globalThis.localStorage?.removeItem(CDN_OVERRIDE_KEY) } catch { /* ignore */ }
+  }
+  lastConfigPreset = preset
   snapshot = next
   if (!isVisualPreviewLocked()) {
     setActiveThemeId(next.themeId)
@@ -56,6 +66,42 @@ export function getRuntimeConfigSnapshot(): RuntimeConfigSnapshot {
 /** F16: deprecated ```iui / ```dsh-ui fences render only with the compat switch on. */
 export function isLegacyFencesEnabled(): boolean {
   return snapshot.legacyFences === true
+}
+
+const CDN_OVERRIDE_KEY = 'iui:cdnPreset:override'
+let lastConfigPreset: CdnPreset | undefined
+let memoryCdnOverride: string | null = null
+
+function readCdnOverride(): { preset: CdnPreset; base: CdnPreset } | null {
+  try {
+    let raw: string | null = memoryCdnOverride
+    try { raw = globalThis.localStorage?.getItem(CDN_OVERRIDE_KEY) ?? raw } catch { /* private mode */ }
+    if (!raw) return null
+    const v = JSON.parse(raw) as { preset?: unknown; base?: unknown }
+    return { preset: normalizeCdnPreset(v.preset), base: normalizeCdnPreset(v.base) }
+  } catch { return null }
+}
+
+/**
+ * F19: effective library source. A strip's「切换…并重试」stores a browser-local
+ * override; it is dropped as soon as the configured preset changes (the user
+ * picked one in Settings).
+ */
+export function getCdnSource(): VendorSource {
+  const configured = normalizeCdnPreset(snapshot.cdnPreset)
+  const override = readCdnOverride()
+  const preset = override && override.base === configured ? override.preset : configured
+  return { preset, ...(snapshot.cdnTemplate ? { template: snapshot.cdnTemplate } : {}) }
+}
+
+/** F19: remember a strip-chosen preset for this browser and notify frames. */
+export function setCdnPresetOverride(preset: CdnPreset): void {
+  memoryCdnOverride = JSON.stringify({ preset, base: normalizeCdnPreset(snapshot.cdnPreset) })
+  try {
+    globalThis.localStorage?.setItem(CDN_OVERRIDE_KEY, memoryCdnOverride)
+  } catch { /* private mode: the in-memory copy still applies for this session */ }
+  snapshot = { ...snapshot }
+  for (const listener of listeners) listener()
 }
 
 /** Test seam: overlay fields on the current snapshot (no fetch, no theme apply). */
@@ -87,6 +133,8 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         formatReferee: data.formatReferee !== false,
         strictImagePolicy: data.strictImagePolicy === true,
         legacyFences: data.legacyFences === true,
+        cdnPreset: normalizeCdnPreset(data.cdnPreset),
+        cdnTemplate: typeof data.cdnTemplate === 'string' ? data.cdnTemplate : '',
         customTokensJson: typeof data.customTokensJson === 'string' ? data.customTokensJson : '',
         userTemplatesJson: typeof data.userTemplatesJson === 'string' ? data.userTemplatesJson : '',
         frameChannelMount: false,

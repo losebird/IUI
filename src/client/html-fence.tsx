@@ -3,6 +3,7 @@
  * Productized chrome: streaming stages, reload, download, dismissible errors,
  * empty/partial placeholders, auto-height + action loop.
  */
+import { createDownloadLimiter, hostCopy, hostDownload, type DelegateVerdict } from './sandbox-delegate.ts'
 import {
   useEffect,
   useMemo,
@@ -50,7 +51,8 @@ import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
 import { SandboxSkeleton, sandboxStreamProgress } from './sandbox-skeleton.tsx'
 import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
-import { getRuntimeConfigSnapshot, subscribeRuntimeConfig } from './runtime-config.ts'
+import { getCdnSource, getRuntimeConfigSnapshot, setCdnPresetOverride, subscribeRuntimeConfig } from './runtime-config.ts'
+import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
@@ -68,6 +70,8 @@ export function usesHostData(raw: string): boolean {
 }
 
 const readStrictImages = (): boolean => getRuntimeConfigSnapshot().strictImagePolicy === true
+/** F19: `preset|template` (stable string for useSyncExternalStore). */
+const readCdnKey = (): string => { const s = getCdnSource(); return `${s.preset}|${s.template ?? ''}` }
 
 /** F6: silence longer than this marks the frame「无响应」. */
 const SANDBOX_HUNG_MS = 5000
@@ -366,6 +370,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
+  const cdnKey = useSyncExternalStore(subscribeRuntimeConfig, readCdnKey, () => 'local|')
   // F17: unguessable per-mount id (React useId is predictable across frames).
   const [frameId] = useState(newSandboxFrameId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -373,6 +378,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   /** F3: every outbound action/sendPrompt from this frame passes the gate. */
   const actionGateRef = useRef<FrameActionGate | null>(null)
   if (actionGateRef.current === null) actionGateRef.current = createFrameActionGate()
+  const downloadLimiterRef = useRef<(() => boolean) | null>(null)
+  if (downloadLimiterRef.current === null) downloadLimiterRef.current = createDownloadLimiter()
   const [actionsPaused, setActionsPaused] = useState(false)
   const warnedBlockRef = useRef<Set<ActionVerdict>>(new Set())
   const gateOutbound = (name: string): boolean => {
@@ -486,6 +493,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       mergePackTokens: false, // already merged above
       // F4: opt-in strict image policy (Settings → IUI).
       strictImages,
+      // F19: library source preset (Settings → IUI, or a strip's switch-and-retry).
+      cdnSource: (() => { const [preset, template] = cdnKey.split('|'); return { preset: normalizeCdnPreset(preset), ...(template ? { template } : {}) } })(),
       ...(seedRef.current?.items ? { storageSeed: seedRef.current.items } : {}),
       // Final keys embed author JS; preview-shell always defers (inject via runAuthorJs).
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
@@ -493,7 +502,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
-    [srcdocRebuildKey, designTokens, frameId, strictImages, storageReady],
+    [srcdocRebuildKey, designTokens, frameId, strictImages, storageReady, cdnKey],
   )
   const baseHeight = parsed?.height ?? (parsed?.partial ? 280 : 360)
 
@@ -677,6 +686,10 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       if (event.data.type === 'stripAction') {
         if (event.data.action === 'reload') {
           setStopped(false); setHung(false); setReloadToken((n) => n + 1); setError(null); setErrorKind(null)
+        } else if (event.data.action === 'switchCdn') {
+          // F19: remember the next source for this browser, then rebuild.
+          setCdnPresetOverride(normalizeCdnPreset(event.data.detail))
+          setStopped(false); setHung(false); setReloadToken((n) => n + 1); setError(null); setErrorKind(null)
         } else {
           void insertIntoComposer(reaskPrompt(t, event.data.detail ?? null))
         }
@@ -731,11 +744,24 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         void insertIntoComposer(prompt.slice(0, 2000))
         return
       }
-      if (event.data.type === 'copyText') {
-        // D8: only on a real click inside the frame (user activation propagates to the host).
-        const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation
-        if (activation !== undefined && !activation.isActive) return
-        try { void navigator.clipboard?.writeText(event.data.text).catch(() => {}) } catch { /* ignore */ }
+      if (event.data.type === 'copyText' || event.data.type === 'download') {
+        // D8/F18: only right after a real click inside the frame (user
+        // activation propagates to the host); the frame gets a hostResult.
+        const reqId = event.data.reqId
+        const reply = (verdict: DelegateVerdict): void => {
+          if (!reqId) return
+          try {
+            frame.contentWindow?.postMessage({
+              source: 'iui-html-host', type: 'hostResult', frameId, reqId,
+              ok: verdict === 'ok', ...(verdict === 'ok' ? {} : { reason: verdict }),
+            }, '*')
+          } catch { /* frame gone */ }
+        }
+        if (event.data.type === 'download') {
+          reply(hostDownload(event.data.filename, event.data.data, event.data.mime, downloadLimiterRef.current!))
+        } else {
+          void hostCopy(event.data.text).then(reply)
+        }
         return
       }
       if (event.data.type === 'openLink') {
