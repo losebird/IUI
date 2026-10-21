@@ -795,9 +795,41 @@ table { font-size: var(--fs-sm); }
 @media (prefers-reduced-motion: reduce) { .iui-3d-loading::before { animation: none; } }
 `.trim()
 
+/**
+ * F23 accessibility + action layout (last layer, so it wins over form / kit styles):
+ * visible keyboard focus ring, global reduced-motion fallback, 32px minimum targets,
+ * accent-filled primary buttons and a right-aligned `.iui-actions` footer.
+ */
+export const OIU_A11Y_CSS = `
+:focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 1px; }
+[data-iui-kbd]:focus-visible { border-radius: var(--border-radius-md, 8px); }
+:where(span, a, i, b, em, strong, small, label)[data-iui-kbd] { display: inline-flex; align-items: center; }
+button:not(.leaflet-container *), [role="button"]:not(.leaflet-container *):not(svg *), select, .iui-sandbox-tab, .iui-code-tools > button { min-height: 32px; }
+button:not(.leaflet-container *) { min-width: 32px; }
+input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-color: var(--accent-fill, #185FA5); }
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+button.primary, button[data-variant="primary"], button[type="submit"]:not(.secondary):not(.ghost) {
+  background: var(--accent-fill, #185FA5); border-color: var(--accent-fill, #185FA5); color: var(--on-accent, #fff); font-weight: 600;
+}
+button.primary:hover, button[type="submit"]:not(.secondary):not(.ghost):hover { background: var(--accent-fill, #185FA5); opacity: 0.92; }
+.iui-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.iui-actions > .iui-actions-spacer { flex: 1; }
+.iui-actions > button { min-height: 40px; padding-inline: 18px; }
+.iui-actions > button.primary, .iui-actions > button[type="submit"] { min-width: 112px; }
+@media (max-width: 480px) { .iui-actions > button { flex: 1 1 auto; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+  }
+}
+`.trim()
+
 /** Full injected design-system CSS block. */
 export function buildOiuDesignSystemCss(): string {
-  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}`
+  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}\n${OIU_A11Y_CSS}`
 }
 
 /** CDN import map for common libs (pinned; see vendor-registry). Leaflet = UMD auto-inject. */
@@ -995,6 +1027,7 @@ Layout helpers already injected:
 - .iui-compare-3 / .iui-tier / .iui-tier.featured  (MUST be 3 side-by-side columns in chat bubbles)
 - .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards)
 - .iui-weather / .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days
+- .iui-actions  (right-aligned action footer: secondary buttons first, one button.primary last; full-width on phones)
 - .iui-cols-2 / .iui-cols-3 / .iui-cols-4  (equal columns with built-in breakpoints: 4→2 at ≤560px, all→1 at ≤480px; no horizontal overflow at 360px)
 - Legacy kit still works: .iui-sandbox-card .iui-sandbox-grid .iui-sandbox-kpi .iui-sandbox-compare …
 

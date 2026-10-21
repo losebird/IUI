@@ -1719,6 +1719,66 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (e.key === 'Escape' && !e.defaultPrevented) post({ type: 'escape' });
     });
   } catch (e) {}
+  // F23: keyboard reachability for click targets the author built from divs/cards/SVG.
+  // Outermost cursor:pointer elements (and [data-iui-action] / [onclick]) that are not
+  // natively focusable get tabindex=0 (+ role=button) and Enter/Space → click.
+  var __iuiKbdTimer = 0;
+  var __iuiNativeFocus = /^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|LABEL|OPTION|IFRAME|CANVAS|VIDEO|AUDIO|DETAILS)$/;
+  function __iuiKbdSchedule() {
+    if (__iuiKbdTimer) return;
+    __iuiKbdTimer = setTimeout(function () { __iuiKbdTimer = 0; __iuiKbdScan(); }, 300);
+  }
+  function __iuiKbdScan() {
+    try {
+      var root = document.getElementById('iui-preview-root') || document.body;
+      if (!root) return;
+      var all = root.getElementsByTagName('*');
+      var n = Math.min(all.length, 4000);
+      for (var i = 0; i < n; i++) {
+        var el = all[i];
+        if (el.hasAttribute('tabindex') || el.isContentEditable) continue;
+        if (__iuiNativeFocus.test(el.tagName.toUpperCase())) continue;
+        var explicit = el.hasAttribute('data-iui-action') || el.hasAttribute('onclick');
+        var cs = getComputedStyle(el);
+        if (!explicit) {
+          if (cs.cursor !== 'pointer') continue;
+          var par = el.parentElement;
+          if (par && par !== root && getComputedStyle(par).cursor === 'pointer') continue;
+        }
+        if (cs.display === 'none' || cs.visibility === 'hidden' || el.getClientRects().length === 0) continue;
+        if (el.closest('a[href],button,label,summary,select,[tabindex],.leaflet-container,[aria-hidden="true"],[inert],[role=grid],[role=treegrid],[role=listbox],[role=tree],[role=menu],[role=menubar]')) continue;
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('data-iui-kbd', '1');
+        if (!el.hasAttribute('role') && !el.querySelector('a[href],button,input,select,textarea')) el.setAttribute('role', 'button');
+      }
+    } catch (e) { /* best effort */ }
+  }
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t || !t.getAttribute || t.getAttribute('data-iui-kbd') !== '1') return;
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    if (e.repeat) return;
+    e.preventDefault();
+    if (typeof t.click === 'function') t.click();
+    else t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  }, true);
+  // F23: reduced-motion preference (CSS collapses animations; charts skip their intro).
+  var __iuiMotionMq = null;
+  try { __iuiMotionMq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null; } catch (e) { __iuiMotionMq = null; }
+  window.__iuiReducedMotion = function () { return !!(__iuiMotionMq && __iuiMotionMq.matches); };
+  // F22: a table / pre wider than its column scrolls sideways instead of widening the page.
+  function __iuiFitWide() {
+    try {
+      // html/body clip overflow-x, so check the wide elements themselves.
+      var els = document.querySelectorAll('table,pre');
+      for (var i = 0; i < els.length && i < 200; i++) {
+        var el = els[i];
+        var parent = el.parentElement;
+        if (!parent || el.classList.contains('iui-scroll-x')) continue;
+        if (el.scrollWidth > parent.clientWidth + 1) el.classList.add('iui-scroll-x');
+      }
+    } catch (e) { /* best effort */ }
+  }
   // F13: one measurement per animation frame; post only when height moves ≥2px.
   var __iuiLastHeight = -1;
   var __iuiMeasureQueued = false;
@@ -1728,6 +1788,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     : function (cb) { return setTimeout(cb, 16); };
   function measureNow(force) {
     __iuiFitWide();
+    __iuiKbdSchedule();
     var body = document.body;
     // Content height (not viewport): bottom of the lowest rendered child + body padding,
     // so frames shrink to fit and 100vh layouts cannot feed back into growth.
@@ -1749,19 +1810,6 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (!force && __iuiLastHeight >= 0 && Math.abs(h - __iuiLastHeight) < 2) return;
     __iuiLastHeight = h;
     post({ type: 'resize', height: h });
-  }
-  // F22: a table / pre wider than its column scrolls sideways instead of widening the page.
-  function __iuiFitWide() {
-    try {
-      // html/body clip overflow-x, so check the wide elements themselves.
-      var els = document.querySelectorAll('table,pre');
-      for (var i = 0; i < els.length && i < 200; i++) {
-        var el = els[i];
-        var parent = el.parentElement;
-        if (!parent || el.classList.contains('iui-scroll-x')) continue;
-        if (el.scrollWidth > parent.clientWidth + 1) el.classList.add('iui-scroll-x');
-      }
-    } catch (e) { /* best effort */ }
   }
   function measure(force) {
     if (force === true) __iuiMeasureForce = true;
@@ -1821,6 +1869,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
   window.__iuiAppData = window.__iuiAppData || {};
   window.iuiSandbox = {
     resize: measure,
+    /** F23: true when the user prefers reduced motion — skip autoplay / loops / long tweens. */
+    get reducedMotion() { return window.__iuiReducedMotion(); },
     /** F10/F18: persistent per-page storage (JSON values; survives reload / session switch). */
     storage: {
       get: function (k) { var v = window.__iuiStorageApi.getItem(k); if (v == null) return null; try { return JSON.parse(v); } catch (e) { return v; } },
@@ -2914,6 +2964,7 @@ function buildChartGuardScript(): string {
     if (!cfg.options) cfg.options = {};
     cfg.options.maintainAspectRatio = false;
     cfg.options.responsive = cfg.options.responsive !== false;
+    try { if (window.__iuiReducedMotion && window.__iuiReducedMotion()) cfg.options.animation = false; } catch (e) {}
     try {
       var ds = cfg.data && cfg.data.datasets;
       if (Array.isArray(ds)) {

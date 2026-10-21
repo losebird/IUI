@@ -133,6 +133,7 @@ async function main(): Promise<void> {
     }
     failures += await bridgeDelegationCase(browser)
     failures += await narrowOverflowCase(browser)
+    failures += await keyboardAuditCase(browser)
   } finally {
     await browser.close()
   }
@@ -247,7 +248,9 @@ async function narrowOverflowCase(browser: any): Promise<number> {
   for (const width of widths) {
     const page = await browser.newPage({ viewport: { width, height: 900 } })
     for (const starter of HTML_SANDBOX_STARTERS) {
-      await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f22-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
+      await page.goto('about:blank') // fresh window: setContent reuses globals
+      await page.goto('about:blank') // fresh window: setContent reuses globals
+    await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f22-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
       await page.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
       await page.waitForTimeout(250)
       const { overflow, culprits } = await measureOverflow(page)
@@ -256,6 +259,110 @@ async function narrowOverflowCase(browser: any): Promise<number> {
     await page.close()
   }
   console.log(`${problems.length ? '✗' : '✓'} narrow widths 360/720 · ${HTML_SANDBOX_STARTERS.length} starters without horizontal overflow${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
+}
+
+/**
+ * F23: keyboard audit of every starter — each click target (native control or
+ * outermost cursor:pointer element) is reachable with Tab, shows a visible focus
+ * ring, and controls are at least 32px tall. Run with reduced motion emulated.
+ */
+export async function auditKeyboard(page: any): Promise<string[]> {
+  await page.evaluate('window.__name = window.__name || function (f) { return f }')
+  const targets: { key: string; label: string }[] = await page.evaluate(() => {
+    const out: { key: string; label: string }[] = []
+    let n = 0
+    const root = document.getElementById('iui-preview-root') ?? document.body
+    for (const el of Array.from(root.querySelectorAll('*')) as HTMLElement[]) {
+      // Composite widgets (grids, listboxes, tablists…) use roving tabindex + arrow keys.
+      if (el.closest('.leaflet-container,[aria-hidden="true"],[inert],[role=grid],[role=treegrid],[role=listbox],[role=tree],[role=menu],[role=menubar],[role=tablist],[role=radiogroup]')) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) continue
+      const cs = getComputedStyle(el)
+      if (cs.visibility === 'hidden') continue
+      const native = el.matches('a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select,textarea,summary')
+      const pointer = cs.cursor === 'pointer' && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer') && !el.closest('label')
+      if (!native && !pointer) continue
+      if (!native && el.closest('a[href],button,summary')) continue
+      const key = `k${n++}`
+      el.setAttribute('data-e2e-key', key)
+      const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/)[0] : ''
+      out.push({ key, label: `${el.tagName.toLowerCase()}${cls}「${(el.textContent ?? '').trim().slice(0, 12)}」` })
+    }
+    return out
+  })
+  const problems: string[] = []
+  const visited = new Set<string>()
+  const ringed = new Set<string>()
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur?.() })
+  for (let i = 0; i < targets.length + 8; i++) {
+    await page.keyboard.press('Tab')
+    const info = await page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null
+      if (!a || a === document.body) return null
+      const host = a.closest('[data-e2e-key]') as HTMLElement | null
+      const cs = getComputedStyle(a)
+      const ring = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 1) || cs.boxShadow !== 'none'
+      return { key: host?.getAttribute('data-e2e-key') ?? null, ring }
+    })
+    if (!info) continue
+    if (info.key) {
+      visited.add(info.key)
+      // A date input takes several Tab stops (fields + picker); one ringed stop is enough.
+      if (info.ring) ringed.add(info.key)
+    }
+  }
+  for (const t of targets) {
+    if (!visited.has(t.key)) problems.push(`not reachable by Tab: ${t.label}`)
+    else if (!ringed.has(t.key)) problems.push(`no focus ring: ${t.label}`)
+  }
+  const small: string[] = await page.evaluate(() => {
+    const out: string[] = []
+    const root = document.getElementById('iui-preview-root') ?? document.body
+    for (const el of Array.from(root.querySelectorAll('button,select,[role="button"],input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=color])')) as HTMLElement[]) {
+      if (el.closest('.leaflet-container,svg')) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) continue
+      if (r.height < 31.5 || (el.tagName === 'BUTTON' && r.width < 31.5)) out.push(`${el.tagName.toLowerCase()}「${(el.textContent ?? '').trim().slice(0, 12)}」${Math.round(r.width)}×${Math.round(r.height)}`)
+    }
+    return out
+  })
+  for (const s of small.slice(0, 4)) problems.push(`target < 32px: ${s}`)
+  return problems
+}
+
+export async function keyboardAuditCase(browser: any): Promise<number> {
+  const problems: string[] = []
+  const page = await browser.newPage({ viewport: { width: 720, height: 900 }, reducedMotion: 'reduce' })
+  for (const starter of HTML_SANDBOX_STARTERS) {
+    await page.goto('about:blank') // fresh window: setContent reuses globals
+    await page.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `f23-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
+    await page.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(500)
+    for (const p of await auditKeyboard(page)) problems.push(`${starter.id}: ${p}`)
+  }
+  // Author-built click targets: div cards, a data-iui-action span, an SVG bar.
+  const spec = {
+    title: 'kbd', css: '.card{cursor:pointer;padding:12px;border:1px solid #ddd}.card b{display:block}',
+    html: '<div class="card" id="c1"><b>北京</b><span>晴 23°</span></div><div class="card" id="c2"><b>上海</b></div><span id="act" data-iui-action="noop">更多</span><svg width="120" height="40"><rect id="bar" x="0" y="0" width="100" height="30" style="cursor:pointer"/></svg><p id="log"></p>',
+    js: 'var log=document.getElementById("log");["c1","c2","bar"].forEach(function(id){document.getElementById(id).addEventListener("click",function(){log.textContent+=id+";"})});',
+  } as HtmlSandboxSpec
+  await page.goto('about:blank')
+  await page.setContent(buildHtmlSandboxSrcdoc(spec, { frameId: 'f23-kbd', uiLang: 'zh' }), { waitUntil: 'load' })
+  await page.waitForFunction(() => ['authorSettled', 'live'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(600)
+  for (const p of await auditKeyboard(page)) problems.push(`author click targets: ${p}`)
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur?.(); document.getElementById('log')!.textContent = '' })
+  await page.focus('#c1'); await page.keyboard.press('Enter')
+  await page.focus('#c2'); await page.keyboard.press(' ')
+  await page.focus('#bar'); await page.keyboard.press('Enter')
+  const kbd = await page.evaluate(() => ({ log: document.getElementById('log')!.textContent, role: document.getElementById('c1')!.getAttribute('role'), act: document.getElementById('act')!.getAttribute('tabindex') }))
+  if (kbd.log !== 'c1;c2;bar;') problems.push(`Enter/Space did not click author targets: ${JSON.stringify(kbd)}`)
+  if (kbd.role !== 'button' || kbd.act !== '0') problems.push(`auto role/tabindex missing: ${JSON.stringify(kbd)}`)
+  const motion = await page.evaluate(() => ({ rm: (window as any).iuiSandbox.reducedMotion, dur: getComputedStyle(document.body, null).transitionDuration }))
+  if (motion.rm !== true) problems.push('iuiSandbox.reducedMotion should be true under emulated reduce')
+  await page.close()
+  console.log(`${problems.length ? '✗' : '✓'} keyboard audit · ${HTML_SANDBOX_STARTERS.length} starters (Tab reach, focus ring, 32px targets)${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
   return problems.length ? 1 : 0
 }
 

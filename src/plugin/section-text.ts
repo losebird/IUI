@@ -56,6 +56,7 @@ const LINES: readonly string[] = [
   "- Information-dense, not a thin demo: a header (title + one-line context), a summary row (KPIs / chips / totals), the main visualization or controls, and a detail area that responds to clicks. Realistic, specific sample data (real names, units, plausible numbers).",
   "- Typography: body 14px, labels/meta ≥12px — never below 12px. Muted text uses --color-text-secondary; one accent color per page from the semantic tokens.",
   "- Surfaces: cards on --color-background-secondary with --border-radius-lg and 1px --color-border-tertiary; 12–16px gaps; no horizontal overflow at 360–720px wide: grids `repeat(auto-fit,minmax(min(160px,100%),1fr))` or .iui-cols-2|3|4 (2 cols ≤560px, 1 col ≤480px), no fixed width >360px. Key content first: pages taller than 2400px scroll.",
+  "- Actions + a11y: one primary action per view (`button.primary`, accent) in a right-aligned `.iui-actions` footer (wizard: 上一步 `.secondary` then 下一步 `.primary`); click targets ≥32px and real <button>s; focus ring + reduced motion are built in — when `iuiSandbox.reducedMotion`, skip autoplay/loops.",
   "",
   "**Finish:** same language as the user. Put the fence in the reply body this turn, close it, then stop.",
 ]
