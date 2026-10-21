@@ -66,6 +66,30 @@ html [data-iui-seg] > button:is([aria-pressed="true"], [aria-selected="true"], [
   border-color: var(--accent-fill); box-shadow: 0 0 0 1px var(--accent-fill), var(--shadow-2);
 }
 .iui-tier.featured .iui-chip { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+/* G4 icons: <i data-iui-icon="name"> / <svg class="iui-icon"><use href="#i-name"/></svg>; 1.15em, currentColor. */
+[data-iui-icon] {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 1.15em; height: 1.15em; vertical-align: -0.2em; font-style: normal; line-height: 1;
+}
+svg.iui-icon {
+  display: inline-block; flex: none; width: 1.15em; height: 1.15em; vertical-align: -0.2em;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+[data-iui-icon] > svg.iui-icon { width: 100%; height: 100%; vertical-align: top; }
+:where(button, .iui-chip, a) > :where([data-iui-icon], svg.iui-icon) { margin-inline-end: 0.35em; }
+:where(button, .iui-chip, a) > :where([data-iui-icon], svg.iui-icon):last-child { margin-inline-end: 0; }
+/* Icon tile: a soft accent square behind a feature / list icon. */
+.iui-icon-tile {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 36px; height: 36px; border-radius: var(--border-radius-md); font-size: 18px;
+  background: var(--accent-soft); color: var(--accent);
+}
+/* Weather glyphs get natural tints (scoped so UI chrome icons stay neutral). */
+.iui-weather :is([data-iui-icon="sun"], [data-iui-icon="sunny"], [data-iui-icon="sunrise"], [data-iui-icon="clear"]) { color: #F59E0B; }
+.iui-weather :is([data-iui-icon="cloud-sun"], [data-iui-icon="partly-cloudy"]) { color: #E0A21B; }
+.iui-weather :is([data-iui-icon="cloud"], [data-iui-icon="cloudy"], [data-iui-icon="wind"]) { color: var(--color-text-secondary); }
+.iui-weather :is([data-iui-icon="cloud-rain"], [data-iui-icon="rain"], [data-iui-icon="umbrella"], [data-iui-icon="droplets"], [data-iui-icon="snowflake"], [data-iui-icon="snow"]) { color: #3B82F6; }
+.iui-weather :is([data-iui-icon="moon"]) { color: #8B7FD8; }
 /* Numbers: aligned digits, tighter display tracking. */
 :where(.iui-stat-value, .iui-hero-value, .iui-sandbox-kpi .value, .iui-tier .price, .temp, .num, .iui-num, [data-num], td.num) {
   font-variant-numeric: tabular-nums lining-nums;

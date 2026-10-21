@@ -257,9 +257,9 @@ export const INTENT_RULES: readonly IntentRule[] = [
     ],
     recipe: sb(
       '上海天气',
-      "<div class=\"iui-sandbox-card iui-weather\"><div class=\"iui-weather-hero\"><div><div class=\"iui-sandbox-muted\">\u4e0a\u6d77 \u00b7 \u4eca\u65e5</div><div class=\"temp\">22\u00b0</div><div class=\"iui-weather-chips\"><span class=\"iui-weather-chip\">\u4f53\u611f<strong>21\u00b0</strong></span><span class=\"iui-weather-chip\">\u6e7f\u5ea6<strong>62%</strong></span><span class=\"iui-weather-chip\">\u4e1c\u5317\u98ce<strong>3 \u7ea7</strong></span><span class=\"iui-weather-chip\">\u7a7a\u6c14<strong>\u826f 68</strong></span></div></div><div class=\"meta\"><div class=\"icon\">\u26c5</div><div>\u591a\u4e91</div><div class=\"iui-sandbox-muted\">26\u00b0 / 17\u00b0</div></div></div><div class=\"iui-weather-chart\"><canvas id=\"wxChart\"></canvas></div><div class=\"iui-weather-days\" id=\"days\"></div></div>",
+      "<div class=\"iui-sandbox-card iui-weather\"><div class=\"iui-weather-hero\"><div><div class=\"iui-sandbox-muted\">\u4e0a\u6d77 \u00b7 \u4eca\u65e5</div><div class=\"temp\">22\u00b0</div><div class=\"iui-weather-chips\"><span class=\"iui-weather-chip\">\u4f53\u611f<strong>21\u00b0</strong></span><span class=\"iui-weather-chip\">\u6e7f\u5ea6<strong>62%</strong></span><span class=\"iui-weather-chip\">\u4e1c\u5317\u98ce<strong>3 \u7ea7</strong></span><span class=\"iui-weather-chip\">\u7a7a\u6c14<strong>\u826f 68</strong></span></div></div><div class=\"meta\"><div class=\"icon\"><i data-iui-icon=\"cloud-sun\"></i></div><div>\u591a\u4e91</div><div class=\"iui-sandbox-muted\">26\u00b0 / 17\u00b0</div></div></div><div class=\"iui-weather-chart\"><canvas id=\"wxChart\"></canvas></div><div class=\"iui-weather-days\" id=\"days\"></div></div>",
       ".iui-weather-chart{height:200px}",
-      "var days=[{d:'\u4eca\u65e5',hi:26,lo:17,icon:'\u26c5',cond:'\u591a\u4e91'},{d:'\u5468\u4e00',hi:28,lo:18,icon:'\u2600\ufe0f',cond:'\u6674'},{d:'\u5468\u4e8c',hi:27,lo:19,icon:'\u2600\ufe0f',cond:'\u6674'},{d:'\u5468\u4e09',hi:24,lo:16,icon:'\ud83c\udf26\ufe0f',cond:'\u5c0f\u96e8'},{d:'\u5468\u56db',hi:25,lo:17,icon:'\u26c5',cond:'\u591a\u4e91'},{d:'\u5468\u4e94',hi:22,lo:15,icon:'\ud83c\udf27\ufe0f',cond:'\u4e2d\u96e8'},{d:'\u5468\u516d',hi:23,lo:16,icon:'\u26c5',cond:'\u591a\u4e91'}];var row=document.getElementById('days');days.forEach(function(x,i){var b=document.createElement('button');b.type='button';b.className='iui-weather-day';b.innerHTML='<span>'+x.d+'</span><span style=\"font-size:20px\">'+x.icon+'</span><span>'+x.cond+'</span><strong>'+x.hi+'\u00b0/'+x.lo+'\u00b0</strong>';if(i===0)b.setAttribute('aria-current','true');row.appendChild(b)});(function paint(){var cv=document.getElementById('wxChart');if(!cv)return;if(!window.Chart){setTimeout(paint,40);return;}(window.iuiCreateChart||function(c,cfg){return new Chart(c,cfg);})(cv,{type:'line',data:{labels:['08','10','12','14','16','18','20'],datasets:[{data:[18,19,21,23,26,24,21]}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});cv.__iuiChartOk=true;window.iuiSandbox&&window.iuiSandbox.resize();})();",
+      "var days=[{d:'\u4eca\u65e5',hi:26,lo:17,icon:'cloud-sun',cond:'\u591a\u4e91'},{d:'\u5468\u4e00',hi:28,lo:18,icon:'sun',cond:'\u6674'},{d:'\u5468\u4e8c',hi:27,lo:19,icon:'sun',cond:'\u6674'},{d:'\u5468\u4e09',hi:24,lo:16,icon:'cloud-rain',cond:'\u5c0f\u96e8'},{d:'\u5468\u56db',hi:25,lo:17,icon:'cloud-sun',cond:'\u591a\u4e91'},{d:'\u5468\u4e94',hi:22,lo:15,icon:'cloud-rain',cond:'\u4e2d\u96e8'},{d:'\u5468\u516d',hi:23,lo:16,icon:'cloud-sun',cond:'\u591a\u4e91'}];var row=document.getElementById('days');days.forEach(function(x,i){var b=document.createElement('button');b.type='button';b.className='iui-weather-day';b.innerHTML='<span>'+x.d+'</span><span style=\"font-size:20px\"><i data-iui-icon=\"'+x.icon+'\"></i></span><span>'+x.cond+'</span><strong>'+x.hi+'\u00b0/'+x.lo+'\u00b0</strong>';if(i===0)b.setAttribute('aria-current','true');row.appendChild(b)});(function paint(){var cv=document.getElementById('wxChart');if(!cv)return;if(!window.Chart){setTimeout(paint,40);return;}(window.iuiCreateChart||function(c,cfg){return new Chart(c,cfg);})(cv,{type:'line',data:{labels:['08','10','12','14','16','18','20'],datasets:[{data:[18,19,21,23,26,24,21]}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});cv.__iuiChartOk=true;window.iuiSandbox&&window.iuiSandbox.resize();})();",
       560,
     ),
     repairHint: '天气必须 ```iui-html：渐变头图大气温 + 细节芯片 + Chart.js + 7 日卡（见 weather-dense starter）。稀薄 KPI 不算成功。',
@@ -581,7 +581,7 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'weather',
     patterns: askPatternsOf('weather'),
-    text: 'Weather: .iui-weather > .iui-weather-hero (city, ≥48px temp, icon, hi/lo) + .iui-weather-chip row (feels-like, humidity, wind, AQI/UV) + .iui-weather-chart (hourly Chart.js line) + .iui-weather-days > .iui-weather-day (7 days); clicking a day updates the hero. Sample data, badge it.',
+    text: 'Weather: .iui-weather > .iui-weather-hero (city, ≥48px temp, <i data-iui-icon="cloud-sun"> — sun / cloud / cloud-rain / snowflake, hi/lo) + .iui-weather-chip row (feels-like, humidity, wind, AQI/UV) + .iui-weather-chart (hourly Chart.js line) + .iui-weather-days > .iui-weather-day (7 days, icon in each); clicking a day updates the hero. Sample data, badge it.',
   },
   {
     id: 'compare',
@@ -597,6 +597,12 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
     id: 'mindmap',
     patterns: askPatternsOf('mindmap'),
     text: 'Mindmap / flowchart: `<pre class="mermaid iui-mindmap">mindmap\\n  root((主题))…</pre>` then `mermaid.run()`.',
+  },
+  {
+    id: 'diagram',
+    patterns: ['示意图', '架构图', '结构图', '原理图', '流程示意', '图解', 'diagram', 'svg', 'schematic', 'architecture'],
+    unless: ['mindmap'],
+    text: 'Hand-drawn SVG diagram: inline <svg viewBox> scaled to width; fills .c-blue .c-teal .c-green .c-amber .c-coral .c-red .c-purple .c-pink .c-gray (auto dark mode), shapes .box .node, arrows .arr, leader lines .leader, text .t / .ts (small) / .th (heading).',
   },
   {
     id: 'scene-3d',

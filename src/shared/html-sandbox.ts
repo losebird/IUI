@@ -17,6 +17,7 @@ import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
 import { VENDOR_CDN_HOSTS, customCdnOrigin, getVendorSource, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
+import { buildIconRuntimeScript, pageWantsIcons } from './icon-runtime.ts'
 import { buildMotionRuntimeScript } from './motion-runtime.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
@@ -3626,7 +3627,9 @@ function buildHtmlSandboxSrcdocInner(
 })();
 <\/script>`
   const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase))
-  const bridge = buildSandboxBridgeScript(frameId) + buildMotionRuntimeScript({ streaming: deferJs })
+  const bridge = buildSandboxBridgeScript(frameId) + buildMotionRuntimeScript({ streaming: deferJs }) +
+    // G4: Lucide icons — streaming shells always carry them (markup still arriving); complete pages only when used.
+    (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '')
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()

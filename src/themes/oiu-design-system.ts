@@ -1130,6 +1130,7 @@ Layout helpers already injected:
 - .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards; scroll horizontally on phones)
 - .iui-weather / .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days
 - .iui-actions  (right-aligned action footer: secondary buttons first, one button.primary last; full-width on phones)
+- Icons (local Lucide, no emoji in UI chrome): <i data-iui-icon="map-pin"></i> or <svg class="iui-icon"><use href="#i-map-pin"/></svg>; size = font-size, colour = currentColor; .iui-icon-tile = soft accent square behind a feature icon
 - .iui-cols-2 / .iui-cols-3 / .iui-cols-4  (equal columns with built-in breakpoints: 4→2 at ≤560px, all→1 at ≤480px; no horizontal overflow at 360px)
 - Legacy kit still works: .iui-sandbox-card .iui-sandbox-grid .iui-sandbox-kpi .iui-sandbox-compare …
 
