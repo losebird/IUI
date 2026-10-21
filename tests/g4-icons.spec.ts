@@ -39,6 +39,7 @@ describe('G4 local Lucide icons', () => {
     expect(body).toHaveLength(1)
     expect(() => new Function(body[0])).not.toThrow()
     expect(src.replace('<\\/script>', '')).not.toContain('\\')
+    expect(src).toContain('data-iui-gap')
   })
 
   it('srcdoc carries the runtime only when the page uses icons', () => {
@@ -56,6 +57,7 @@ describe('G4 local Lucide icons', () => {
     expect(all).not.toMatch(/[\u2600-\u26ff\u{1F300}-\u{1FAFF}]/u)
     expect(OIU_POLISH_CSS).toContain('[data-iui-icon]')
     expect(OIU_POLISH_CSS).toContain('.iui-icon-tile')
+    expect(OIU_POLISH_CSS).toContain('[data-iui-gap="end"]')
     expect(GENUI_SECTION_TEXT).toContain('data-iui-icon')
   })
 })

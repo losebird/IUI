@@ -76,8 +76,9 @@ svg.iui-icon {
   fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 [data-iui-icon] > svg.iui-icon { width: 100%; height: 100%; vertical-align: top; }
-:where(button, .iui-chip, a) > :where([data-iui-icon], svg.iui-icon) { margin-inline-end: 0.35em; }
-:where(button, .iui-chip, a) > :where([data-iui-icon], svg.iui-icon):last-child { margin-inline-end: 0; }
+/* The icon runtime marks the side that touches label text (data-iui-gap = end | start | none). */
+:where([data-iui-icon], svg.iui-icon)[data-iui-gap="end"] { margin-inline-end: 0.4em; }
+:where([data-iui-icon], svg.iui-icon)[data-iui-gap="start"] { margin-inline-start: 0.4em; }
 /* Icon tile: a soft accent square behind a feature / list icon. */
 .iui-icon-tile {
   display: inline-flex; align-items: center; justify-content: center; flex: none;

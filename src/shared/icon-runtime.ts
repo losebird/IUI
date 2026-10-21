@@ -106,10 +106,25 @@ export function buildIconRuntimeScript(): string {
     s.innerHTML = P[n];
     sprite.appendChild(s);
   }
+  // Space between an icon and adjacent label text (text nodes are invisible to CSS selectors).
+  function txt(n) { return n && n.nodeType === 3 ? n.nodeValue : null; }
+  function gap(el) {
+    var nx = el.nextSibling, pv = el.previousSibling, v = 'none';
+    var a = txt(nx), b = txt(pv), cs = null;
+    try { cs = getComputedStyle(el.parentNode); } catch (e) {}
+    var flexGap = cs && String(cs.display).indexOf('flex') + String(cs.display).indexOf('grid') > -2 && parseFloat(cs.columnGap) > 0;
+    var iconNext = nx && nx.nodeType === 1 && (nx.hasAttribute('data-iui-icon') || String(nx.getAttribute('class') || '').indexOf('iui-icon') > -1);
+    if (flexGap) v = 'none';
+    else if (a !== null ? (a.trim() !== '' && a.charAt(0) === a.trim().charAt(0)) : (nx && nx.nodeType === 1 && !iconNext)) v = 'end';
+    else if (b !== null ? (b.trim() !== '' && b.charAt(b.length - 1) === b.trim().charAt(b.trim().length - 1)) : false) v = 'start';
+    if (el.getAttribute('data-iui-gap') !== v) el.setAttribute('data-iui-gap', v);
+  }
   function scan() {
     try {
       var els = document.querySelectorAll('[data-iui-icon]');
-      for (var i = 0; i < els.length && i < 600; i++) paint(els[i]);
+      for (var i = 0; i < els.length && i < 600; i++) { paint(els[i]); gap(els[i]); }
+      var svgs = document.querySelectorAll('svg.iui-icon');
+      for (var k = 0; k < svgs.length && k < 600; k++) if (!svgs[k].parentNode.hasAttribute('data-iui-icon')) gap(svgs[k]);
       var uses = document.querySelectorAll('use');
       for (var j = 0; j < uses.length && j < 600; j++) {
         var h = uses[j].getAttribute('href') || uses[j].getAttribute('xlink:href') || '';
@@ -130,7 +145,7 @@ export function buildIconRuntimeScript(): string {
   function boot() {
     scan();
     try {
-      new MutationObserver(queue).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-iui-icon', 'href'] });
+      new MutationObserver(queue).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-iui-icon', 'href'], characterData: true });
     } catch (e) {}
   }
   if (document.body) boot(); else document.addEventListener('DOMContentLoaded', boot);
