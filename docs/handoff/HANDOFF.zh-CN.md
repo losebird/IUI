@@ -1,7 +1,7 @@
 # IUI 视觉重做 · 交接文档
 
 > 交接时间：2026-10 ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
-> 本目录：`docs/handoff/`
+> 本目录：`docs/handoff/`（只在 `hotfix/0.13.0-iui.27` 分支上，`main` 没有；先 `git fetch origin && git checkout hotfix/0.13.0-iui.27`）
 
 ## 1. 现在在哪一步
 

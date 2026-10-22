@@ -6,7 +6,11 @@
 3. docs/handoff/sheets/ 里 12 张对比图（左现状、右推荐）
 4. docs/handoff/demo/site/common.css（IUI 中性主题 token）和 demo/site/r2/*.html（推荐方案的参考实现）
 
-工作分支：hotfix/0.13.0-iui.27。用 pnpm；改完跑 npx tsc --noEmit -p . 和 npx vitest run。
+工作分支：hotfix/0.13.0-iui.27（不是 main）。开始前先执行：
+git fetch origin && git checkout hotfix/0.13.0-iui.27
+确认 docs/handoff/ 存在后再读文件。所有提交都推到这个分支，不要推 main。
+
+用 pnpm；改完跑 npx tsc --noEmit -p . 和 npx vitest run。
 
 规则：
 - 第 1、2 轮（图 ①–⑩）已确认，可以按 HANDOFF 第 6 节的顺序实施。
