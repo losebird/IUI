@@ -1,25 +1,16 @@
 /**
- * IUI sandbox design-system (theme CSS + SVG/form helpers + importmap + trip animator).
+ * Host kit CSS for ```iui-html sandboxes: the hooks older pages and host
+ * runtimes rely on (legacy colour bridge, SVG diagram classes, .iui-* layout /
+ * map / itinerary / states, a11y, 3D stage, code tools).
+ * visual(③): replaces the retired OIU design-system module — the OIU palette,
+ * design skill and naming are gone; daisyUI + Tailwind are the authoring surface.
  * Legal attribution for adapted MIT material: see NOTICE.
- *
- * Injected into every ```iui-html sandbox:
- * 1. Shared THEME + SVG + FORM CSS
- * 2. CDN importmap (three / gsap / d3 / chart.js; Leaflet = UMD auto-inject)
- * 3. Agent design skill teaching token usage + patterns
- * 4. createTripAnimator for map+pin-drop+carousel itineraries
  */
-import { OIU_POLISH_CSS } from './oiu-polish.ts'
+import { HOST_POLISH_CSS } from './host-polish.ts'
 import { LEGACY_TOKEN_BRIDGE_CSS, legacyElementLayer } from './iui-daisy.ts'
-import { buildVendorImportMap } from '../shared/vendor-registry.ts'
-
-/**
- * visual(①): the old warm-stone / blue OIU palette is gone. The legacy variable
- * names now resolve to the daisyUI "IUI 中性" tokens (see iui-daisy.ts).
- */
-export const OIU_THEME_CSS = LEGACY_TOKEN_BRIDGE_CSS
 
 /** SVG color-ramp + diagram helpers (.c-purple … .c-red, .box .node .arr .leader, .t .ts .th). */
-export const OIU_SVG_CLASSES_CSS = `
+export const HOST_SVG_CSS = `
 svg text.t   { font: 400 14px var(--font-sans); fill: var(--p); }
 svg text.ts  { font: 400 12px var(--font-sans); fill: var(--s); }
 svg text.th  { font: 500 14px var(--font-sans); fill: var(--p); }
@@ -119,7 +110,7 @@ svg .c-red text.ts { fill: #A32D2D; }
 `.trim()
 
 /** Form controls + entrance stagger (thin borders, soft focus, fadeSlideIn). */
-export const OIU_FORM_STYLES_CSS = `
+export const HOST_FORM_CSS = `
 /* visual(①): raw-element defaults sit in a layer below the daisyUI components (.btn, .input …). */
 ${legacyElementLayer(`* { box-sizing: border-box; margin: 0; }
 html { background: transparent; }
@@ -260,6 +251,9 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 .leaflet-bar a, .leaflet-bar a:hover { background: var(--color-background-primary); color: var(--color-text-primary); border-bottom-color: var(--color-border-tertiary); }
 .leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--color-background-primary) 80%, transparent); color: var(--color-text-secondary); }
 .leaflet-container .leaflet-control-attribution a { color: var(--color-text-secondary); }
+.leaflet-overlay-pane svg { color: var(--color-base-content); }
+.iui-leaflet-pin { background: none; border: 0; }
+.iui-leaflet-pin > span { display: block; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; background: var(--color-base-content); border: 3px solid var(--color-base-100); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
 /* G8: "hold Ctrl/⌘ to zoom" / "two fingers" hint for cooperative map gestures. */
 .iui-map-hint {
   position: absolute; inset: 0; z-index: 1001; display: flex; align-items: center; justify-content: center;
@@ -392,29 +386,54 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 @media (prefers-reduced-motion: reduce) { .iui-pin-dot, .leaflet-marker-icon[data-iui-declutter] { transition: none; } }
 
 .ag-theme-iui, .ag-theme-quartz.ag-theme-iui {
-  --ag-background-color: var(--color-background-primary);
-  --ag-foreground-color: var(--color-text-primary);
-  --ag-header-background-color: var(--color-background-secondary);
-  --ag-header-foreground-color: var(--color-text-secondary);
-  --ag-border-color: var(--color-border-tertiary);
-  --ag-row-hover-color: var(--color-background-secondary);
-  --ag-selected-row-background-color: var(--color-background-info);
+  /* visual(③): quiet quartz — 13px type, muted 500-weight header on the page surface,
+     hairline borders, 44px rows, ink checkboxes / focus (grid.html). */
   --ag-font-family: var(--font-sans);
   --ag-font-size: 13px;
-  --ag-border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border-tertiary);
-  border-radius: var(--border-radius-lg);
-  overflow: hidden;
+  --ag-foreground-color: var(--color-base-content);
+  --ag-data-color: var(--color-base-content);
+  --ag-secondary-foreground-color: var(--iui-chart-axis);
+  --ag-header-foreground-color: var(--iui-chart-axis);
+  --ag-header-background-color: var(--color-base-100);
+  --ag-background-color: var(--color-base-100);
+  --ag-odd-row-background-color: var(--color-base-100);
+  --ag-control-panel-background-color: var(--color-base-100);
+  --ag-border-color: var(--iui-chart-grid);
+  --ag-secondary-border-color: var(--iui-chart-grid);
+  --ag-row-border-color: var(--iui-chart-row);
+  --ag-wrapper-border-radius: var(--radius-box, 16px);
+  --ag-border-radius: var(--radius-field, 8px);
+  --ag-row-hover-color: var(--iui-chart-hover);
+  --ag-selected-row-background-color: var(--color-base-200);
+  --ag-header-column-resize-handle-color: transparent;
+  --ag-header-column-separator-display: none;
+  --ag-checkbox-checked-color: var(--color-base-content);
+  --ag-checkbox-unchecked-color: var(--iui-chart-axis);
+  --ag-range-selection-border-color: var(--color-base-content);
+  --ag-input-focus-border-color: var(--color-base-content);
+  --ag-active-color: var(--color-base-content);
+  --ag-cell-horizontal-padding: 14px;
+  --ag-header-height: 40px;
+  --ag-row-height: 44px;
+  --ag-icon-font-color: var(--iui-chart-axis);
+  --ag-modal-overlay-background-color: color-mix(in oklab, var(--color-base-100) 70%, transparent);
 }
-.ag-theme-iui .ag-header-cell-label { font-weight: 600; }
+.ag-theme-iui .ag-header { border-bottom-color: var(--iui-chart-grid); }
+.ag-theme-iui .ag-header-cell-text, .ag-theme-iui .ag-header-cell-label { font-weight: 500; }
+.ag-theme-iui .ag-cell { font-variant-numeric: tabular-nums; }
+.ag-theme-iui .ag-paging-panel { color: var(--iui-chart-axis); border-top-color: var(--iui-chart-grid); }
 .iui-mindmap, .mermaid.iui-mindmap {
-  background: var(--color-background-secondary);
-  border: 1px solid var(--color-border-tertiary);
-  border-radius: var(--border-radius-lg);
-  padding: 12px;
+  background: var(--color-base-100);
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box, 16px);
+  padding: 16px;
   overflow: auto;
 }
-.iui-mindmap svg { max-width: 100%; height: auto; display: block; }
+.iui-mindmap svg { max-width: 100%; height: auto; display: block; margin-inline: auto; }
+/* visual(③): d3 axes follow the chart chrome (attributes lose to CSS; author CSS still wins). */
+:where(svg) :where(.tick) > text { fill: var(--iui-chart-axis); font-family: var(--font-sans); font-size: 11px; }
+:where(svg) :where(.tick) > line { stroke: var(--iui-chart-grid); }
+:where(svg) :where(g) > path.domain { stroke: var(--iui-chart-grid); }
 
 .iui-weather { display: flex; flex-direction: column; gap: 14px; }
 .iui-weather-hero {
@@ -538,7 +557,7 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 `.trim()
 
 /** D1–D8 design kit: type scale, page personalities, stat, scroll hints, equal-height cards, code tools, 3D stage. */
-export const OIU_DESIGN_KIT_CSS = `
+export const HOST_KIT_CSS = `
 /* D1 type scale: 12 / 14 / 16 / 20 / 28 / 40 — nothing below 12px. */
 /* G2: heading rhythm, Latin line height, aligned digits for numbers / prices / tables. */
 ${legacyElementLayer(`h1, h2, h3, h4 { line-height: var(--lh-heading, 1.25); }
@@ -756,7 +775,7 @@ ${legacyElementLayer(`:where(pre:not(.mermaid)) {
  * visible keyboard focus ring, global reduced-motion fallback, 32px minimum targets,
  * accent-filled primary buttons and a right-aligned `.iui-actions` footer.
  */
-export const OIU_A11Y_CSS = `
+export const HOST_A11Y_CSS = `
 :focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 2px; }
 :focus:not(:focus-visible) { outline: none; }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 1px; }
@@ -784,276 +803,6 @@ button.primary:not(.btn):hover, button[type="submit"]:not(.secondary):not(.ghost
 `.trim()
 
 /** Full injected design-system CSS block. */
-export function buildOiuDesignSystemCss(): string {
-  return `${OIU_THEME_CSS}\n${OIU_SVG_CLASSES_CSS}\n${OIU_FORM_STYLES_CSS}\n${OIU_DESIGN_KIT_CSS}\n${OIU_POLISH_CSS}\n${OIU_A11Y_CSS}`
+export function buildHostKitCss(): string {
+  return `${LEGACY_TOKEN_BRIDGE_CSS}\n${HOST_SVG_CSS}\n${HOST_FORM_CSS}\n${HOST_KIT_CSS}\n${HOST_POLISH_CSS}\n${HOST_A11Y_CSS}`
 }
-
-/** CDN import map for common libs (pinned; see vendor-registry). Leaflet = UMD auto-inject. */
-export const OIU_IMPORTMAP = buildVendorImportMap()
-
-export function buildOiuImportmapScriptTag(assetBase?: string): string {
-  return `<script type="importmap">${JSON.stringify(buildVendorImportMap(assetBase))}</script>`
-}
-
-/**
- * Self-contained trip pin-drop animator for itinerary sandboxes.
- * Installed as window.createTripAnimator inside the sandbox.
- */
-export function createTripAnimatorSource(): string {
-  // Keep as a plain function body string so it serializes into the iframe.
-  return `function createTripAnimator(options) {
-  var stopCount = options.stopCount, onFrame = options.onFrame, onState = options.onState;
-  var duration = options.durationMs != null ? options.durationMs : 6000;
-  if (!Number.isInteger(stopCount) || stopCount < 2 || stopCount > 30)
-    throw new Error("A trip needs 2–30 stops.");
-  if (!Number.isFinite(duration) || duration < 1000 || duration > 120000)
-    throw new Error("Trip duration must be between 1 and 120 seconds.");
-  // Leaflet marker.getElement() is often still null on first paint. A truthy
-  // pinElements array with holes must not throw. If the array is empty, adopt
-  // .iui-pin-dot nodes already in the map pane.
-  function resolvePins() {
-    var out = [];
-    var pins = options.pinElements;
-    if (pins && typeof pins.forEach === 'function') {
-      pins.forEach(function (pin) { if (pin) out.push(pin); });
-    }
-    if (out.length === 0) {
-      var dots = document.querySelectorAll('.iui-pin-dot');
-      for (var d = 0; d < dots.length; d++) out.push(dots[d]);
-    }
-    return out;
-  }
-  function eachPin(fn) {
-    resolvePins().forEach(function (pin, index) {
-      if (!pin) return;
-      try { fn(pin, index); } catch (e) {}
-    });
-  }
-  function showPins() {
-    eachPin(function (pin, index) {
-      if (!pin.textContent || !String(pin.textContent).trim()) pin.textContent = String(index + 1);
-      if (pin.style) { pin.style.opacity = '1'; pin.style.transform = 'none'; }
-    });
-  }
-  showPins();
-  var elapsed = 0, lastTime = null, frameId = null, playing = false, disposed = false;
-  function reduceMotion() {
-    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  }
-  function emit() {
-    var progress = Math.min(1, elapsed / duration);
-    var step = progress * (stopCount - 1);
-    var fromIndex = Math.min(stopCount - 2, Math.floor(step));
-    var travel = Math.min(1, (step - fromIndex) / 0.8);
-    var fraction = travel * travel * (3 - 2 * travel);
-    var pinStep = progress * stopCount;
-    var pinIndex = Math.min(stopCount - 1, Math.floor(pinStep));
-    var pinProgress = progress === 1 ? 1 : Math.min(1, (pinStep - pinIndex) / 0.55);
-    eachPin(function (pin, index) {
-      if (!pin.style) return;
-      if (!playing && elapsed === 0) {
-        pin.style.opacity = "1";
-        pin.style.transform = "none";
-        return;
-      }
-      var landing = index < pinIndex ? 1 : index === pinIndex ? pinProgress : 0;
-      var t = landing - 1;
-      var ease = 1 + 2.2 * t * t * t + 1.2 * t * t;
-      pin.style.opacity = landing > 0 ? "1" : "0";
-      pin.style.transform = "translateY(" + (-18 * (1 - ease)) + "px) scale(" + (0.72 + 0.28 * ease) + ")";
-    });
-    onFrame({
-      progress: progress, fromIndex: fromIndex, toIndex: fromIndex + 1, fraction: fraction,
-      activeStop: pinIndex, pinIndex: pinIndex, pinProgress: pinProgress
-    });
-  }
-  function pause() {
-    if (disposed) return;
-    playing = false; lastTime = null;
-    if (frameId !== null) cancelAnimationFrame(frameId);
-    frameId = null;
-    if (onState) onState(elapsed >= duration ? "complete" : "paused");
-  }
-  function tick(time) {
-    if (!playing || disposed) return;
-    if (lastTime !== null) elapsed = Math.min(duration, elapsed + Math.max(0, time - lastTime));
-    lastTime = time;
-    emit();
-    if (elapsed >= duration) pause();
-    else frameId = requestAnimationFrame(tick);
-  }
-  function play() {
-    if (disposed || playing) return;
-    if (reduceMotion()) { elapsed = duration; emit(); if (onState) onState("complete"); return; }
-    if (elapsed >= duration) return;
-    playing = true; lastTime = null;
-    if (onState) onState("playing");
-    frameId = requestAnimationFrame(tick);
-  }
-  function seek(stop) {
-    if (disposed) return;
-    if (!Number.isInteger(stop) || stop < 0 || stop >= stopCount)
-      throw new Error("Stop index is outside this trip.");
-    pause();
-    elapsed = stop === stopCount - 1 ? duration : duration * (stop + 0.6) / stopCount;
-    emit();
-    if (onState) onState(elapsed >= duration ? "complete" : "paused");
-  }
-  function refreshMaps() {
-    try {
-      if (options.map && typeof options.map.invalidateSize === 'function') {
-        try { options.map.invalidateSize({ animate: false }); } catch (e0) { options.map.invalidateSize(); }
-        try {
-          options.map.eachLayer(function (layer) {
-            if (layer && typeof layer.redraw === 'function') layer.redraw();
-          });
-        } catch (e1) {}
-      }
-    } catch (e) {}
-    try {
-      if (window.L && typeof L.iuiRefreshMaps === 'function') L.iuiRefreshMaps('animator-replay');
-    } catch (e2) {}
-  }
-  function replay() {
-    if (disposed) return;
-    pause(); elapsed = 0; emit();
-    refreshMaps();
-    play();
-    setTimeout(refreshMaps, 80);
-    setTimeout(refreshMaps, 320);
-    setTimeout(refreshMaps, 800);
-  }
-  function onVisibility() { if (document.hidden) pause(); }
-  function dispose() {
-    if (disposed) return;
-    pause(); disposed = true;
-    document.removeEventListener("visibilitychange", onVisibility);
-    window.removeEventListener("pagehide", dispose);
-  }
-  document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("pagehide", dispose);
-  if (reduceMotion()) elapsed = duration;
-  emit();
-  setTimeout(showPins, 0);
-  setTimeout(showPins, 160);
-  setTimeout(showPins, 480);
-  return { play: play, pause: pause, replay: replay, seek: seek, dispose: dispose };
-}`
-}
-
-export function buildTripAnimatorScriptTag(): string {
-  return `<script>window.createTripAnimator=${createTripAnimatorSource()};<\/script>`
-}
-
-/**
- * Agent-facing design skill (trip/pricing/weather patterns), OIU vocabulary.
- * @deprecated Not injected anywhere (since .27 the prompt is `section-text.ts`
- * + `[iui-pattern]` notes in `referee-rules.ts`, both daisyUI since visual(②)).
- * Kept only until the OIU kit is removed; do not wire it back in.
- */
-export const OIU_DESIGN_SKILL = `
-The sandbox already includes a shared design system. Build on it — do NOT restyle from scratch.
-
-Colors (use CSS variables for text/surfaces; one topic colour via the \`accent:\` header line):
-- Surfaces: --color-background-primary / secondary / tertiary
-- Text: --color-text-primary / secondary / tertiary
-- Semantic: --color-background-info|danger|success|warning + matching --color-text-* / --color-border-*
-- Fonts: --font-sans / --font-serif / --font-mono
-- Radii: --border-radius-md / lg / xl
-- Dark mode is automatic via these variables.
-
-Form controls (button, input, textarea, select, range, checkbox, radio) are pre-styled — do not restyle basics.
-
-Type scale (ONLY these sizes; nothing below 12px): --fs-xs 12 / --fs-sm 14 / --fs-md 16 / --fs-lg 20 / --fs-xl 28 / --fs-2xl 40.
-Body text contrast ≥ 4.5:1 (large ≥ 3:1) — use --color-text-* on --color-background-*.
-
-Page personality (put on the page root): data-iui-style="tool" (工具型·简洁) | "content" (内容型·杂志) | "data" (数据型·看板) | "toy" (玩具型·活泼).
-It sets --accent / --accent-fill / --accent-soft, background, radii and density. Use var(--accent) for highlights instead of a hardcoded brand color.
-ONE visual hero per page (a lead photo, one big number, one chart, or the playable object) — everything else is quieter.
-
-Stats: <div class="iui-stat"><div class="iui-stat-value">128<span class="unit">ms</span></div><div class="iui-stat-label">P95 延迟</div></div>
-(.iui-stats grid for several; .iui-stat.lg / .sm; optional .iui-stat-delta[.down]). Number on top, caption below — never "128 次访问" in one line.
-Cards side by side: .iui-card-grid (equal height); .iui-card-title clamps to 2 lines, .iui-card-summary to 3; .iui-card-foot sticks to the bottom; .iui-clamp-1/2/3 helpers.
-Host auto-adds: edge fades + indicator on horizontal scrollers; 换行/复制 tools on <pre> (opt out: data-iui-no-tools).
-3D: use the host stage — <div data-iui-3d='{"model":"polyhaven:ArmChair_01","hotspots":[{"id":"seat","label":"坐垫","at":[0,0.1,0.6],"text":"…"}]}'></div>
-("model": "polyhaven:ID" | "khronos:Name" | an https .glb on jsDelivr or GitHub raw, from find_3d_models — never invent IDs; or "shape": torusKnot|sphere|box|icosahedron|torus|cone|cylinder|capsule).
-The host does lights + soft shadow, auto-fit, damped OrbitControls, keyboard, Ctrl+wheel zoom, pins with camera fly, loading % and fallback.
-Options: ground plinth|shadow|none, view [az,el], autoRotate, cursor "look", animation true|"Clip", color. Text layers: child with data-iui-3d-layer="back|front".
-Events iui3d:ready / iui3d:hotspot (detail.id, label, spec); API window.iuiStage3d(el).then(s => s.focus('seat') / s.reset() / s.play()).
-Hand-write three.js only for custom scenes: canvas inside .iui-3d-wrap + .iui-3d-loading, set data-iui-3d-ready on first frame, fit by projecting vertices.
-
-SVG diagrams: use .c-purple .c-teal .c-coral .c-pink .c-gray .c-blue .c-green .c-amber .c-red plus .box .node .arr .leader and text .t .ts .th.
-
-Layout helpers already injected:
-- .iui-itinerary / .iui-map-wrap / .iui-cards-strip / .iui-stop-card / .iui-chip / .iui-map-chrome
-- .iui-compare-3 / .iui-tier / .iui-tier.featured  (3 columns; stacks on phones ≤520px)
-- .iui-kanban-3 / .iui-kanban-col / .iui-kanban-col-title / .iui-kanban-card  (3-col boards; scroll horizontally on phones)
-- .iui-weather / .iui-weather-hero / .iui-weather-chip / .iui-weather-chart / .iui-weather-days
-- .iui-actions  (right-aligned action footer: secondary buttons first, one button.primary last; full-width on phones)
-- Icons (local Lucide, no emoji in UI chrome): <i data-iui-icon="map-pin"></i> or <svg class="iui-icon"><use href="#i-map-pin"/></svg>; size = font-size, colour = currentColor; .iui-icon-tile = soft accent square behind a feature icon
-- .iui-cols-2 / .iui-cols-3 / .iui-cols-4  (equal columns with built-in breakpoints: 4→2 at ≤560px, all→1 at ≤480px; no horizontal overflow at 360px)
-- Legacy kit still works: .iui-sandbox-card .iui-sandbox-grid .iui-sandbox-kpi .iui-sandbox-compare …
-
-css parameter = widget-specific styles ONLY (theme/forms/SVG already loaded).
-
-Importmap provides bare imports: three, gsap, d3 (chart.js map kept for compat). Prefer host-injected UMD globals: Chart (chart.js) and L (Leaflet) — do NOT rely on import("chart.js") or import("leaflet") in srcdoc (flaky → blank charts/maps). Author JS is classic eval, not a module: never \`import … from\` or \`typeof import\`. Load Three with import('three').then(...) or an async IIFE await import('three'). Load other CDN libs inside async functions (no top-level await in classic js).
-
-## Pattern — maps / multi-stop (Nanjing density, not a frozen city template)
-Lock the structure, not the copy. Any map with 2+ places (trip, 探店, 一日游, 景点详解) MUST ship:
-1) REAL Leaflet in .iui-map-wrap (height 300px, colored muted basemap; data-iui-map-style="mono" only if asked). Pause/Replay chrome.
-2) Numbered L.divIcon pins (.iui-pin-dot, data-cat="food|sight|hotel|shop|nature|culture|transport" colors them; .active = selected → bigger, ringed, on top). Host spreads overlapping pins apart. createTripAnimator — do not invent timers. Filter null getElement() before pinElements.
-3) Horizontal .iui-cards-strip + .iui-stop-card (photo 110px + number + name + one-line). Extra cards SCROLL inside the first rounded frame (host sets min-width:0).
-4) Click pin OR card opens an in-page detail sheet: 停留 / 票或预约 / 怎么去 / 避坑 (plus a why line). Do not leave the map as pins-only.
-Single-place maps may skip the strip/animator; still real Leaflet + one marker + that place's detail.
-Optional only when the ask has the data: day timeline, lodging .iui-compare-3, budget. NEVER force a 3-day Nanjing layout onto 探店/天气/单点.
-- Host installs window.createTripAnimator:
-  createTripAnimator({ stopCount, durationMs:6000, pinElements, map, onFrame, onState })
-  → play()/pause()/replay()/seek(i)/dispose(). Pass map so replay() invalidateSize/redraws tiles.
-- On activateStop: highlight card (aria-current), strip.scrollLeft to card offset (not scrollIntoView), fill the detail sheet, update status.
-- Label polyline "示意行程连线 — 非核实驾车路线". Approximate coords OK if labeled.
-- Map tiles (REQUIRED): Esri World Street Map (host mutes saturation slightly) https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x} (z/y/x) {attribution:'Tiles © Esri',maxZoom:19}. Host auto-falls back on tileerror (OSM FR HOT → Esri Light Gray). Never World_Topo_Map, tile.openstreetmap.org, or basemaps.cartocdn.com. scrollWheelZoom:false; invalidateSize after setup. Pins must stay visible (do not rely on opacity:0 CSS).
-- Photos (REQUIRED on every itinerary stop card AND hotel/product/place/cover card):
-  1) Prefer tool get_trip_stop_images or get_place_images({ wikipedia_titles: [...], coordinates: [{lat,lng}...] }) BEFORE the fence
-     for ANY destination / hotel / cover. Only photos that demonstrably show the place come back (Commons file/description/
-     categories name it, or within 300 m). Put image_url into .photo / .cover img + collapsed credit:
-     <div class="iui-photo-credit"><a href="credit_url" title="artist · license">ⓘ 图片来自 Wikimedia</a></div> — never a file name.
-  2) Unavailable / unsure → leave the .photo band EMPTY and put data-lat/data-lng on the card: the host draws a designed
-     placeholder (category icon on an accent gradient). NEVER substitute a nearby or more famous place's photo
-     (愚园路 ≠ 静安寺, a 安福路 café ≠ 外滩). A city photo is fine only for a whole-city stop.
-  3) Host ALSO auto-fills .photo/.cover (strict well-known aliases + verified Wikipedia/Commons lookup, 300 m geo check)
-     for .iui-stop-card / .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card / [data-iui-place].
-     Model-invented Commons filenames are replaced when they 404. Prefer loading=eager on stop photos.
-     NEVER invent Unsplash/random hosts; no photo → leave the band empty (host placeholder), never a grey block.
-  Never invent live traffic/hours.
-
-## Pattern — hotel / product / place covers (non-itinerary)
-Use .iui-hotel-card / .iui-product-card / .iui-place-card / .iui-cover-card with a .photo or .cover band
-+ .name (or data-iui-place="Tokyo"). Same Wikimedia rules as itinerary stops. Host enrich+fill applies.
-
-## Pattern — pricing / compare (3 columns)
-Wrap tiers in <div class="iui-compare-3"> with three .iui-tier (one .featured). Each: plan name, .price + <small>/月</small>, feature <ul><li>, CTA button. Three columns side by side; host CSS stacks them on phones (≤520px) with the featured tier first.
-
-## Pattern — kanban board (3 columns)
-Use <div class="iui-kanban-3"> with three .iui-kanban-col (each .iui-kanban-col-title + .iui-kanban-card items). Move cards via buttons (local JS only). On phones (≤520px) the host turns the board into a horizontal scroll-snap strip.
-
-## Pattern — weather (dense dashboard)
-Hero first, then detail — a bare 3-KPI strip reads unfinished. Structure:
-1) Hero band (.iui-weather-hero): city+date, LARGE temp (≥48px), condition icon, high/low.
-2) Detail chips (.iui-weather-chip): feels-like, humidity, wind, AQI (or UV).
-3) Hourly Chart.js line in a fixed-height (~200px) wrapper (.iui-weather-chart) — use global Chart / window.iuiCreateChart(canvas, cfg) (UMD injected); maintainAspectRatio:false; never leave the canvas blank. Chart cfg MUST parse (var cfg={type,data,options:{scales:{x,y,y1}}}; — count the closing braces; a missing } before ; is SyntaxError Unexpected token ';' ; closing the object with ) instead of } is Unexpected token ')').
-4) 7-day row (.iui-weather-days > .iui-weather-day): icon + cond + hi/lo; click switches hero (local JS).
-Use token colors only; soft info gradient on hero. Label sample data if not live.
-
-## Pattern — calculators / charts
-Real defaults on first paint; Chart.js/ECharts with maintainAspectRatio:false and fixed-height wrapper (220–320px). Validate finite numbers; no NaN.
-
-## Pattern — filterable table (AG Grid only)
-Use ONLY when the ask is a sortable/filterable multi-column sheet (名单、排行、明细). agGrid.createGrid(el, {columnDefs, rowData}); el class = ag-theme-quartz ag-theme-iui. Few rows: domLayout autoHeight. Host injects ag-grid-community + quartz and paints --ag-* from --color-*. NEVER wrap a 3-row budget table or itinerary facts in AG Grid.
-
-## Pattern — mindmap (Mermaid)
-<pre class="mermaid iui-mindmap">mindmap\\n  root((主题))\\n</pre> then mermaid.run. Host injects mermaid UMD and initializes themeVariables from --color-*. Do not emit ASCII trees or nested Markdown lists as the mindmap.
-
-## Bridge
-window.iuiSandbox.sendPrompt(text) / openLink(url) / action(name,payload) — only on user click, never on load.
-Official sites (气象局 / booking / maps): openLink(httpsUrl) or data-iui-open-link. NEVER action('sandbox_open_link') — host opens the URL locally and must not [genui-action] a new page.
-`.trim()

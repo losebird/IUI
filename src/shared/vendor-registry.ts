@@ -32,7 +32,7 @@ export const VENDOR_LIBS = {
   agGrid: { pkg: 'ag-grid-community', version: '32.3.3', js: 'dist/ag-grid-community.min.js', css: ['styles/ag-grid.css', 'styles/ag-theme-quartz.css'] },
   mermaid: { pkg: 'mermaid', version: '11.16.0', js: 'dist/mermaid.min.js' },
   // ESM only (importmap). three.module.js imports ./three.core.js; addons import bare 'three'.
-  three: { pkg: 'three', version: '0.180.0', extra: ['build/three.module.js', 'build/three.core.js', 'examples/jsm/controls', 'examples/jsm/geometries', 'examples/jsm/utils', 'examples/jsm/math', 'examples/jsm/environments', 'examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/loaders/DRACOLoader.js', 'examples/jsm/libs/meshopt_decoder.module.js', 'examples/jsm/libs/draco/gltf/draco_decoder.wasm', 'examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js'] },
+  three: { pkg: 'three', version: '0.180.0', extra: ['build/three.module.js', 'build/three.core.js', 'examples/jsm/controls', 'examples/jsm/geometries', 'examples/jsm/utils', 'examples/jsm/math', 'examples/jsm/environments', 'examples/jsm/effects/OutlineEffect.js', 'examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/loaders/DRACOLoader.js', 'examples/jsm/libs/meshopt_decoder.module.js', 'examples/jsm/libs/draco/gltf/draco_decoder.wasm', 'examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js'] },
   // F1: ESM only (importmap `gsap` / `gsap/…`) — the package root files are the ES modules.
   // visual(①): Inter (variable, latin) for the IUI theme — font file only, no js/css.
   inter: { pkg: '@fontsource-variable/inter', version: '5.3.0', extra: ['files/inter-latin-wght-normal.woff2'] },
@@ -434,4 +434,9 @@ export function vendorIntegrityFiles(): Array<{ pkg: string; version: string; pa
     for (const p of files) if (p) out.push({ pkg: lib.pkg, version: lib.version, path: p })
   }
   return out
+}
+
+/** `<script type="importmap">` for the sandbox head (three / gsap / d3 / chart.js ESM). */
+export function buildVendorImportmapScriptTag(assetBase?: string): string {
+  return `<script type="importmap">${JSON.stringify(buildVendorImportMap(assetBase))}</script>`
 }

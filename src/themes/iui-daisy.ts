@@ -72,6 +72,15 @@ const SERIES: Record<'iui' | 'iui-dark' | 'corporate' | 'dim', readonly string[]
   dim: ['#9fe88d', '#4b5563', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#9ca3af', '#c084fc'],
 }
 
+/** visual(③): library chrome tokens (resolved to hex in-frame by __iuiCssColor). */
+export const CHART_CHROME: Readonly<Record<string, string>> = {
+  '--iui-chart-axis': 'color-mix(in oklab,var(--color-base-content) 58%,var(--color-base-100))',
+  '--iui-chart-grid': 'color-mix(in oklab,var(--color-base-content) 8%,var(--color-base-100))',
+  '--iui-chart-row': 'color-mix(in oklab,var(--color-base-content) 5%,var(--color-base-100))',
+  '--iui-chart-hover': 'color-mix(in oklab,var(--color-base-content) 2.5%,var(--color-base-100))',
+  '--iui-chart-line': 'color-mix(in oklab,var(--color-base-content) 35%,var(--color-base-100))',
+}
+
 function block(sel: string, vars: Readonly<Record<string, string>>): string {
   return `${sel}{${Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';')}}`
 }
@@ -135,6 +144,9 @@ export function buildIuiThemeCss(): string {
     DAISY_THEMES_CSS,
     block('[data-theme="corporate"]', seriesVars('corporate')),
     block('[data-theme="dim"]', seriesVars('dim')),
+    // visual(③): chart chrome shared by Chart.js / ECharts / d3 / AG Grid / Mermaid — muted axis ink,
+    // hairline grid, row lines — derived from each theme's base colours (charts.html: #71717a / #ececee).
+    block(':root,[data-theme]', CHART_CHROME),
     // common.css: pill toggles, softer textarea, accordion groups, quiet progress ring track.
     ':where(:root,[data-theme^="iui"]) .toggle,:where(:root,[data-theme^="iui"]) .toggle:before{border-radius:999px}',
     ':where(:root,[data-theme^="iui"]) .textarea{border-radius:1rem}',
@@ -247,7 +259,8 @@ export function interFontFaceCss(assetBase?: string): string {
 
 /**
  * The handful of Tailwind utilities daisyUI markup leans on (`card bg-base-100
- * border border-base-300`, `text-error`). No Tailwind runtime in the sandbox.
+ * border border-base-300`, `text-error`), pre-shipped so they paint before the per-page
+ * Tailwind compile (tailwind-jit.ts) lands.
  */
 export const IUI_UTILITIES_CSS = '@layer utilities{'
   + '.border{border:var(--border-w,1px) solid var(--color-base-300)}.border-dashed{border-style:dashed}'
@@ -268,7 +281,7 @@ export const IUI_UTILITIES_CSS = '@layer utilities{'
   + '}'
 
 /**
- * The slice of Tailwind preflight daisyUI assumes (no Tailwind runtime here):
+ * The slice of Tailwind preflight daisyUI assumes (the per-page compile emits utilities only):
  * form controls inherit the font, buttons start transparent and borderless,
  * so `.tab` / `.join-item` don't show the UA ButtonFace grey (dark: #6b6b6b).
  * `@layer base` = lowest, so host element defaults and daisyUI win over it.
@@ -276,6 +289,10 @@ export const IUI_UTILITIES_CSS = '@layer utilities{'
 export const IUI_PREFLIGHT_CSS = '@layer base{'
   + ':where(button,input,select,textarea,optgroup){font:inherit;letter-spacing:inherit;color:inherit}'
   + ':where(button,[type=button],[type=reset],[type=submit]){background-color:transparent;background-image:none;border:0 solid;cursor:pointer}'
+  // Tailwind side borders (`border-b`, `divide-y`) without a colour: the hairline token, not currentColor.
+  + ':where(*,::before,::after){border-color:var(--color-base-300)}'
+  // Styled lists (`<ul class="divide-y …">`) start flush like Tailwind; bare prose lists keep bullets.
+  + ':where(ul[class],ol[class]){list-style:none;margin:0;padding:0}'
   + '}'
 
 /** Theme base injected before host tokens: layer order, font, daisyUI, themes (the colour bridge ships with the host kit, after host tokens). */

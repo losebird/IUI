@@ -278,10 +278,15 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     el.appendChild(status);
     var stage = { el: el, options: o, error: null, clips: [], hotspots: [] };
     var still = reduce();
-    var THREE, OC, mods;
+    // visual(③ ⑤): look presets — clay (default: matte, warm soft light), toon (3-step shading +
+    // outline), data (neutral, quiet), studio (the old glossy accent look).
+    var preset = ['clay', 'toon', 'data', 'studio'].indexOf(o.look) >= 0 ? o.look : 'clay';
+    stage.look = preset;
+    var THREE, OC, mods, outlineIdx = -1;
     try {
       var want = [import('three'), import('three/addons/controls/OrbitControls.js'), o.env === 'none' ? null : import('three/addons/environments/RoomEnvironment.js')];
       if (o.model) want.push(import('three/addons/loaders/GLTFLoader.js'), import('three/addons/loaders/DRACOLoader.js'), import('three/addons/libs/meshopt_decoder.module.js'));
+      if (preset === 'toon') { outlineIdx = want.length; want.push(import('three/addons/effects/OutlineEffect.js').catch(function () { return null; })); }
       mods = await Promise.all(want);
       THREE = mods[0];
       OC = mods[1].OrbitControls;
@@ -297,7 +302,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2));
     renderer.setSize(w, h, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = preset === 'toon' ? THREE.NoToneMapping : (preset === 'studio' ? THREE.ACESFilmicToneMapping : (THREE.NeutralToneMapping || THREE.ACESFilmicToneMapping));
     renderer.toneMappingExposure = Number(o.exposure) > 0 ? Number(o.exposure) : 1;
     var shadows = o.shadow !== false && o.ground !== 'none';
     renderer.shadowMap.enabled = shadows;
@@ -314,30 +319,52 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       try {
         var pm = new THREE.PMREMGenerator(renderer);
         scene.environment = pm.fromScene(new mods[2].RoomEnvironment(), 0.04).texture;
-        scene.environmentIntensity = 0.75;
+        scene.environmentIntensity = preset === 'clay' ? 0.55 : (preset === 'data' ? 0.5 : (preset === 'toon' ? 0.2 : 0.75));
         pm.dispose();
       } catch (eEnv) {}
     }
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8070, scene.environment ? 0.35 : 0.6));
-    var key = new THREE.DirectionalLight(0xffffff, 2.2);
-    key.position.set(4, 6, 3);
+    var LP = {
+      clay: { sky: 0xffffff, gnd: 0xd8d2c8, hemi: 0.6, key: 2.2, keyColor: 0xfff4e8, pos: [3, 7, 4], fill: 0.25, rim: 0.5, ground: 0.18 },
+      data: { sky: 0xffffff, gnd: 0xeeeeee, hemi: 0.7, key: 1.8, keyColor: 0xffffff, pos: [-3, 8, 5], fill: 0.2, rim: 0.3, ground: 0.12 },
+      toon: { sky: 0xffffff, gnd: 0xffffff, hemi: 0.7, key: 1.6, keyColor: 0xffffff, pos: [-5, 6, 2], fill: 0, rim: 0, ground: 0.06 },
+      studio: { sky: 0xffffff, gnd: 0x8a8070, hemi: scene.environment ? 0.35 : 0.6, key: 2.2, keyColor: 0xffffff, pos: [4, 6, 3], fill: 0.6, rim: 1.1, ground: 0.22 }
+    }[preset];
+    scene.add(new THREE.HemisphereLight(LP.sky, LP.gnd, LP.hemi));
+    var key = new THREE.DirectionalLight(LP.keyColor, LP.key);
+    key.position.set(LP.pos[0], LP.pos[1], LP.pos[2]);
     key.castShadow = shadows;
     key.shadow.mapSize.set(small ? 512 : 1024, small ? 512 : 1024);
-    key.shadow.radius = 4;
+    key.shadow.radius = preset === 'toon' ? 1 : 4;
     key.shadow.bias = -0.0005;
     key.shadow.normalBias = 0.02;
     var sc = key.shadow.camera; sc.left = -3; sc.right = 3; sc.top = 3; sc.bottom = -3; sc.near = 0.5; sc.far = 20;
-    var fill = new THREE.DirectionalLight(0xdbe8ff, 0.6); fill.position.set(-5, 2.5, 2);
-    var rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(-2, 4, -5);
+    var fill = new THREE.DirectionalLight(preset === 'studio' ? 0xdbe8ff : 0xffffff, LP.fill); fill.position.set(-5, 2.5, 2);
+    var rim = new THREE.DirectionalLight(0xffffff, LP.rim); rim.position.set(-2, 4, -5);
     scene.add(key, fill, rim);
 
     // Subject: GLB / glTF model, or a primitive shape. Normalised to a 2-unit box sitting on y=0.
     var pivot = new THREE.Group();
     scene.add(pivot);
     var subject = null, gltf = null, credit = null;
-    var accent = cssColor(THREE, o.color || '--accent-fill', 0x185FA5);
+    var accent = preset === 'studio' ? cssColor(THREE, o.color || '--accent-fill', 0x185FA5)
+      : preset === 'toon' ? cssColor(THREE, o.color || '--iui-chart-3', 0x2563eb)
+      : preset === 'data' ? (o.color ? cssColor(THREE, o.color, 0xd4d4d8) : new THREE.Color(0xd4d4d8))
+      : (o.color ? cssColor(THREE, o.color, 0xd9cfc1) : new THREE.Color(0xd9cfc1));
+    var toonRamp = null;
+    function ramp() {
+      if (toonRamp) return toonRamp;
+      toonRamp = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 190, 190, 190, 255, 255, 255, 255, 255]), 3, 1);
+      toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
+      toonRamp.needsUpdate = true;
+      return toonRamp;
+    }
     function makeShape(failed) {
-      var mat = new THREE.MeshStandardMaterial({ color: failed ? new THREE.Color(0x9aa3ad) : accent, roughness: failed ? 0.6 : 0.32, metalness: failed ? 0 : 0.18, flatShading: o.shape === 'icosahedron' });
+      var flat = o.shape === 'icosahedron';
+      var mat = failed ? new THREE.MeshStandardMaterial({ color: new THREE.Color(0x9aa3ad), roughness: 0.6, metalness: 0, flatShading: flat })
+        : preset === 'toon' ? new THREE.MeshToonMaterial({ color: accent, gradientMap: ramp() })
+        : preset === 'clay' ? new THREE.MeshStandardMaterial({ color: accent, roughness: 0.92, metalness: 0, flatShading: flat })
+        : preset === 'data' ? new THREE.MeshStandardMaterial({ color: accent, roughness: 0.6, metalness: 0, flatShading: flat })
+        : new THREE.MeshStandardMaterial({ color: accent, roughness: 0.32, metalness: 0.18, flatShading: flat });
       return new THREE.Mesh(shapeGeometry(THREE, o.shape), mat);
     }
     if (o.model) {
@@ -387,6 +414,12 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     if (!subject) subject = makeShape(!!stage.error);
     subject.traverse(function (m) {
       if (m.isMesh) { m.castShadow = shadows; m.receiveShadow = false; if (m.material && 'envMapIntensity' in m.material && !scene.environment) m.material.envMapIntensity = 1; }
+      // toon: loaded models keep their colours / textures on the 3-step ramp.
+      if (m.isMesh && gltf && preset === 'toon' && m.material && !Array.isArray(m.material) && !m.material.isMeshToonMaterial) {
+        var om = m.material;
+        m.material = new THREE.MeshToonMaterial({ color: om.color || 0xffffff, map: om.map || null, gradientMap: ramp(), transparent: !!om.transparent, opacity: om.opacity == null ? 1 : om.opacity, side: om.side });
+        try { om.dispose(); } catch (eOm) {}
+      }
     });
     var holder = new THREE.Group();
     holder.add(subject);
@@ -412,10 +445,16 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     holder.position.set(-ctr.x, -box.min.y + lift, -ctr.z);
     pivot.add(holder);
     if (ground !== 'none') {
-      var gr = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.ShadowMaterial({ opacity: 0.22 }));
+      var gr = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.ShadowMaterial({ opacity: LP.ground }));
+      gr.material.userData.outlineParameters = { visible: false };
       gr.rotation.x = -Math.PI / 2; gr.receiveShadow = true;
       scene.add(gr);
     }
+    var outline = null;
+    if (outlineIdx >= 0 && mods[outlineIdx] && mods[outlineIdx].OutlineEffect) {
+      try { outline = new mods[outlineIdx].OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.09, 0.09, 0.11] }); } catch (eOut) { outline = null; }
+    }
+    function draw() { if (outline) outline.render(scene, camera); else renderer.render(scene, camera); }
     pivot.updateMatrixWorld(true);
     var mbox = new THREE.Box3().setFromObject(holder);
     var center = mbox.getCenter(new THREE.Vector3());
@@ -743,7 +782,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         pivot.rotation.y += (ty - pivot.rotation.y) * Math.min(1, dt * 6);
         pivot.rotation.x += (tp - pivot.rotation.x) * Math.min(1, dt * 6);
       }
-      renderer.render(scene, camera);
+      draw();
       placePins();
     }
     function run(on) {
@@ -768,7 +807,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         renderer.setSize(W, H, false);
         camera.aspect = W / H;
         camera.updateProjectionMatrix();
-        if (!running) { renderer.render(scene, camera); placePins(); }
+        if (!running) { draw(); placePins(); }
       });
       ro.observe(el);
     }
@@ -789,7 +828,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       try { renderer.forceContextLoss(); } catch (eF) {}
       el.__iui3d = null;
     }
-    renderer.render(scene, camera);
+    draw();
     placePins();
     run(true);
     el.setAttribute('data-iui-3d-ready', '1');
@@ -802,7 +841,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     stage.model = subject; stage.pivot = pivot; stage.mixer = mixer; stage.credit = credit;
     stage.focus = focus; stage.reset = reset; stage.play = play; stage.stop = stop; stage.dispose = dispose;
     stage.setAutoRotate = function (on) { controls.autoRotate = !!on && !still; syncTools(); };
-    stage.render = function () { renderer.render(scene, camera); placePins(); };
+    stage.render = function () { draw(); placePins(); };
     try { el.dispatchEvent(new CustomEvent('iui3d:ready', { bubbles: true, detail: { stage: stage, error: stage.error ? String(stage.error.message || stage.error) : null } })); } catch (eR) {}
     return stage;
   }

@@ -12,7 +12,7 @@ import { legacyElementLayer } from './iui-daisy.ts'
 const CHECK_SVG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E\")"
 
-export const OIU_POLISH_CSS = `
+export const HOST_POLISH_CSS = `
 /* R5-1 motion tokens */
 :root {
   --iui-ease-out: cubic-bezier(.22, 1, .36, 1);

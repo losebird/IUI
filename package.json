@@ -182,6 +182,7 @@
     "mermaid": "11.16.0",
     "react-dom": "^18.3.1",
     "semver": "^7.8.5",
+    "tailwindcss": "4.3.3",
     "three": "^0.180.0",
     "tsdown": "^0.22.2",
     "tsx": "^4.0.0",

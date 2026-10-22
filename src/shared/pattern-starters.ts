@@ -4,8 +4,8 @@
  * visual(②/⑧): the six page templates (itinerary, weather, pricing, hotels, meeting rooms,
  * kanban) are written the daisyUI way — `card` / `btn` / `badge` / `stats` / `tabs-box` /
  * `progress` / `avatar` on the IUI 中性 tokens (`--color-base-*`, `--color-primary`,
- * `--radius-box`), muted text via `text-base-content/70|60`. No Tailwind runtime in the
- * sandbox, so layout lives in each starter's own `css`. Host hooks are kept on purpose:
+ * `--radius-box`), muted text via `text-base-content/70|60`. Tailwind utilities are
+ * compiled per page (visual ③), but starters keep layout in their own `css` so they stay readable. Host hooks are kept on purpose:
  * `.iui-map-wrap` + `createTripAnimator` + `.iui-pin-dot` (map fixes, declutter, replay),
  * `.iui-stop-card` / `.iui-hotel-card` + `data-iui-place` (verified photo fill),
  * `.iui-badge-sample` (sample-data tag), `data-iui-icon` (local Lucide).
@@ -670,5 +670,3 @@ export const PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   },
 ]
 
-/** @deprecated old name, kept for callers that still import it. */
-export const OIU_PATTERN_STARTERS = PATTERN_STARTERS

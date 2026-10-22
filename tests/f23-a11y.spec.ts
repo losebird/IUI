@@ -2,33 +2,33 @@
 // keyboard activation for author-built click targets (browser-verified in
 // scripts/browser-e2e.mts keyboardAuditCase).
 import { describe, expect, it } from 'vitest'
-import { OIU_A11Y_CSS, buildOiuDesignSystemCss } from '../src/themes/oiu-design-system.ts'
+import { HOST_A11Y_CSS, buildHostKitCss } from '../src/themes/host-kit.ts'
 import { buildHtmlSandboxSrcdoc, buildSandboxBridgeScript } from '../src/shared/html-sandbox.ts'
 import { GENUI_SECTION_TEXT } from '../src/plugin/section-text.ts'
 
 describe('F23 accessibility css', () => {
   it('is the last design-system layer', () => {
-    expect(buildOiuDesignSystemCss().endsWith(OIU_A11Y_CSS)).toBe(true)
+    expect(buildHostKitCss().endsWith(HOST_A11Y_CSS)).toBe(true)
   })
 
   it('has a keyboard focus ring and hides it for mouse focus', () => {
-    expect(OIU_A11Y_CSS).toContain(':focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 2px; }')
-    expect(OIU_A11Y_CSS).toContain(':focus:not(:focus-visible) { outline: none; }')
+    expect(HOST_A11Y_CSS).toContain(':focus-visible { outline: 2px solid var(--accent-fill, #185FA5); outline-offset: 2px; }')
+    expect(HOST_A11Y_CSS).toContain(':focus:not(:focus-visible) { outline: none; }')
   })
 
   it('turns off animations and transitions under prefers-reduced-motion', () => {
-    const block = OIU_A11Y_CSS.slice(OIU_A11Y_CSS.indexOf('@media (prefers-reduced-motion: reduce)'))
+    const block = HOST_A11Y_CSS.slice(HOST_A11Y_CSS.indexOf('@media (prefers-reduced-motion: reduce)'))
     expect(block).toContain('animation-duration: 0.01ms !important')
     expect(block).toContain('transition-duration: 0.01ms !important')
     expect(block).toContain('scroll-behavior: auto !important')
   })
 
   it('keeps controls ≥32px (Leaflet chrome excluded) and fills primary actions with the accent', () => {
-    expect(OIU_A11Y_CSS).toMatch(/button:not\(\.leaflet-container \*\), \[role="button"\][^{]*\{ min-height: 32px; \}/)
-    expect(OIU_A11Y_CSS).toContain('button:not(.leaflet-container *) { min-width: 32px; }')
+    expect(HOST_A11Y_CSS).toMatch(/button:not\(\.leaflet-container \*\), \[role="button"\][^{]*\{ min-height: 32px; \}/)
+    expect(HOST_A11Y_CSS).toContain('button:not(.leaflet-container *) { min-width: 32px; }')
     // visual(①): daisyUI .btn keeps its own colours.
-    expect(OIU_A11Y_CSS).toMatch(/button\.primary:not\(\.btn\), button\[data-variant="primary"\]:not\(\.btn\), button\[type="submit"\]:not\(\.secondary\):not\(\.ghost\):not\(\.btn\) \{\s*background: var\(--accent-fill/)
-    expect(OIU_A11Y_CSS).toContain('.iui-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;')
+    expect(HOST_A11Y_CSS).toMatch(/button\.primary:not\(\.btn\), button\[data-variant="primary"\]:not\(\.btn\), button\[type="submit"\]:not\(\.secondary\):not\(\.ghost\):not\(\.btn\) \{\s*background: var\(--accent-fill/)
+    expect(HOST_A11Y_CSS).toContain('.iui-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;')
   })
 
   it('ships inside every srcdoc', () => {

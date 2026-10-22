@@ -10,7 +10,7 @@
  * - Explicit "no network data" + "never below 12px" + design bar.
  * Prompt trim (.27, after G4): host-enforced styling rules dropped (polish layer covers them), patch syntax
  *   moved to the on-demand `[iui-current-page]` note; ~3.3k chars.
- * visual(②): daisyUI vocabulary (card / btn / badge / stats / tabs-box) + base tokens; no Tailwind runtime → layout in ---css.
+ * visual(②): daisyUI vocabulary (card / btn / badge / stats / tabs-box) + base tokens; Tailwind utilities compiled per page (visual ③).
  * Kept static on purpose: a stable system prompt stays prefix-cacheable.
  */
 import { FENCE_LANG_PRIMARY } from '../config/defaults.ts'
@@ -33,7 +33,7 @@ const LINES: readonly string[] = [
   "",
   "**When:** visual / interactive asks (图表、看板、表单、地图、计算器、对比、游戏…) → 1 short sentence → the fence → optional 1 sentence. Facts, chat, coding / how-to → plain text. Never Markdown tables or ```json as UI, never files or tools.",
   "",
-  "**Host runtime (never re-load):** daisyUI 5 + IUI neutral theme (auto dark): card card-body, btn btn-primary|neutral|outline|ghost btn-sm, badge badge-soft, stats stat-title stat-value, tabs tabs-box tab-active, input select toggle, table, progress, avatar. NO Tailwind runtime (only border, bg-base-100|200, text-base-content/70|60, text-success|warning|error): write layout CSS only (grid / flex in ---css), no hex for text / surfaces. Tokens --color-base-100|200|300|content, --color-primary|success|warning|error. Globals `Chart` / `window.iuiCreateChart(canvas,cfg)`, `L` (Leaflet), `echarts`, `agGrid`, `mermaid`, `window.createTripAnimator`; `three` / `gsap` / `d3` only via `import('three').then(...)` inside a function; other libraries HTTPS from cdn.jsdelivr.net / unpkg.com. Host hooks .iui-cols-2|3|4 .iui-actions .iui-empty .iui-skeleton .iui-badge-sample; icons `<i data-iui-icon=\"map-pin\"></i>` (Lucide names, no emoji).",
+  "**Host runtime (never re-load):** daisyUI 5 + IUI neutral theme (auto dark): card card-body, btn btn-primary|neutral|outline|ghost btn-sm, badge badge-soft, stats stat-title stat-value, tabs tabs-box tab-active, input select toggle, table, progress, avatar. Tailwind 4 utilities compiled per page (flex grid gap-4 p-6 md:grid-cols-3 text-base-content/60 rounded-box): use them for layout, no hex for text / surfaces. Tokens --color-base-100|200|300|content, --color-primary|success|warning|error. Globals `Chart` / `window.iuiCreateChart(canvas,cfg)`, `L` (Leaflet), `echarts`, `agGrid`, `mermaid`, `window.createTripAnimator`; `three` / `gsap` / `d3` only via `import('three').then(...)` inside a function; other libraries HTTPS from cdn.jsdelivr.net / unpkg.com. Host hooks .iui-cols-2|3|4 .iui-actions .iui-empty .iui-skeleton .iui-badge-sample; icons `<i data-iui-icon=\"map-pin\"></i>` (Lucide names, no emoji).",
   "",
   "**Runnable author JS (one error blanks the page):** classic script — no static `import … from`, no `typeof import`, no top-level `await`. NO network data (fetch/XHR blocked): embed sample data inline, tag it `<span class=\"iui-badge-sample\"></span>`. Charts: fixed-height wrapper (200–320px). Interactions stay in-page: no prompt()/alert()/confirm(); `video.play()` → `.catch(()=>{})`.",
   "",

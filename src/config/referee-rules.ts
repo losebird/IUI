@@ -393,16 +393,16 @@ export const INTENT_RULES: readonly IntentRule[] = [
       '(?:^|\\n)#{1,3}\\s*.*(脑图|思维导图|流程图)',
     ],
     successCriteria: [
-      '```iui-html 用 mermaid / .iui-mindmap，不要 ASCII 树。',
+      '```iui-html：脑图用 ECharts 树图（.iui-mindmap 容器），流程图用 mermaid flowchart LR，不要 ASCII 树。',
     ],
     recipe: sb(
       '脑图',
-      '<div class="card border"><div class="card-body wrap"><h2>结构</h2><pre class="mermaid iui-mindmap">mindmap\n  root((主题))\n    分支甲\n    分支乙</pre></div></div>',
-      '.wrap{gap:12px}',
-      "if(window.mermaid&&mermaid.run)mermaid.run({querySelector:'.mermaid'});",
-      420,
+      '<div class="card border"><div class="card-body gap-3"><h2 class="card-title">结构</h2><div id="mm" class="iui-mindmap h-[360px]"></div></div></div>',
+      '',
+      "var c=echarts.init(document.getElementById('mm'));c.setOption({series:[{type:'tree',layout:'orthogonal',orient:'LR',data:[{name:'主题',children:[{name:'分支甲',children:[{name:'要点 1'},{name:'要点 2'}]},{name:'分支乙',children:[{name:'要点 3'}]}]}]}]});addEventListener('resize',function(){c.resize()});",
+      440,
     ),
-    repairHint: '脑图/流程图必须 ```iui-html + mermaid（.iui-mindmap）。禁止 Markdown 缩进树。',
+    repairHint: '脑图/流程图必须 ```iui-html：脑图 echarts tree（.iui-mindmap），流程图 mermaid flowchart LR。禁止 Markdown 缩进树。',
   },
   {
     id: 'visual',
@@ -607,7 +607,7 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'mindmap',
     patterns: askPatternsOf('mindmap'),
-    text: 'Mindmap / flowchart: `<pre class="mermaid iui-mindmap">mindmap\\n  root((主题))…</pre>` then `mermaid.run()`.',
+    text: "Mindmap: ECharts tree in a `<div class=\"iui-mindmap\" style=\"height:360px\">` — series [{type:'tree',layout:'orthogonal',orient:'LR',data:[{name:'主题',children:[…]}]}]; the host colours first-level branches and inks the root, keep 2–3 levels, ≤8 per level. Flowchart / process: `<pre class=\"mermaid\">flowchart LR` (TD only for long chains) then `mermaid.run()`; host greys; mark the key step `:::focal`, side paths `:::muted`, external systems `:::ext`.",
   },
   {
     id: 'diagram',
@@ -618,7 +618,12 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'scene-3d',
     patterns: ['3d', '三维', '立体', 'three(\\.js)?', 'webgl'],
-    text: "3D: host stage `<div data-iui-3d='{\"model\":\"polyhaven:ID\",\"hotspots\":[{\"id\":\"a\",\"label\":\"…\",\"at\":[x,y,z],\"text\":\"…\"}]}'></div>` — get real models from find_3d_models first (never invent IDs); no model → \"shape\":\"torusKnot\"|sphere|box…. at = point in the model box, each axis -1..1. Host does lights, shadow, fit, orbit, keys, pins, fallback; listen for iui3d:hotspot. Do not hand-write a renderer unless the scene is custom.",
+    text: "3D: host stage `<div data-iui-3d='{\"model\":\"polyhaven:ID\",\"hotspots\":[{\"id\":\"a\",\"label\":\"…\",\"at\":[x,y,z],\"text\":\"…\"}]}'></div>` — get real models from find_3d_models first (never invent IDs); no model → \"shape\":\"torusKnot\"|sphere|box…. at = point in the model box, each axis -1..1. Host does lights, shadow, fit, orbit, keys, pins, fallback; listen for iui3d:hotspot. Look: default \"look\":\"clay\" (matte product shot); \"toon\" for playful / kids / explainers, \"data\" for flat technical views. Do not hand-write a renderer unless the scene is custom.",
+  },
+  {
+    id: 'motion',
+    patterns: ['动画', '动效', '过渡', '转场', '交互动效', 'animat\\w*', 'transition', 'motion'],
+    text: "Motion: 150ms hover / press, 250ms panels / tabs, 400ms entrances; ease-out (cubic-bezier(.2,.7,.2,1)), never bounce on data. Reorder / filter lists with FLIP (measure → change → transform from old box, 250ms). Sequences: `import('gsap').then(({gsap})=>gsap.from('.card',{y:12,opacity:0,stagger:.05}))` (host defaults .4s power3.out). Respect prefers-reduced-motion (the host shortens transitions); no looping decoration.",
   },
   {
     id: 'dashboard',

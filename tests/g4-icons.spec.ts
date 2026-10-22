@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS } from '../src/shared/html-sandbox.ts'
 import { buildIconRuntimeScript, ICON_ALIASES, pageWantsIcons, resolveIconName } from '../src/shared/icon-runtime.ts'
 import { ICON_NAMES, ICON_PATHS } from '../src/shared/icon-sprite.ts'
-import { OIU_POLISH_CSS } from '../src/themes/oiu-polish.ts'
+import { HOST_POLISH_CSS } from '../src/themes/host-polish.ts'
 import { GENUI_SECTION_TEXT } from '../src/plugin/section-text.ts'
 
 const inlineScripts = (s: string) => [...s.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])
@@ -55,9 +55,9 @@ describe('G4 local Lucide icons', () => {
     const all = wx.html + wx.js
     expect(all).toContain('data-iui-icon')
     expect(all).not.toMatch(/[\u2600-\u26ff\u{1F300}-\u{1FAFF}]/u)
-    expect(OIU_POLISH_CSS).toContain('[data-iui-icon]')
-    expect(OIU_POLISH_CSS).toContain('.iui-icon-tile')
-    expect(OIU_POLISH_CSS).toContain('[data-iui-gap="end"]')
+    expect(HOST_POLISH_CSS).toContain('[data-iui-icon]')
+    expect(HOST_POLISH_CSS).toContain('.iui-icon-tile')
+    expect(HOST_POLISH_CSS).toContain('[data-iui-gap="end"]')
     expect(GENUI_SECTION_TEXT).toContain('data-iui-icon')
   })
 })

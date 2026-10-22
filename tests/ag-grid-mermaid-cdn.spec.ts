@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildHtmlSandboxSrcdoc, getHtmlSandboxStarter, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
-import { buildOiuDesignSystemCss, OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system.ts'
+import { buildHostKitCss } from '../src/themes/host-kit.ts'
 import { buildPatternNote, classifyIntentAsk, getIntentRule } from '../src/config/referee-rules.ts'
 import { buildGenuiSectionText } from '../src/plugin/section-text.ts'
 
@@ -51,12 +51,10 @@ describe('AG Grid / Mermaid CDN + token skin (narrow)', () => {
   })
 
   it('design system ships token skins', () => {
-    const css = buildOiuDesignSystemCss()
+    const css = buildHostKitCss()
     expect(css).toContain('.ag-theme-iui')
     expect(css).toContain('--ag-background-color')
     expect(css).toContain('.iui-mindmap')
-    expect(OIU_DESIGN_SKILL).toMatch(/AG Grid only/)
-    expect(OIU_DESIGN_SKILL).toMatch(/mindmap \(Mermaid\)/)
   })
 
   it('starters exist and trigger CDN in srcdoc', () => {

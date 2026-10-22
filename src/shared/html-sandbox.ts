@@ -7,22 +7,23 @@
 import { DESIGN_ENHANCE_JS } from './design-enhance.ts'
 import { IUI_TOKEN_CATALOG, tokenCatalogToCssVars, cssVarsToInline } from '../themes/tokens.ts'
 import { sandboxBrandCssVars } from '../themes/sandbox-brand.ts'
-import {
-  buildOiuDesignSystemCss,
-  buildOiuImportmapScriptTag,
-  buildTripAnimatorScriptTag,
-} from '../themes/oiu-design-system.ts'
+import { buildHostKitCss } from '../themes/host-kit.ts'
+import { buildTripAnimatorScriptTag } from './trip-animator.ts'
 import { PATTERN_STARTERS } from './pattern-starters.ts'
 import { CSS_COLOR_RESOLVER_SRC, DEFAULT_IUI_THEME, buildIuiDaisyCss, legacyElementLayer, normalizeIuiTheme, type IuiThemeId } from '../themes/iui-daisy.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { AMAP_TILE, AMAP_TILE_ORIGINS, GCJ_CRS_JS, GCJ_JS, getNetContext, withNetContext, type NetContext } from './net-context.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
-import { VENDOR_CDN_HOSTS, buildSriLookupSource, customCdnOrigin, getVendorSource, normalizeDeclaredLibs, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
+import { VENDOR_CDN_HOSTS, buildSriLookupSource, buildVendorImportmapScriptTag, customCdnOrigin, getVendorSource, normalizeDeclaredLibs, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
 import { buildIconRuntimeScript, pageWantsIcons } from './icon-runtime.ts'
 import { buildStage3dRuntimeScript, MODEL_CONNECT_ORIGINS, pageWants3d } from './stage3d-runtime.ts'
 import { buildMotionRuntimeScript } from './motion-runtime.ts'
+import { buildTailwindCss, installTailwindHost } from '../themes/tailwind-jit.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
+
+// visual(③): answer Tailwind top-up requests from sandbox frames (browser hosts only).
+installTailwindHost()
 
 /**
  * Chrome/Safari reject video.play() with AbortError when pause()/src change
@@ -2386,6 +2387,53 @@ export function buildSandboxBridgeScript(frameId: string): string {
     try { if (window.__iuiRethemeEcharts) window.__iuiRethemeEcharts(); } catch (eE) {}
   }
   window.__iuiSetAppearance = __iuiSetAppearance;
+  // visual(③): Tailwind classes the live DOM uses (JS-built markup, streamed
+  // preview html) — the host compiles them and answers with one sorted sheet.
+  (function () {
+    var twSeen = {}, twCount = 0, twKey = '', twTimer = 0, twSeq = 0;
+    function twCollect() {
+      var els = document.querySelectorAll('[class]');
+      for (var i = 0; i < els.length && twCount < 3000; i++) {
+        var cl = els[i].getAttribute('class');
+        if (!cl) continue;
+        var parts = cl.split(/\s+/);
+        for (var j = 0; j < parts.length; j++) {
+          var c = parts[j];
+          if (c && c.length <= 100 && !twSeen[c]) { twSeen[c] = 1; twCount++; }
+        }
+      }
+    }
+    function twFlush() {
+      twTimer = 0;
+      twCollect();
+      var list = Object.keys(twSeen).sort();
+      var key = list.join(' ');
+      if (key === twKey || !list.length) return;
+      twKey = key;
+      try { parent.postMessage({ source: 'iui-tailwind', type: 'need', seq: ++twSeq, classes: list }, '*'); } catch (eT) {}
+    }
+    function twSchedule() { if (!twTimer) twTimer = setTimeout(twFlush, 40); }
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.source !== 'iui-tailwind-host' || d.type !== 'css' || typeof d.css !== 'string' || ev.source !== parent) return;
+      if (d.seq !== twSeq || d.css.length > 400000) return;
+      var st = document.getElementById('iui-tw');
+      if (!st) {
+        st = document.createElement('style');
+        st.id = 'iui-tw';
+        var author = document.getElementById('iui-author-css');
+        if (author && author.parentNode) author.parentNode.insertBefore(st, author); else (document.head || document.documentElement).appendChild(st);
+      }
+      if (st.textContent !== d.css) {
+        st.textContent = d.css;
+        if (__iuiScheme.mode !== 'auto') __iuiApplyScheme();
+      }
+    });
+    try {
+      new MutationObserver(twSchedule).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    } catch (eMO) {}
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', twSchedule); else twSchedule();
+  })();
   try {
     var __iuiInitScheme = document.documentElement.getAttribute('data-iui-scheme');
     if (__iuiInitScheme === 'light' || __iuiInitScheme === 'dark') {
@@ -3884,6 +3932,16 @@ ${amap ? GCJ_JS : ''}
         }, 40);
       }, true);
     }
+    // visual(③): theme defaults — routes / shapes draw in the page ink (currentColor follows the
+    // scheme live), and the stock blue PNG pin becomes an ink dot with a surface ring.
+    try {
+      var PO = L.Path && L.Path.prototype && L.Path.prototype.options;
+      if (PO && PO.color === '#3388ff') { PO.color = 'currentColor'; PO.weight = 3; PO.opacity = 0.9; PO.fillOpacity = 0.12; }
+      var MO = L.Marker && L.Marker.prototype && L.Marker.prototype.options;
+      if (MO && L.divIcon && L.Icon && L.Icon.Default && MO.icon instanceof L.Icon.Default) {
+        MO.icon = L.divIcon({ className: 'iui-leaflet-pin', html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -10], tooltipAnchor: [10, 0] });
+      }
+    } catch (eDef) {}
     return true;
   }
   if (!patch()) {
@@ -3923,7 +3981,8 @@ function buildChartGuardScript(): string {
       else if (++n > 250) clearInterval(t);
     }, 40);
   }
-  // G3: Chart.js follows the page tokens (font, ink, grid, tooltip, 8-colour series).
+  // G3 / visual(③ ①②): Chart.js follows the page tokens — muted axis ink, hairline solid grid,
+  // ink tooltip, 8-colour series (ink main + light grey comparison first).
   ${CSS_COLOR_RESOLVER_SRC}
   function tok(name, fb) {
     try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v ? __iuiCssColor(v) : fb; } catch (e) { return fb; }
@@ -3948,16 +4007,16 @@ function buildChartGuardScript(): string {
       d.font = d.font || {};
       d.font.family = tok('--font-sans', 'system-ui, sans-serif');
       d.font.size = 12;
-      d.color = tok('--color-text-secondary', '#5f5e58');
-      d.borderColor = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
-      if (d.scale && d.scale.grid) d.scale.grid.color = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
+      d.color = tok('--iui-chart-axis', '#71717a');
+      d.borderColor = tok('--iui-chart-grid', '#ececee');
+      if (d.scale && d.scale.grid) d.scale.grid.color = tok('--iui-chart-grid', '#ececee');
       var p = d.plugins || {};
       if (p.tooltip) {
-        p.tooltip.backgroundColor = tok('--color-text-primary', '#1a1a1a');
-        p.tooltip.titleColor = tok('--color-background-primary', '#ffffff');
-        p.tooltip.bodyColor = tok('--color-background-primary', '#ffffff');
-        p.tooltip.padding = 8; p.tooltip.cornerRadius = 8; p.tooltip.boxPadding = 4;
-        p.tooltip.titleFont = { weight: '600' };
+        p.tooltip.backgroundColor = tok('--color-base-content', '#0a0a0a');
+        p.tooltip.titleColor = tok('--color-base-100', '#ffffff');
+        p.tooltip.bodyColor = tok('--color-base-100', '#ffffff');
+        p.tooltip.padding = { x: 10, y: 8 }; p.tooltip.cornerRadius = 8; p.tooltip.boxPadding = 4;
+        p.tooltip.titleFont = { weight: '600' }; p.tooltip.usePointStyle = true;
       }
       if (p.legend && p.legend.labels) { p.legend.labels.usePointStyle = true; p.legend.labels.boxWidth = 8; p.legend.labels.boxHeight = 8; }
       if (p.colors) p.colors.enabled = false;
@@ -3972,10 +4031,11 @@ function buildChartGuardScript(): string {
         var a = sc[k]; if (!a) return;
         a.border = a.border || {}; a.border.display = false;
         a.grid = a.grid || {}; a.grid.drawBorder = false; // Chart.js 3 spelling
-        a.ticks = a.ticks || {}; if (a.ticks.maxTicksLimit == null) a.ticks.maxTicksLimit = 6; if (a.ticks.padding == null) a.ticks.padding = 6;
+        a.ticks = a.ticks || {}; if (a.ticks.maxTicksLimit == null) a.ticks.maxTicksLimit = 5; if (a.ticks.padding == null) a.ticks.padding = 8;
       });
       if (d.animation && typeof d.animation === 'object') { d.animation.duration = 700; }
-      if (d.elements && d.elements.line && d.elements.line.tension === 0) d.elements.line.tension = 0.35;
+      if (d.elements && d.elements.line && d.elements.line.tension === 0) d.elements.line.tension = 0.3;
+      if (d.elements && d.elements.arc) { d.elements.arc.borderColor = tok('--color-base-100', '#ffffff'); }
     } catch (e) {}
   }
   // G10: datasets the host coloured are re-coloured when the accent / scheme changes.
@@ -3989,38 +4049,45 @@ function buildChartGuardScript(): string {
       ds.forEach(function (d, i) {
         if (!d) return;
         var mark = painted ? painted.get(d) : null;
-        if (mark) { delete d.borderColor; delete d.backgroundColor; if (mark.pb) delete d.pointBackgroundColor; }
+        if (mark) { delete d.borderColor; delete d.backgroundColor; if (mark.pb) delete d.pointBackgroundColor; if (mark.pbc) delete d.pointBorderColor; }
         else if (d.borderColor || d.backgroundColor) return;
-        if (painted) painted.set(d, { pb: d.pointBackgroundColor == null });
+        if (painted) painted.set(d, { pb: d.pointBackgroundColor == null, pbc: d.pointBorderColor == null });
         var t = String(d.type || type);
         var c = pal[i % pal.length];
         if (t === 'pie' || t === 'doughnut' || t === 'polarArea') {
           var n = Array.isArray(d.data) ? d.data.length : 0;
           d.backgroundColor = []; for (var k = 0; k < n; k++) d.backgroundColor.push(pal[k % pal.length]);
-          d.borderColor = tok('--color-background-primary', '#ffffff');
+          d.borderColor = tok('--color-base-100', '#ffffff');
           d.borderWidth = d.borderWidth == null ? 2 : d.borderWidth;
+          if (t === 'doughnut' && d.cutout == null) d.cutout = '66%';
+          if (t !== 'polarArea' && d.borderRadius == null) d.borderRadius = 4;
         } else if (t === 'line' || t === 'radar') {
           d.borderColor = c;
           // R5-1: area fades out toward the axis instead of a flat tint.
           d.backgroundColor = t === 'line' ? function (ctx) {
             var ch = ctx && ctx.chart, a = ch && ch.chartArea;
-            if (!a || !ch.ctx || !ch.ctx.createLinearGradient) return alpha(c, 0.12);
+            if (!a || !ch.ctx || !ch.ctx.createLinearGradient) return alpha(c, 0.08);
             var g = ch.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-            g.addColorStop(0, alpha(c, 0.28)); g.addColorStop(1, alpha(c, 0));
+            g.addColorStop(0, alpha(c, 0.10)); g.addColorStop(1, alpha(c, 0));
             return g;
           } : alpha(c, 0.12);
           // R5-2: single series fills to the floor; points only at the latest value (hover shows the rest).
           if (t === 'line' && d.fill == null && ds.length === 1) d.fill = 'start';
-          if (d.pointRadius == null) d.pointRadius = t === 'line' ? function (ctx) { var n = ctx && ctx.dataset && ctx.dataset.data ? ctx.dataset.data.length : 0; return ctx && ctx.dataIndex === n - 1 ? 3.5 : 0; } : 3;
+          if (d.pointRadius == null) d.pointRadius = t === 'line' ? function (ctx) { var n = ctx && ctx.dataset && ctx.dataset.data ? ctx.dataset.data.length : 0; return ctx && ctx.dataIndex === n - 1 ? 4 : 0; } : 3;
           if (d.pointHoverRadius == null) d.pointHoverRadius = 5;
-          if (d.pointBackgroundColor == null) d.pointBackgroundColor = tok('--color-background-primary', '#ffffff');
-          if (d.pointBorderWidth == null) d.pointBorderWidth = 2;
-          if (d.borderWidth == null) d.borderWidth = t === 'line' ? 2.5 : 2;
-          if (t === 'line' && d.tension == null) d.tension = 0.35;
+          if (d.pointBackgroundColor == null) d.pointBackgroundColor = c;
+          if (d.pointBorderColor == null) d.pointBorderColor = tok('--color-base-100', '#ffffff');
+          if (d.pointBorderWidth == null) d.pointBorderWidth = t === 'line' ? 0 : 2;
+          if (d.borderWidth == null) d.borderWidth = 2;
+          if (t === 'line' && d.tension == null) d.tension = 0.3;
         } else {
           d.backgroundColor = c; d.borderColor = c;
-          if (d.borderRadius == null && t === 'bar') d.borderRadius = 6;
-          if (d.maxBarThickness == null && t === 'bar') d.maxBarThickness = 40;
+          if (d.borderRadius == null && t === 'bar') d.borderRadius = 5;
+          if (d.maxBarThickness == null && t === 'bar') d.maxBarThickness = 36;
+          if (t === 'bar' && ds.length > 1) {
+            if (d.categoryPercentage == null) d.categoryPercentage = 0.62;
+            if (d.barPercentage == null) d.barPercentage = 0.8;
+          }
         }
       });
     } catch (e) {}
@@ -4190,40 +4257,145 @@ function buildEchartsGuardScript(): string {
   function tok(name, fb) {
     try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v ? __iuiCssColor(v) : fb; } catch (e) { return fb; }
   }
-  function theme() {
-    var ink = tok('--color-text-secondary', '#5f5e58');
-    var grid = tok('--color-border-tertiary', 'rgba(0,0,0,0.15)');
-    var axis = { axisLine: { lineStyle: { color: tok('--color-border-secondary', 'rgba(0,0,0,0.3)') } }, axisTick: { lineStyle: { color: grid } }, axisLabel: { color: ink }, splitLine: { lineStyle: { color: grid } }, nameTextStyle: { color: ink } };
+  function rgba(c, a) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c || '').trim());
+    if (!m) return c;
+    var n = parseInt(m[1], 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function palette() {
     var pal = [];
-    for (var i = 1; i <= 8; i++) pal.push(tok('--iui-chart-' + i, ['#185FA5', '#3B6D11', '#854F0B', '#A32D2D', '#534AB7', '#0F6E56', '#B4457A', '#5F5E58'][i - 1]));
+    for (var i = 1; i <= 8; i++) pal.push(tok('--iui-chart-' + i, ['#0a0a0a', '#d4d4d8', '#2563eb', '#16a34a', '#d97706', '#dc2626', '#71717a', '#7c3aed'][i - 1]));
+    return pal;
+  }
+  // visual(③ ①②④): muted axis labels, no axis rails / ticks, hairline solid value grid,
+  // rounded bars, 2px lines with only the latest point, ink tooltip text on the page surface,
+  // tree (mind map) defaults; charts.html / mind.html.
+  function theme() {
+    var ink = tok('--iui-chart-axis', '#71717a');
+    var grid = tok('--iui-chart-grid', '#ececee');
+    var text = tok('--color-base-content', '#0a0a0a');
+    var bg = tok('--color-base-100', '#ffffff');
+    var axis = { axisLine: { show: false, lineStyle: { color: grid } }, axisTick: { show: false, lineStyle: { color: grid } }, axisLabel: { color: ink, margin: 10 }, splitLine: { lineStyle: { color: grid, type: 'solid' } }, nameTextStyle: { color: ink } };
     return {
-      color: pal,
+      color: palette(),
       backgroundColor: 'transparent',
       textStyle: { fontFamily: tok('--font-sans', 'system-ui, sans-serif'), color: ink, fontSize: 12 },
-      title: { textStyle: { color: tok('--color-text-primary', '#1a1a1a') }, subtextStyle: { color: ink } },
-      legend: { textStyle: { color: ink }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
-      tooltip: { backgroundColor: tok('--color-background-primary', '#ffffff'), borderColor: grid, textStyle: { color: tok('--color-text-primary', '#1a1a1a') } },
-      // R5-1: category axes without ticks/grid; value axes without rail, dashed grid.
-      categoryAxis: Object.assign({}, axis, { axisTick: { show: false }, splitLine: { show: false } }),
-      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } }),
-      timeAxis: axis, logAxis: Object.assign({}, axis, { axisLine: { show: false } }),
-      line: { smooth: 0.35, symbol: 'emptyCircle', symbolSize: 7, showSymbol: false, lineStyle: { width: 2.5 } },
-      bar: { barMaxWidth: 40, itemStyle: { borderRadius: [6, 6, 0, 0] } }
+      title: { textStyle: { color: text, fontWeight: 600, fontSize: 14 }, subtextStyle: { color: ink } },
+      legend: { textStyle: { color: ink }, icon: 'circle', itemWidth: 8, itemHeight: 8, itemGap: 14 },
+      grid: { left: 8, right: 16, top: 28, bottom: 8, containLabel: true },
+      tooltip: { backgroundColor: bg, borderColor: tok('--color-base-300', '#e7e7e9'), borderWidth: 1, padding: [8, 10], textStyle: { color: text, fontSize: 12 }, extraCssText: 'border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.08)' },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false, lineStyle: { color: grid } } }),
+      valueAxis: Object.assign({}, axis, { splitNumber: 4 }),
+      timeAxis: Object.assign({}, axis, { splitLine: { show: false, lineStyle: { color: grid } } }),
+      logAxis: axis,
+      line: { smooth: 0.3, symbol: 'circle', symbolSize: 7, showSymbol: false, lineStyle: { width: 2 } },
+      bar: { barMaxWidth: 28, barGap: '25%', itemStyle: { borderRadius: [5, 5, 0, 0] } },
+      pie: { itemStyle: { borderColor: bg, borderWidth: 2, borderRadius: 4 }, label: { color: text } },
+      scatter: { symbolSize: 8 },
+      tree: {
+        top: '4%', bottom: '4%', left: '18%', right: '18%', symbol: 'circle', symbolSize: 9, edgeShape: 'curve', initialTreeDepth: -1,
+        itemStyle: { color: text, borderColor: text, borderWidth: 2 }, lineStyle: { color: tok('--iui-chart-line', '#a1a1aa'), width: 1.5, curveness: 0.5 },
+        label: { position: 'left', verticalAlign: 'middle', align: 'right', fontSize: 13, color: text, distance: 8 },
+        leaves: { label: { position: 'right', align: 'left', color: tok('--color-text-secondary', '#3f3f46') } },
+        emphasis: { focus: 'descendant' }, expandAndCollapse: true
+      }
     };
+  }
+  // Per-series polish the theme cannot express (only where the author left it unset).
+  function decorate(opt) {
+    if (!opt || typeof opt !== 'object') return;
+    var list = Array.isArray(opt.series) ? opt.series : (opt.series && typeof opt.series === 'object' ? [opt.series] : []);
+    if (!list.length) return;
+    var pal = palette();
+    var lines = list.filter(function (x) { return x && x.type === 'line'; });
+    list.forEach(function (sr, idx) {
+      if (!sr || typeof sr !== 'object') return;
+      var c = (sr.itemStyle && typeof sr.itemStyle.color === 'string' && sr.itemStyle.color) || (sr.lineStyle && typeof sr.lineStyle.color === 'string' && sr.lineStyle.color) || (typeof sr.color === 'string' && sr.color) || pal[idx % pal.length];
+      if (sr.type === 'line') {
+        // area: soft fade to the axis (10% → 0) instead of a flat 70% fill.
+        if (sr.areaStyle && typeof sr.areaStyle === 'object' && sr.areaStyle.color == null && sr.areaStyle.opacity == null && /^#/.test(c)) {
+          sr.areaStyle.color = { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: rgba(c, 0.10) }, { offset: 1, color: rgba(c, 0) }] };
+        }
+        // a single trend line marks its latest value (ink label, like the demo).
+        if (lines.length === 1 && list.length === 1 && sr.markPoint == null && sr.showSymbol == null && sr.symbolSize == null && Array.isArray(sr.data) && sr.data.length > 1) {
+          var last = sr.data.length - 1, v = sr.data[last];
+          var num = typeof v === 'number' ? v : (v && typeof v === 'object' && typeof v.value === 'number' ? v.value : null);
+          if (num != null) {
+            sr.showSymbol = true;
+            sr.symbolSize = function (val, p) { return p && p.dataIndex === last ? 8 : 0; };
+            sr.markPoint = { symbol: 'roundRect', symbolSize: [Math.max(40, String(num).length * 8 + 16), 22], symbolOffset: [0, -20], silent: true,
+              data: [{ coord: [last, num], value: num }], itemStyle: { color: c }, label: { color: tok('--color-base-100', '#ffffff'), fontSize: 11, fontWeight: 600 } };
+          }
+        }
+      } else if (sr.type === 'tree') {
+        decorateTree(sr, pal);
+      }
+    });
+  }
+  // ④ mind map: each first-level branch takes a hue; the root is an ink pill.
+  function decorateTree(sr, pal) {
+    var roots = Array.isArray(sr.data) ? sr.data : [];
+    var root = roots[0];
+    if (!root || typeof root !== 'object' || !Array.isArray(root.children)) return;
+    // Margins sized to the root / leaf labels so narrow (390px) frames don't clip them.
+    var orient = sr.orient || 'LR';
+    if ((sr.layout || 'orthogonal') === 'orthogonal' && (orient === 'LR' || orient === 'RL')) {
+      var w = function (t, px) { var n = 0; String(t == null ? '' : t).split('').forEach(function (ch) { n += ch.charCodeAt(0) > 255 ? 1 : 0.6; }); return Math.ceil(n * px); };
+      var leafW = 0;
+      (function walk(nodes) { (nodes || []).forEach(function (n) { if (!n || typeof n !== 'object') return; if (Array.isArray(n.children) && n.children.length) walk(n.children); else leafW = Math.max(leafW, w(n.name, 12)); }); })(root.children);
+      var rootW = w(root.name, 14) + 28;
+      var near = orient === 'LR' ? 'left' : 'right', far = orient === 'LR' ? 'right' : 'left';
+      if (sr[near] == null) sr[near] = Math.min(rootW, 180);
+      if (sr[far] == null) sr[far] = Math.min(leafW + 18, 200);
+      if (sr.top == null) sr.top = 16;
+      if (sr.bottom == null) sr.bottom = 16;
+    }
+    var hues = [pal[2], pal[3], pal[4], pal[7], pal[5], pal[6]];
+    var text = tok('--color-base-content', '#0a0a0a'), bg = tok('--color-base-100', '#ffffff');
+    if (root.label == null && root.itemStyle == null) {
+      root.label = { position: 'inside', fontSize: 14, fontWeight: 700, backgroundColor: text, color: bg, padding: [6, 10], borderRadius: 999 };
+      root.symbolSize = 1;
+    }
+    root.children.forEach(function (ch, i) {
+      if (!ch || typeof ch !== 'object' || ch.itemStyle != null || ch.lineStyle != null) return;
+      var h = hues[i % hues.length];
+      ch.itemStyle = { color: h, borderColor: h };
+      ch.lineStyle = { color: rgba(h, 0.4) };
+      if (ch.label == null) ch.label = { fontWeight: 600 };
+      (function paint(nodes) {
+        (nodes || []).forEach(function (n) {
+          if (!n || typeof n !== 'object') return;
+          if (n.itemStyle == null) n.itemStyle = { color: bg, borderColor: h };
+          if (n.lineStyle == null) n.lineStyle = { color: rgba(h, 0.33) };
+          paint(n.children);
+        });
+      })(ch.children);
+    });
+  }
+  function wrapInstance(inst) {
+    if (!inst || inst.__iuiWrapped || typeof inst.setOption !== 'function') return inst;
+    var so = inst.setOption;
+    inst.setOption = function (opt) {
+      try { decorate(opt); } catch (eD) {}
+      return so.apply(this, arguments);
+    };
+    inst.__iuiWrapped = true;
+    return inst;
   }
   function patch(e) {
     if (!e || e.__iuiPatched || typeof e.init !== 'function' || typeof e.registerTheme !== 'function') return false;
     try { e.registerTheme('iui', theme()); lastInks = inks(); } catch (err) {}
     var orig = e.init;
-    e.init = function (el, th, opts) { return orig.call(e, el, th == null ? 'iui' : th, opts); };
+    e.init = function (el, th, opts) { return wrapInstance(orig.call(e, el, th == null ? 'iui' : th, opts)); };
     e.__iuiPatched = true;
     return true;
   }
   function inks() {
     return {
-      ink: tok('--color-text-secondary', '#5f5e58'), grid: tok('--color-border-tertiary', 'rgba(0,0,0,0.15)'),
-      line: tok('--color-border-secondary', 'rgba(0,0,0,0.3)'), text: tok('--color-text-primary', '#1a1a1a'),
-      bg: tok('--color-background-primary', '#ffffff')
+      ink: tok('--iui-chart-axis', '#71717a'), grid: tok('--iui-chart-grid', '#ececee'),
+      line: tok('--iui-chart-grid', '#ececee'), text: tok('--color-base-content', '#0a0a0a'),
+      bg: tok('--color-base-100', '#ffffff')
     };
   }
   var lastInks = inks();
@@ -4290,6 +4462,54 @@ function buildEchartsGuardScript(): string {
 <\/script>`
 }
 
+/**
+ * visual(③): d3 starts on the page palette — the categorical schemes models reach for
+ * (schemeCategory10 / schemeTableau10 / schemeObservable10) become the theme series;
+ * axes pick up the chart chrome from the host CSS (.tick / .domain).
+ */
+function buildD3DefaultsScript(): string {
+  return `<script>
+(function () {
+  ${CSS_COLOR_RESOLVER_SRC}
+  function tok(name, fb) {
+    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v ? __iuiCssColor(v) : fb; } catch (e) { return fb; }
+  }
+  function patch(d) {
+    if (!d || d.__iuiThemed || typeof d.scaleOrdinal !== 'function') return false;
+    var pal = [];
+    for (var i = 1; i <= 8; i++) pal.push(tok('--iui-chart-' + i, ['#0a0a0a', '#d4d4d8', '#2563eb', '#16a34a', '#d97706', '#dc2626', '#71717a', '#7c3aed'][i - 1]));
+    var ten = pal.concat([tok('--iui-chart-axis', '#71717a'), tok('--iui-chart-line', '#a1a1aa')]);
+    ['schemeCategory10', 'schemeTableau10', 'schemeObservable10'].forEach(function (k) { try { if (k in d) d[k] = ten.slice(); } catch (e) {} });
+    d.__iuiThemed = true;
+    return true;
+  }
+  if (patch(window.d3)) return;
+  var cur = window.d3;
+  try {
+    Object.defineProperty(window, 'd3', {
+      configurable: true,
+      get: function () { return cur; },
+      set: function (v) { cur = v; Promise.resolve().then(function () { patch(cur); }); }
+    });
+  } catch (e) {}
+  var n = 0, t = setInterval(function () { if (patch(window.d3) || ++n > 250) clearInterval(t); }, 40);
+})();
+<\/script>`
+}
+
+/** visual(③ motion): GSAP defaults from the motion spec (250–400ms, ease-out) for ESM or UMD gsap. */
+function buildGsapDefaultsScript(): string {
+  return `<script type="module">
+var apply = function (g) {
+  if (!g || g.__iuiDefaults || typeof g.defaults !== 'function') return;
+  g.__iuiDefaults = true;
+  try { g.defaults({ duration: 0.4, ease: 'power3.out' }); } catch (e) {}
+};
+try { if (window.gsap) apply(window.gsap); } catch (e) {}
+import('gsap').then(function (m) { apply(m.gsap || m.default); }, function () {});
+<\/script>`
+}
+
 function buildAgGridGuardScript(): string {
   return `<script>
 (function () {
@@ -4305,16 +4525,25 @@ function buildAgGridGuardScript(): string {
     if (!g || g.__iuiPatched) return;
     var orig = g.createGrid;
     if (typeof orig !== 'function') return;
-    g.createGrid = function (el, opts) {
+    // The UMD namespace exposes getters only (assignment is a silent no-op): wrap it.
+    var api = g;
+    try { api = Object.create(g); } catch (eC) { api = g; }
+    var patched = function (el, opts) {
       paintHost(el);
       var o = opts && typeof opts === 'object' ? opts : {};
       if (!o.domLayout && el && (!el.style || !el.style.height || el.style.height === 'auto')) o.domLayout = 'autoHeight';
+      // visual(③): columns share the width (no ragged right edge), no header menu buttons.
+      if (!o.defaultColDef) o.defaultColDef = { flex: 1, minWidth: 90, suppressHeaderMenuButton: true };
+      if (o.rowHeight == null && o.domLayout === 'autoHeight' && Array.isArray(o.rowData) && o.rowData.length > 12 && o.pagination == null) { o.pagination = true; o.paginationPageSize = 10; o.paginationPageSizeSelector = false; }
       try { return orig.call(g, el, o); } catch (err) {
         try { window.iuiSandbox && window.iuiSandbox.reportError(err); } catch (e) {}
         throw err;
       }
     };
-    g.__iuiPatched = true;
+    try { Object.defineProperty(api, 'createGrid', { value: patched, writable: true, configurable: true }); } catch (eD) {}
+    try { Object.defineProperty(api, '__iuiPatched', { value: true }); } catch (eP) {}
+    if (api !== g) { try { window.agGrid = api; } catch (eW) {} }
+    try { g.__iuiPatched = true; } catch (eG) {}
   }
   function wait(cb) {
     if (window.agGrid) { cb(); return; }
@@ -4323,6 +4552,9 @@ function buildAgGridGuardScript(): string {
       else if (++n > 250) clearInterval(t);
     }, 40);
   }
+  // visual(③): patch in the capture phase of the vendor script's load event, before the
+  // pipeline (which watches the same load) can run author code against the raw API.
+  try { document.addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'SCRIPT' && window.agGrid) wrapCreate(); }, true); } catch (e) {}
   wait(function () {
     wrapCreate();
     document.querySelectorAll('[class*="ag-theme"]').forEach(paintHost);
@@ -4342,24 +4574,67 @@ function buildMermaidGuardScript(): string {
     } catch (e) {}
     return fallback;
   }
+  function rgba(c, a) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c || '').trim());
+    if (!m) return c;
+    var n = parseInt(m[1], 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  // visual(③ ⑨): greyscale Mermaid — page-surface nodes with hairline borders, 35% ink edges,
+  // rounded boxes; classes :::focal (ink, key step) / :::muted / :::ext (dashed) / :::input.
+  function mermaidConfig() {
+    var ink = cssVar('--color-base-content', '#0a0a0a'), bg = cssVar('--color-base-100', '#ffffff');
+    var b2 = cssVar('--color-base-200', '#f4f4f5'), b3 = cssVar('--color-base-300', '#e7e7e9');
+    var line = cssVar('--iui-chart-line', '#a1a1aa'), mut = cssVar('--iui-chart-axis', '#71717a');
+    var err = cssVar('--color-error', '#dc2626');
+    var css = '.node rect,.node polygon,.node circle,.node path{stroke-width:1px}.node rect{rx:10px;ry:10px}'
+      + '.focal rect,.focal path,.focal polygon,.focal circle{fill:' + ink + '!important;stroke:' + ink + '!important}.focal .nodeLabel,.focal text{color:' + bg + '!important;fill:' + bg + '!important;font-weight:600}'
+      + '.ext rect,.ext path,.ext polygon{stroke-dasharray:4 3!important}'
+      + '.muted rect,.muted path,.muted polygon,.input rect,.input path,.input polygon{fill:' + b2 + '!important;stroke:transparent!important}.muted .nodeLabel,.muted text{color:' + mut + '!important;fill:' + mut + '!important}'
+      + '.edgeLabel,.edgeLabel p{font-size:12px;color:' + mut + '}.edgeLabel rect,.labelBkg{fill:' + bg + ';background:' + bg + '}'
+      + 'rect.actor{rx:10px;ry:10px;stroke:' + b3 + '!important}.messageText{fill:' + mut + '!important}'
+      + '.grid .tick line{stroke:' + rgba(ink, 0.07) + '!important}.grid .tick text{fill:' + mut + '!important;font-size:11px!important}.grid path{stroke:none!important}rect.task{rx:6px;ry:6px}.sectionTitle{fill:' + mut + '!important}';
+    return {
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      fontFamily: cssVar('--font-sans', 'system-ui,sans-serif'),
+      flowchart: { curve: 'basis', padding: 14, nodeSpacing: 36, rankSpacing: 46, htmlLabels: true },
+      sequence: { mirrorActors: false, actorMargin: 80, boxMargin: 6, messageFontSize: 13 },
+      gantt: { barHeight: 22, barGap: 8, topPadding: 40, fontSize: 12, sectionFontSize: 12 },
+      themeCSS: css,
+      themeVariables: {
+        fontFamily: cssVar('--font-sans', 'system-ui,sans-serif'), fontSize: '13px',
+        background: bg, primaryColor: bg, primaryBorderColor: b3, primaryTextColor: ink,
+        secondaryColor: b2, secondaryBorderColor: b3, secondaryTextColor: ink,
+        tertiaryColor: b2, tertiaryBorderColor: b3, tertiaryTextColor: ink,
+        mainBkg: bg, nodeBorder: b3, nodeTextColor: ink, textColor: ink, titleColor: ink,
+        lineColor: line, defaultLinkColor: line, edgeLabelBackground: bg, clusterBkg: b2, clusterBorder: b3,
+        actorBkg: bg, actorBorder: b3, actorTextColor: ink, actorLineColor: b3, signalColor: line, signalTextColor: ink,
+        labelBoxBkgColor: bg, labelBoxBorderColor: b3, labelTextColor: ink, noteBkgColor: b2, noteBorderColor: b3, noteTextColor: ink, activationBkgColor: b2, activationBorderColor: b3,
+        sectionBkgColor: rgba(ink, 0.03), altSectionBkgColor: bg, sectionBkgColor2: rgba(ink, 0.03),
+        taskBkgColor: rgba(ink, 0.14), taskBorderColor: 'transparent', taskTextColor: ink, taskTextDarkColor: ink, taskTextOutsideColor: ink, taskTextLightColor: bg,
+        activeTaskBkgColor: ink, activeTaskBorderColor: ink, doneTaskBkgColor: rgba(ink, 0.35), doneTaskBorderColor: 'transparent',
+        critBkgColor: err, critBorderColor: err, gridColor: rgba(ink, 0.08), todayLineColor: err,
+        pie1: ink, pie2: cssVar('--iui-chart-2', '#d4d4d8'), pie3: cssVar('--iui-chart-3', '#2563eb'), pie4: cssVar('--iui-chart-4', '#16a34a'), pie5: cssVar('--iui-chart-5', '#d97706'), pie6: cssVar('--iui-chart-6', '#dc2626'),
+        pieStrokeColor: bg, pieOuterStrokeColor: b3, pieTitleTextColor: ink, pieSectionTextColor: bg, pieLegendTextColor: ink
+      }
+    };
+  }
+  window.__iuiMermaidConfig = mermaidConfig;
   function boot(m) {
     if (!m || m.__iuiBooted) return;
     try {
-      m.initialize({
-        startOnLoad: false,
-        securityLevel: 'strict',
-        theme: 'base',
-        themeVariables: {
-          background: cssVar('--color-background-primary', '#fff'),
-          primaryColor: cssVar('--color-background-info', '#E6F1FB'),
-          primaryTextColor: cssVar('--color-text-primary', '#1a1a1a'),
-          primaryBorderColor: cssVar('--color-border-tertiary', '#ccc'),
-          lineColor: cssVar('--color-text-secondary', '#5f5e58'),
-          secondaryColor: cssVar('--color-background-secondary', '#f7f6f3'),
-          tertiaryColor: cssVar('--color-background-tertiary', '#efeee9'),
-          fontFamily: cssVar('--font-sans', 'system-ui,sans-serif')
-        }
-      });
+      var init = m.initialize;
+      // Author initialize() keeps the host look unless it picks a named theme (dark / forest …).
+      m.initialize = function (cfg) {
+        var base = mermaidConfig(), c = cfg && typeof cfg === 'object' ? cfg : {};
+        var named = c.theme && c.theme !== 'default' && c.theme !== 'neutral' && c.theme !== 'base';
+        var out = named ? Object.assign({}, c) : Object.assign(base, c, { theme: 'base', themeVariables: Object.assign(base.themeVariables, c.themeVariables || {}), themeCSS: (base.themeCSS || '') + (c.themeCSS || '') });
+        out.securityLevel = 'strict';
+        return init.call(m, out);
+      };
+      init.call(m, mermaidConfig());
       m.__iuiBooted = true;
     } catch (e) {}
   }
@@ -4379,6 +4654,7 @@ function buildMermaidGuardScript(): string {
       else if (++n > 250) clearInterval(t);
     }, 40);
   }
+  try { document.addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'SCRIPT' && window.mermaid) boot(window.mermaid); }, true); } catch (e) {}
   wait(function (m) {
     boot(m);
     setTimeout(runAll, 0);
@@ -4554,6 +4830,7 @@ function autoCdnTags(html: string, js: string, base?: string, libs: readonly Ven
   if (wantsLeaflet && !hasLeafletUmdScript) {
     tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base)); inject('leaflet')
   }
+  if (want.has('d3') || scriptOf(/d3(?:@|\.min|\.v)/)) tags.push(buildD3DefaultsScript())
   if (want.has('d3') && !scriptOf(/d3(?:@|\.min|\.v)/)) { tags.push(vendorScriptTag('d3', base)); inject('d3') }
   const hasAgGridScript = scriptOf(/ag-grid/)
   const wantsAgGrid = want.has('agGrid')
@@ -4568,6 +4845,7 @@ function autoCdnTags(html: string, js: string, base?: string, libs: readonly Ven
     tags.push(vendorScriptTag('mermaid', base)); inject('mermaid')
   }
   if (wantsMermaid || hasMermaidScript) tags.push(buildMermaidGuardScript())
+  if (/\bgsap\b/.test(html) || /\bgsap\b/.test(js)) tags.push(buildGsapDefaultsScript())
   return buildCdnPreconnect(firstUrls, base) + buildVendorBootScript(base, [...want]) + tags.join('')
 }
 
@@ -4674,8 +4952,10 @@ function buildHtmlSandboxSrcdocInner(
     (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '') +
     // R5-3: host 3D stage — same rule as icons.
     (pageWants3d(html + authorJs + fnSrc, deferJs) ? buildStage3dRuntimeScript({ assetBase: options.assetBase }) : '')
-  const oiuCss = buildOiuDesignSystemCss()
-  const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
+  const hostKitCss = buildHostKitCss()
+  // visual(③): Tailwind utilities for the classes this page mentions (the live frame tops up via the host).
+  const twCss = buildTailwindCss(`${html}\n${authorCss}\n${authorJs}\n${fnSrc}`).replace(/<\/style/gi, '<\\/style')
+  const importMapTag = buildVendorImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()
 
   // P1-PREVIEW-PHOTO: always inject runtime fill (well-known map). Volume trade for
@@ -4691,13 +4971,13 @@ function buildHtmlSandboxSrcdocInner(
   let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}${themeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()} ${MODEL_CONNECT_ORIGINS.join(' ')} blob: data:; worker-src blob:; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${buildIuiDaisyCss(options.assetBase)}
 ${tokenCss}${baseCss}
-${oiuCss}
+${hostKitCss}
 ${pageAccentCss(spec.accent)}
 html,body{min-height:0!important;height:auto!important;background:transparent!important;margin:0!important;max-width:100%!important;overflow-x:clip}
 #iui-preview-root{min-width:0;max-width:100%;overflow-x:clip}
 .leaflet-container{min-height:280px;border-radius:var(--border-radius-lg,12px)}
 body{padding:4px!important}
-</style><style id="iui-author-css">${authorCss}</style>${appearanceCss || schemeAttr ? `<style id="iui-appearance">${appearanceCss}</style>` : ''}</head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
+</style>${twCss ? `<style id="iui-tw-static">${twCss}</style>` : ''}<style id="iui-author-css">${authorCss}</style>${appearanceCss || schemeAttr ? `<style id="iui-appearance">${appearanceCss}</style>` : ''}</head><body>${bridge}${truncationBanner(truncatedParts)}<div id="iui-preview-root">${html}</div>${jsBlock}${photoFill}</body></html>`
   if (doc.length > HTML_SANDBOX_MAX_SRCDOC_BYTES) {
     doc = doc.slice(0, HTML_SANDBOX_MAX_SRCDOC_BYTES) + '\n<!-- srcdoc truncated -->'
   }

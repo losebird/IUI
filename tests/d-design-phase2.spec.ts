@@ -12,8 +12,8 @@ import {
 } from '../src/shared/design-lint'
 import { DESIGN_ENHANCE_JS } from '../src/shared/design-enhance'
 import { buildSandboxBridgeScript, isIuiSandboxHostMessage } from '../src/shared/html-sandbox'
-import { buildOiuDesignSystemCss, OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system'
-import { OIU_PATTERN_STARTERS } from '../src/shared/pattern-starters'
+import { buildHostKitCss } from '../src/themes/host-kit'
+import { PATTERN_STARTERS } from '../src/shared/pattern-starters'
 import { queueDesignNote } from '../src/plugin/fence-feedback'
 import { sandboxStreamProgress } from '../src/client/sandbox-skeleton'
 import { fitSceneBounds } from '../src/client/scene3d-core'
@@ -82,14 +82,14 @@ describe('D1 design lint', () => {
   })
 
   it('built-in starters are lint-clean', () => {
-    for (const s of OIU_PATTERN_STARTERS) {
+    for (const s of PATTERN_STARTERS) {
       expect(lintSandboxDesign({ html: s.spec.html, css: s.spec.css }), s.id).toEqual([])
     }
   })
 })
 
 describe('D2–D8 design kit CSS + skill', () => {
-  const css = buildOiuDesignSystemCss()
+  const css = buildHostKitCss()
   it('ships type scale, accent tokens, personalities and stat', () => {
     for (const tok of ['--fs-xs', '--fs-2xl', '--accent-fill', '--on-accent']) expect(css).toContain(tok)
     for (const p of ['tool', 'content', 'data', 'toy']) expect(css).toContain(`[data-iui-style="${p}"]`)
@@ -104,7 +104,6 @@ describe('D2–D8 design kit CSS + skill', () => {
     expect(css).toContain('.iui-pin-dot.active')
   })
   it('skill text documents the rules', () => {
-    for (const s of ['nothing below 12px', '--fs-2xl 40', 'data-iui-style', '.iui-stat', '.iui-card-grid', 'OrbitControls']) expect(OIU_DESIGN_SKILL).toContain(s)
     const skill = read('SKILL.md')
     expect(skill).toContain('设计规则')
   })
@@ -160,12 +159,12 @@ describe('D10 streaming skeleton', () => {
 
 describe('D补充 starters + 3D fit', () => {
   it('scene-3d and meeting-rooms starters exist', () => {
-    const ids = OIU_PATTERN_STARTERS.map((s) => s.id)
+    const ids = PATTERN_STARTERS.map((s) => s.id)
     expect(ids).toContain('scene-3d')
     expect(ids).toContain('meeting-rooms')
-    const room = OIU_PATTERN_STARTERS.find((s) => s.id === 'meeting-rooms')!
+    const room = PATTERN_STARTERS.find((s) => s.id === 'meeting-rooms')!
     expect(room.spec.js + room.spec.html).toContain('stat-value') // visual(⑧): daisyUI stats
-    const s3 = OIU_PATTERN_STARTERS.find((s) => s.id === 'scene-3d')!
+    const s3 = PATTERN_STARTERS.find((s) => s.id === 'scene-3d')!
     expect(s3.spec.html).toContain("data-iui-3d='")
     expect(JSON.parse(/data-iui-3d='([^']+)'/.exec(s3.spec.html)![1]!).hotspots.length).toBeGreaterThanOrEqual(3)
     expect(s3.spec.js).toContain('iui3d:hotspot')

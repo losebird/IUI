@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildHtmlSandboxSrcdoc, IUI_MAP_TILE_FALLBACKS } from '../src/shared/html-sandbox.ts'
 import { buildTripPhotoFillScript, fetchWikipediaTripImage, lookupKnownStop } from '../src/shared/trip-images.ts'
-import { createTripAnimatorSource } from '../src/themes/oiu-design-system.ts'
+import { createTripAnimatorSource } from '../src/shared/trip-animator.ts'
 
 describe('0.13.0-iui.20 trip photos + replay tiles', () => {
   it('photo fill script includes Wikipedia/Commons network path (not well-known only)', () => {

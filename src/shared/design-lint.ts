@@ -10,16 +10,15 @@
  * - narrow-overflow (F22): a fixed width / min-width or fixed grid tracks wider
  *   than a 360px phone viewport (the browser check in scripts/browser-e2e.mts
  *   renders the starters at 360 / 720px)
- * - tailwind-utility (visual ②): Tailwind layout classes (`flex gap-4 p-6
- *   grid-cols-3 md:…`) — the sandbox ships daisyUI components but no Tailwind
- *   runtime, so they silently do nothing. Classes the author's own CSS defines
- *   are not flagged.
+ * - tailwind-hex (visual ③): Tailwind utilities are compiled per page now, so
+ *   layout classes are fine; only arbitrary hard-coded colours
+ *   (`text-[#333]`, `bg-[#fff]`) are flagged — they break the theme / dark mode.
  *
  * Results feed a non-steering design note for the NEXT UI turn — never a
  * same-turn correction, so a working page is never re-generated for style.
  */
 
-export type DesignIssueKind = 'min-font' | 'contrast' | 'stat-label' | 'narrow-overflow' | 'tailwind-utility'
+export type DesignIssueKind = 'min-font' | 'contrast' | 'stat-label' | 'narrow-overflow' | 'tailwind-hex'
 
 export type DesignIssue = {
   readonly kind: DesignIssueKind
@@ -273,30 +272,24 @@ function checkStatLabels(html: string, issues: DesignIssue[]): void {
   }
 }
 
-/** Lint one sandbox spec. Bounded (≤ {@link MAX_ISSUES}), deterministic. */
-/** Tailwind layout / spacing / type utilities that daisyUI markup tends to carry (not shipped in the sandbox). */
-const TAILWIND_UTILITY = /^(?:(?:sm|md|lg|xl|2xl|dark|hover|focus):\S+|-?[mp][xytrbl]?-(?:\d+(?:\.5)?|px|auto)|gap(?:-[xy])?-\d+(?:\.5)?|space-[xy]-\d+|grid-cols-\d+|col-span-\d+|[wh]-(?:\d+(?:\/\d+)?|full|screen|fit|auto)|(?:min|max)-[wh]-\S+|text-(?:xs|sm|base|lg|[2-9]?xl)|font-(?:thin|light|normal|medium|semibold|bold|extrabold)|leading-\S+|tracking-\S+|rounded(?:-(?:sm|md|lg|xl|2xl|3xl|full|none))?|shadow(?:-(?:sm|md|lg|xl|2xl|none))?|items-(?:start|center|end|stretch|baseline)|justify-(?:start|center|end|between|around|evenly)|flex-(?:col|row|wrap|1|none)|inline-flex|hidden|truncate|overflow-(?:hidden|auto|x-auto)|relative|absolute)$/u
+/** Tailwind arbitrary colour on a text / surface / border utility (`text-[#333]`, `hover:bg-[#fafafa]`). */
+const TAILWIND_HEX = /^(?:[\w-]+:)*!?(?:text|bg|border(?:-[xytrbl])?|divide|ring|outline|from|via|to|fill|stroke|decoration|shadow)-\[(?:#[0-9a-f]{3,8}|rgba?\([^\]]*\)|hsla?\([^\]]*\))\](?:\/\d+)?$/iu
 
-function checkTailwindUtilities(html: string, css: string, issues: DesignIssue[]): void {
-  const own = new Set<string>()
-  css.replace(/\.(-?[A-Za-z_][\w\\:/.-]*)/gu, (_m, name: string) => {
-    own.add(name.replace(/\\/gu, ''))
-    return ''
-  })
+function checkTailwindHex(html: string, issues: DesignIssue[]): void {
   const found: string[] = []
   const re = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/giu
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null && found.length < 6) {
     for (const c of (m[2] ?? m[3] ?? '').split(/\s+/u)) {
-      if (c === '' || own.has(c) || found.includes(c) || !TAILWIND_UTILITY.test(c)) continue
+      if (c === '' || found.includes(c) || !TAILWIND_HEX.test(c)) continue
       found.push(c)
       if (found.length >= 6) break
     }
   }
-  // One stray class is noise; two or more means the layout leans on Tailwind.
-  if (found.length >= 2) issues.push({ kind: 'tailwind-utility', detail: found.join(' ') })
+  if (found.length > 0) issues.push({ kind: 'tailwind-hex', detail: found.join(' ') })
 }
 
+/** Lint one sandbox spec. Bounded (≤ {@link MAX_ISSUES}), deterministic. */
 export function lintSandboxDesign(input: DesignLintInput): DesignIssue[] {
   const issues: DesignIssue[] = []
   const html = (input.html ?? '').slice(0, 400_000)
@@ -322,7 +315,7 @@ export function lintSandboxDesign(input: DesignLintInput): DesignIssue[] {
     checkDecls(`<${m[1]!.toLowerCase()} style>`, parseDecls(m[3] ?? m[4] ?? ''), issues, /^(img|canvas|svg|video|iframe|table|pre)$/iu.test(m[1]!))
   }
   checkStatLabels(bodyHtml, issues)
-  checkTailwindUtilities(bodyHtml, styleBlocks.join('\n'), issues)
+  checkTailwindHex(bodyHtml, issues)
   // De-duplicate by kind+detail, keep order.
   const seen = new Set<string>()
   const out: DesignIssue[] = []
@@ -344,7 +337,7 @@ export function designLintNote(issues: readonly DesignIssue[]): string {
   if (kinds.has('min-font')) rules.push('字号只用 12/14/16/20/28/40（--fs-xs…--fs-2xl），任何文字不小于 12px')
   if (kinds.has('contrast')) rules.push('正文与背景对比度 ≥ 4.5:1（大字 ≥ 3:1），文字用 --color-base-content（次要文字 text-base-content/70），底色用 --color-base-100/200，不要写死十六进制')
   if (kinds.has('narrow-overflow')) rules.push('页面要在 360px 宽的手机上不横向溢出：固定宽度改成 max-width/百分比，网格用 repeat(auto-fit,minmax(min(160px,100%),1fr)) 或 .iui-cols-2/3/4（自带断点）')
-  if (kinds.has('tailwind-utility')) rules.push('沙箱里只有 daisyUI 组件、没有 Tailwind：flex / gap-4 / p-6 / grid-cols-3 / md:… 这类工具类不生效，布局（grid、flex、间距、尺寸）写在 ---css 里')
+  if (kinds.has('tailwind-hex')) rules.push('Tailwind 类里不要写死颜色（text-[#333] / bg-[#fff]）：文字用 text-base-content（次要 text-base-content/70），底色 bg-base-100/200，强调 text-primary / text-success，深色模式才会跟着变')
   if (kinds.has('stat-label')) rules.push('统计数字用 daisyUI stats：.stat > .stat-title 小号说明在上、.stat-value 大号数字（单位放 <small>）、.stat-desc 变化值，不要和说明写在同一行')
   const lines = issues.slice(0, 4).map((i) => `- ${i.kind}: ${i.detail}`)
   return [

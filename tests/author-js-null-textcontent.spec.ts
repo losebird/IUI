@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTripAnimatorSource } from '../src/themes/oiu-design-system.ts'
+import { createTripAnimatorSource } from '../src/shared/trip-animator.ts'
 import { buildAuthorJsRuntimeSource } from '../src/shared/author-js-runtime.ts'
 import { splitAuthorJsChunks } from '../src/shared/html-sandbox.ts'
 

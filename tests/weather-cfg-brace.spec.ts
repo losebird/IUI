@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { prepareAuthorJs, softCloseObjectBeforeCallParen, softCloseObjectBeforeSemicolon } from '../src/shared/html-sandbox.ts'
-import { OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system.ts'
 
 /** Minimised Suzhou weather drawChart: options closed, cfg object not. */
 const SUZHOU_CFG_MISSING_BRACE = `
@@ -34,10 +33,6 @@ describe('Suzhou weather: missing cfg } before semicolon', () => {
     const ok = '(function(){ var cfg={a:1}; return cfg; })();'
     expect(softCloseObjectBeforeSemicolon(ok)).toBe(ok)
     expect(prepareAuthorJs(ok)).toContain('var cfg={a:1}')
-  })
-
-  it('weather skill asks for a complete Chart cfg skeleton', () => {
-    expect(OIU_DESIGN_SKILL).toMatch(/Chart cfg/)
   })
 
   /** Real Suzhou page: function bodies have `;` long before `var cfg=`. */

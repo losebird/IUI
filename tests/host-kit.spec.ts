@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildOiuDesignSystemCss,
-  buildOiuImportmapScriptTag,
-  buildTripAnimatorScriptTag,
-  OIU_DESIGN_SKILL,
-  OIU_IMPORTMAP,
-} from '../src/themes/oiu-design-system.ts'
+import { buildHostKitCss } from '../src/themes/host-kit.ts'
+import { buildTripAnimatorScriptTag } from '../src/shared/trip-animator.ts'
+import { buildVendorImportMap, buildVendorImportmapScriptTag } from '../src/shared/vendor-registry.ts'
 import {
   buildHtmlSandboxSrcdoc,
   getHtmlSandboxStarter,
@@ -14,9 +10,9 @@ import {
 import { buildGenuiSectionText } from '../src/plugin/section-text.ts'
 import { buildPatternNote } from '../src/config/referee-rules.ts'
 
-describe('OIU design-system port', () => {
+describe('host kit (ex-OIU design system)', () => {
   it('exports theme + svg + form CSS with color tokens', () => {
-    const css = buildOiuDesignSystemCss()
+    const css = buildHostKitCss()
     expect(css).toContain('--color-background-primary')
     expect(css).toContain('--color-text-secondary')
     expect(css).toContain('svg .c-teal')
@@ -40,7 +36,7 @@ describe('OIU design-system port', () => {
   })
 
   it('cards-strip can scroll inside a column flex/grid card instead of blowing the first border', () => {
-    const css = buildOiuDesignSystemCss()
+    const css = buildHostKitCss()
     const strip = css.match(/\.iui-cards-strip\s*\{[^}]+\}/)?.[0] ?? ''
     const itinerary = css.match(/\.iui-itinerary\s*\{[^}]+\}/)?.[0] ?? ''
     // 8×200px stop cards must not inflate min-content and paint past the
@@ -53,9 +49,9 @@ describe('OIU design-system port', () => {
   })
 
   it('importmap includes three/gsap/d3/chart.js/leaflet', () => {
-    const tag = buildOiuImportmapScriptTag()
+    const tag = buildVendorImportmapScriptTag()
     expect(tag).toContain('type="importmap"')
-    for (const key of Object.keys(OIU_IMPORTMAP.imports)) {
+    for (const key of Object.keys(buildVendorImportMap().imports)) {
       expect(tag).toContain(key)
     }
   })
@@ -74,8 +70,6 @@ describe('OIU design-system port', () => {
     expect(doc).toContain('iui-itinerary')
     expect(doc).toContain('Special:FilePath/GoldenGateBridge-001.jpg')
     expect(doc).toContain('<img src=')
-    expect(OIU_DESIGN_SKILL).toMatch(/Photos \(REQUIRED/)
-    expect(OIU_DESIGN_SKILL).not.toMatch(/solid muted blocks or Wikimedia/)
   })
 
   it('pricing starter is 3-column compare', () => {
@@ -88,11 +82,11 @@ describe('OIU design-system port', () => {
     expect(tiers).toBeGreaterThanOrEqual(3)
   })
 
-  it('system prompt includes OIU design skill + trip pattern', () => {
+  it('system prompt includes the design rules + trip pattern', () => {
     const section = buildGenuiSectionText()
     expect(section).toContain('--color-base-100')
     expect(section).toContain('btn btn-primary')
-    expect(section).toContain('NO Tailwind runtime')
+    expect(section).toContain('Tailwind 4 utilities compiled per page')
     expect(section).toContain('createTripAnimator')
     expect(buildPatternNote('做个三档定价页')).toContain('bg-neutral')
     expect(section).toContain('Runnable author JS')
@@ -101,13 +95,9 @@ describe('OIU design-system port', () => {
     expect(section).toContain('typeof import')
     expect(section).toContain("import('three')")
     expect(section).toContain('video.play()')
-    expect(OIU_DESIGN_SKILL).toContain('Nanjing density')
-    expect(OIU_DESIGN_SKILL).toContain('停留')
-    expect(OIU_DESIGN_SKILL).toMatch(/避坑/)
     expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('click-to-detail')
     expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('createTripAnimator(')
     expect(section).toContain('openLink(httpsUrl)')
-    expect(OIU_DESIGN_SKILL).toMatch(/NEVER action\('sandbox_open_link'\)/)
   })
 
   it('lists new starters', () => {

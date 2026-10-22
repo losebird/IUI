@@ -10,10 +10,10 @@ import { buildIuiDaisyCss, IUI_PREFLIGHT_CSS, IUI_UTILITIES_CSS } from '../src/t
 const OLD_VOCAB = /iui-sandbox-(card|btn|grid|kpi|muted)|--color-(background|text)-(primary|secondary)|iui-compare-3|iui-weather-/u
 
 describe('visual(②) daisyUI vocabulary', () => {
-  it('resident prompt teaches daisyUI + no Tailwind runtime, no OIU classes', () => {
+  it('resident prompt teaches daisyUI + per-page Tailwind, no OIU classes', () => {
     expect(GENUI_SECTION_TEXT).toContain('card card-body')
     expect(GENUI_SECTION_TEXT).toContain('tabs tabs-box')
-    expect(GENUI_SECTION_TEXT).toContain('NO Tailwind runtime')
+    expect(GENUI_SECTION_TEXT).toContain('Tailwind 4 utilities compiled per page')
     expect(GENUI_SECTION_TEXT).not.toMatch(OLD_VOCAB)
     expect(SANDBOX_RECIPE).toContain('btn btn-primary')
     expect(SANDBOX_RECIPE).not.toMatch(OLD_VOCAB)
@@ -43,13 +43,13 @@ describe('visual(②) daisyUI vocabulary', () => {
     }
   })
 
-  it('design-lint flags Tailwind layout utilities unless the author CSS defines them', () => {
+  it('design-lint allows Tailwind layout utilities, flags hard-coded colour utilities', () => {
     const html = '<div class="card border"><div class="card-body flex gap-4 p-6"><h2 class="text-xl">x</h2><div class="grid md:grid-cols-3"></div></div></div>'
-    const issues = lintSandboxDesign({ html, css: '' })
-    expect(issues.find((i) => i.kind === 'tailwind-utility')?.detail).toContain('gap-4')
-    expect(designLintNote(issues)).toContain('没有 Tailwind')
-    expect(lintSandboxDesign({ html: '<div class="card-body p-6 gap-4"></div>', css: '.p-6{padding:24px}.gap-4{gap:16px}' })).toEqual([])
-    expect(lintSandboxDesign({ html: '<div class="card-body p-6"></div>', css: '' })).toEqual([])
+    expect(lintSandboxDesign({ html, css: '' })).toEqual([])
+    const issues = lintSandboxDesign({ html: '<p class="text-[#333] hover:bg-[#fafafa] p-4">x</p>', css: '' })
+    expect(issues.find((i) => i.kind === 'tailwind-hex')?.detail).toBe('text-[#333] hover:bg-[#fafafa]')
+    expect(designLintNote(issues)).toContain('不要写死颜色')
+    expect(lintSandboxDesign({ html: '<div class="w-[320px] grid-cols-[1fr_2fr]"></div>', css: '' })).toEqual([])
     expect(designLintNote([{ kind: 'stat-label', detail: 'x' }])).toContain('stat-value')
   })
 

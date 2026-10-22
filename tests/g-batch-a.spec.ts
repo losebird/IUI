@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { contrastRatio, deriveAccentSet, normalizeAccent, pageAccentCss } from '../src/shared/page-accent.ts'
 import { buildHtmlSandboxSrcdoc, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
 import { applySandboxPatch, pageFromSpec, parseSandboxPatch } from '../src/shared/sandbox-patch.ts'
-import { OIU_DESIGN_KIT_CSS, OIU_FORM_STYLES_CSS, OIU_THEME_CSS } from '../src/themes/oiu-design-system.ts'
-import { buildIuiDaisyCss } from '../src/themes/iui-daisy.ts'
+import { HOST_KIT_CSS, HOST_FORM_CSS } from '../src/themes/host-kit.ts'
+import { LEGACY_TOKEN_BRIDGE_CSS, buildIuiDaisyCss } from '../src/themes/iui-daisy.ts'
 import { GENUI_SECTION_TEXT } from '../src/plugin/section-text.ts'
 import { buildPatternNote, patternNotesFor } from '../src/config/referee-rules.ts'
 
@@ -59,7 +59,7 @@ describe('G2 page accent', () => {
 
   it('theme ships the shared token scale', () => {
     // visual(①): scale + series live in the daisyUI theme base, colour aliases in the bridge.
-    const themeBase = buildIuiDaisyCss() + OIU_THEME_CSS
+    const themeBase = buildIuiDaisyCss() + LEGACY_TOKEN_BRIDGE_CSS
     for (const t of ['--space-1', '--space-8', '--shadow-1', '--shadow-3', '--lh-body', '--accent-strong', '--iui-chart-8']) {
       expect(themeBase).toContain(t)
     }
@@ -88,12 +88,12 @@ describe('G3 chart / ECharts theming', () => {
 
 describe('G1 / G5 / G8 CSS', () => {
   it('compare stacks and kanban scrolls on phones', () => {
-    expect(OIU_FORM_STYLES_CSS).toMatch(/max-width: 520px\)\s*\{\s*\.iui-compare-3 \{ grid-template-columns: 1fr; \}/)
-    expect(OIU_FORM_STYLES_CSS).toContain('scroll-snap-type: x mandatory')
+    expect(HOST_FORM_CSS).toMatch(/max-width: 520px\)\s*\{\s*\.iui-compare-3 \{ grid-template-columns: 1fr; \}/)
+    expect(HOST_FORM_CSS).toContain('scroll-snap-type: x mandatory')
   })
   it('ships hero / empty / skeleton / sample badge and map hint', () => {
     for (const c of ['.iui-hero', '.iui-empty', '.iui-skeleton', '.iui-badge-sample', '.iui-map-hint']) {
-      expect(OIU_DESIGN_KIT_CSS + OIU_FORM_STYLES_CSS + OIU_THEME_CSS).toContain(c)
+      expect(HOST_KIT_CSS + HOST_FORM_CSS + LEGACY_TOKEN_BRIDGE_CSS).toContain(c)
     }
   })
 })

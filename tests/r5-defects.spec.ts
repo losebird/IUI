@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio, deriveAccentSet, deriveSeriesPalette, pageAccentCss } from '../src/shared/page-accent.ts'
-import { OIU_FORM_STYLES_CSS as OIU_DESIGN_SYSTEM_CSS } from '../src/themes/oiu-design-system.ts'
+import { HOST_FORM_CSS } from '../src/themes/host-kit.ts'
 
 describe('R5-0 screenshot defects', () => {
   it('accent pages get a harmonised 8-step chart series (no stock green next to orange)', () => {
@@ -23,8 +23,8 @@ describe('R5-0 screenshot defects', () => {
   })
 
   it('itinerary header groups trailing chips; Leaflet font + tile seam fixed', () => {
-    expect(OIU_DESIGN_SYSTEM_CSS).toContain('.iui-itinerary-head > :first-child { margin-right: auto; }')
-    expect(OIU_DESIGN_SYSTEM_CSS).toContain('html body .leaflet-container img.leaflet-tile { mix-blend-mode: normal; }')
-    expect(OIU_DESIGN_SYSTEM_CSS).toMatch(/html body \.leaflet-container, html body \.leaflet-popup-content-wrapper[^{]*\{ font-family: var\(--font-sans\)/)
+    expect(HOST_FORM_CSS).toContain('.iui-itinerary-head > :first-child { margin-right: auto; }')
+    expect(HOST_FORM_CSS).toContain('html body .leaflet-container img.leaflet-tile { mix-blend-mode: normal; }')
+    expect(HOST_FORM_CSS).toMatch(/html body \.leaflet-container, html body \.leaflet-popup-content-wrapper[^{]*\{ font-family: var\(--font-sans\)/)
   })
 })

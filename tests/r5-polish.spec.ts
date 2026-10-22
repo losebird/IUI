@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS } from '../src/shared/html-sandbox.ts'
 import { buildMotionRuntimeScript } from '../src/shared/motion-runtime.ts'
-import { OIU_POLISH_CSS } from '../src/themes/oiu-polish.ts'
-import { buildOiuDesignSystemCss } from '../src/themes/oiu-design-system.ts'
+import { HOST_POLISH_CSS } from '../src/themes/host-polish.ts'
+import { buildHostKitCss } from '../src/themes/host-kit.ts'
 
 function inlineScripts(html: string): string[] {
   return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1])
@@ -10,14 +10,14 @@ function inlineScripts(html: string): string[] {
 
 describe('R5-1 default polish + motion (zero author tokens)', () => {
   it('polish layer ships inside the design system with motion tokens and reduced-motion opt-out', () => {
-    expect(buildOiuDesignSystemCss()).toContain(OIU_POLISH_CSS.trim().slice(0, 80))
-    expect(OIU_POLISH_CSS).toContain('--iui-ease-out')
-    expect(OIU_POLISH_CSS).toContain('.iui-swap-in')
-    expect(OIU_POLISH_CSS).toContain('.iui-enter')
-    expect(OIU_POLISH_CSS).toContain('[data-iui-clickable="card"]')
-    expect(OIU_POLISH_CSS).toContain('.iui-tier.featured')
-    expect(OIU_POLISH_CSS).toMatch(/prefers-reduced-motion: reduce/)
-    expect(OIU_POLISH_CSS).toContain('tabular-nums')
+    expect(buildHostKitCss()).toContain(HOST_POLISH_CSS.trim().slice(0, 80))
+    expect(HOST_POLISH_CSS).toContain('--iui-ease-out')
+    expect(HOST_POLISH_CSS).toContain('.iui-swap-in')
+    expect(HOST_POLISH_CSS).toContain('.iui-enter')
+    expect(HOST_POLISH_CSS).toContain('[data-iui-clickable="card"]')
+    expect(HOST_POLISH_CSS).toContain('.iui-tier.featured')
+    expect(HOST_POLISH_CSS).toMatch(/prefers-reduced-motion: reduce/)
+    expect(HOST_POLISH_CSS).toContain('tabular-nums')
   })
 
   it('motion runtime is valid JS, has no backslashes and honours the streaming flag', () => {
@@ -50,11 +50,11 @@ describe('R5-1 default polish + motion (zero author tokens)', () => {
 
 describe('R5-2 visual corrections', () => {
   it('segmented toggle groups, frosted map controls, accent selection, neutral secondary buttons', () => {
-    expect(OIU_POLISH_CSS).toContain('html [data-iui-seg]')
-    expect(OIU_POLISH_CSS).toContain('.iui-map-chrome > button')
-    expect(OIU_POLISH_CSS).toMatch(/\.iui-stop-card\[aria-current="true"\][^{]*\{\s*border-color: var\(--accent-fill\)/)
-    expect(OIU_POLISH_CSS).toMatch(/button\.secondary[^{]*\{\s*background: var\(--color-background-primary\); color: var\(--color-text-primary\)/)
-    expect(OIU_POLISH_CSS).toContain('.iui-tier.featured .iui-chip')
+    expect(HOST_POLISH_CSS).toContain('html [data-iui-seg]')
+    expect(HOST_POLISH_CSS).toContain('.iui-map-chrome > button')
+    expect(HOST_POLISH_CSS).toMatch(/\.iui-stop-card\[aria-current="true"\][^{]*\{\s*border-color: var\(--accent-fill\)/)
+    expect(HOST_POLISH_CSS).toMatch(/button\.secondary[^{]*\{\s*background: var\(--color-background-primary\); color: var\(--color-text-primary\)/)
+    expect(HOST_POLISH_CSS).toContain('.iui-tier.featured .iui-chip')
     const rt = buildMotionRuntimeScript({ streaming: false })
     expect(rt).toContain('data-iui-seg')
     expect(rt).toContain('function segScan')
@@ -74,9 +74,9 @@ describe('resident prompt trim', () => {
   it('resident prompt stays short; host CSS answers common token guesses', async () => {
     const { GENUI_SECTION_TEXT } = await import('../src/plugin/section-text.ts')
     expect(GENUI_SECTION_TEXT.length).toBeLessThan(3600)
-    expect(GENUI_SECTION_TEXT).toContain('write layout CSS only')
+    expect(GENUI_SECTION_TEXT).toContain('use them for layout')
     expect(GENUI_SECTION_TEXT).toContain('[iui-current-page]')
-    const css = buildOiuDesignSystemCss()
+    const css = buildHostKitCss()
     for (const t of ['--bg:', '--surface:', '--text:', '--muted:', '--border:', '--radius:']) expect(css).toContain(t)
   })
 })
