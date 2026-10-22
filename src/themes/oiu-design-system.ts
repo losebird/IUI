@@ -9,168 +9,14 @@
  * 4. createTripAnimator for map+pin-drop+carousel itineraries
  */
 import { OIU_POLISH_CSS } from './oiu-polish.ts'
+import { LEGACY_TOKEN_BRIDGE_CSS, legacyElementLayer } from './iui-daisy.ts'
 import { buildVendorImportMap } from '../shared/vendor-registry.ts'
 
-/** Theme tokens — warm stone neutrals, semantic status colors, dark auto. */
-export const OIU_THEME_CSS = `
-:root {
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f7f6f3;
-  --color-background-tertiary: #efeee9;
-  --color-background-info: #E6F1FB;
-  --color-background-danger: #FCEBEB;
-  --color-background-success: #EAF3DE;
-  --color-background-warning: #FAEEDA;
-
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #5f5e58;
-  --color-text-tertiary: #6b6a64;
-  --color-text-info: #185FA5;
-  --color-text-danger: #A32D2D;
-  --color-text-success: #3B6D11;
-  --color-text-warning: #854F0B;
-
-  --color-border-primary: rgba(0, 0, 0, 0.4);
-  --color-border-secondary: rgba(0, 0, 0, 0.3);
-  --color-border-tertiary: rgba(0, 0, 0, 0.12);
-  --color-border-info: #185FA5;
-  --color-border-danger: #A32D2D;
-  --color-border-success: #3B6D11;
-  --color-border-warning: #854F0B;
-
-  /* G2: explicit CJK faces — system-ui alone falls back to SimSun on some Windows / Linux setups. */
-  --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", Roboto, sans-serif;
-  --font-serif: Georgia, "Times New Roman", serif;
-  --font-mono: "SF Mono", "Fira Code", "Fira Mono", monospace;
-
-  --border-radius-md: 8px;
-  --border-radius-lg: 12px;
-  --border-radius-xl: 16px;
-
-  /* D1 type scale — the ONLY sizes pages should use (floor 12px). */
-  --fs-xs: 12px;
-  --fs-sm: 14px;
-  --fs-md: 16px;
-  --fs-lg: 20px;
-  --fs-xl: 28px;
-  --fs-2xl: 40px;
-  /* G2 aliases + line heights (CJK body 1.65, Latin 1.5, headings 1.25). */
-  --text-xs: var(--fs-xs); --text-sm: var(--fs-sm); --text-base: var(--fs-md);
-  --text-lg: var(--fs-lg); --text-xl: var(--fs-xl); --text-2xl: var(--fs-2xl);
-  --lh-body: 1.65; --lh-latin: 1.5; --lh-heading: 1.25;
-
-  /* G2 spacing on a 4/8pt grid. */
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
-
-  /* G2 elevation (1 = resting card, 2 = raised / hover, 3 = popover / sheet). */
-  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 3px 10px -4px rgba(16, 24, 40, 0.08);
-  --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 12px 24px -8px rgba(16, 24, 40, 0.14);
-  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
-
-  /* D2 page accent (personality presets override it). */
-  --accent: var(--color-text-info);
-  --accent-soft: var(--color-background-info);
-  --accent-fill: #185FA5;
-  --accent-strong: #124a80;
-  --on-accent: #ffffff;
-
-  --p: var(--color-text-primary);
-  --s: var(--color-text-secondary);
-  --t: var(--color-text-tertiary);
-  --bg2: var(--color-background-secondary);
-  --b: var(--color-border-tertiary);
-
-  /* Bridge: keep existing .iui-sandbox-* kit working on design tokens */
-  --iui-pack-surface: var(--color-background-primary);
-  --iui-pack-surface-muted: var(--color-background-secondary);
-  --iui-pack-fg: var(--color-text-primary);
-  --iui-pack-muted-fg: var(--color-text-secondary);
-  --iui-pack-border: var(--color-border-tertiary);
-  --iui-pack-accent: var(--accent, var(--color-text-info));
-  --iui-pack-on-accent: #ffffff;
-  --iui-pack-ok: var(--color-text-success);
-  --iui-pack-warn: var(--color-text-warning);
-  --iui-pack-danger: var(--color-text-danger);
-  --iui-pack-tint: var(--color-background-info);
-  --iui-pack-tint-strong: #cfe3f7;
-  --iui-pack-secondary: var(--color-background-tertiary);
-  --iui-pack-hero-from: var(--color-background-secondary);
-  --iui-pack-hero-to: var(--color-background-tertiary);
-  --iui-pack-font-family: var(--font-sans);
-  --iui-pack-radius: var(--border-radius-lg);
-  --iui-pack-radius-sm: var(--border-radius-md);
-  --iui-pack-radius-control: var(--border-radius-md);
-  --iui-pack-elev: var(--shadow-1);
-  --iui-pack-elev-2: var(--shadow-2);
-  --dsl-g-fg: var(--color-text-primary);
-  --dsl-g-bg: var(--color-background-primary);
-  --dsl-g-surface: var(--color-background-primary);
-  --dsl-g-muted-fg: var(--color-text-secondary);
-  --dsl-g-border: var(--color-border-tertiary);
-  /* Prompt-trim aliases: short names authors often guess. */
-  --bg: var(--color-background-primary); --surface: var(--color-background-secondary); --card: var(--color-background-secondary);
-  --text: var(--color-text-primary); --fg: var(--color-text-primary); --muted: var(--color-text-secondary);
-  --border: var(--color-border-tertiary); --radius: var(--border-radius-lg);
-  --iui-chart-1: #185FA5;
-  --iui-chart-2: #3B6D11;
-  --iui-chart-3: #854F0B;
-  --iui-chart-4: #A32D2D;
-  --iui-chart-5: #534AB7;
-  --iui-chart-6: #0F6E56;
-  --iui-chart-7: #B4457A;
-  --iui-chart-8: #5F5E58;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background-primary: #1a1a18;
-    --color-background-secondary: #2c2c2a;
-    --color-background-tertiary: #222220;
-    --color-background-info: #0C447C;
-    --color-background-danger: #501313;
-    --color-background-success: #173404;
-    --color-background-warning: #412402;
-
-    --color-text-primary: #e8e6de;
-    --color-text-secondary: #a8a69e;
-    --color-text-tertiary: #9a988f;
-    --color-text-info: #85B7EB;
-    --color-text-danger: #F09595;
-    --color-text-success: #97C459;
-    --color-text-warning: #EF9F27;
-
-    --color-border-primary: rgba(255, 255, 255, 0.4);
-    --color-border-secondary: rgba(255, 255, 255, 0.3);
-    --color-border-tertiary: rgba(255, 255, 255, 0.15);
-    --color-border-info: #85B7EB;
-    --color-border-danger: #F09595;
-    --color-border-success: #97C459;
-    --color-border-warning: #EF9F27;
-
-    --iui-pack-surface-dark: #1a1a18;
-    --iui-pack-surface-muted-dark: #2c2c2a;
-    --iui-pack-fg-dark: #e8e6de;
-    --iui-pack-muted-fg-dark: #a8a69e;
-    --iui-pack-border-dark: rgba(255, 255, 255, 0.15);
-    --iui-pack-accent-dark: #85B7EB;
-
-    --accent-strong: #2a73bd;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45);
-    --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.55);
-    /* G3: lighter series so charts stay readable on dark surfaces. */
-    --iui-chart-1: #85B7EB;
-    --iui-chart-2: #97C459;
-    --iui-chart-3: #EF9F27;
-    --iui-chart-4: #F09595;
-    --iui-chart-5: #AFA9EC;
-    --iui-chart-6: #5DCAA5;
-    --iui-chart-7: #ED93B1;
-    --iui-chart-8: #B4B2A9;
-  }
-}
-`.trim()
+/**
+ * visual(①): the old warm-stone / blue OIU palette is gone. The legacy variable
+ * names now resolve to the daisyUI "IUI 中性" tokens (see iui-daisy.ts).
+ */
+export const OIU_THEME_CSS = LEGACY_TOKEN_BRIDGE_CSS
 
 /** SVG color-ramp + diagram helpers (.c-purple … .c-red, .box .node .arr .leader, .t .ts .th). */
 export const OIU_SVG_CLASSES_CSS = `
@@ -274,7 +120,8 @@ svg .c-red text.ts { fill: #A32D2D; }
 
 /** Form controls + entrance stagger (thin borders, soft focus, fadeSlideIn). */
 export const OIU_FORM_STYLES_CSS = `
-* { box-sizing: border-box; margin: 0; }
+/* visual(①): raw-element defaults sit in a layer below the daisyUI components (.btn, .input …). */
+${legacyElementLayer(`* { box-sizing: border-box; margin: 0; }
 html { background: transparent; }
 body {
   font-family: var(--font-sans);
@@ -361,6 +208,7 @@ input[type="checkbox"], input[type="radio"] {
 }
 a { color: var(--color-text-info); text-decoration: none; }
 a:hover { text-decoration: underline; }
+`)}
 
 /* Editorial card helpers used by itinerary / compare patterns */
 .iui-itinerary {
@@ -693,14 +541,15 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 export const OIU_DESIGN_KIT_CSS = `
 /* D1 type scale: 12 / 14 / 16 / 20 / 28 / 40 — nothing below 12px. */
 /* G2: heading rhythm, Latin line height, aligned digits for numbers / prices / tables. */
-h1, h2, h3, h4 { line-height: var(--lh-heading, 1.25); }
+${legacyElementLayer(`h1, h2, h3, h4 { line-height: var(--lh-heading, 1.25); }
 :lang(en) body { line-height: var(--lh-latin, 1.5); }
-.iui-stat-value, .iui-sandbox-kpi, .iui-kpi, .price, .num, [data-iui-num], td, th, time, progress + span { font-variant-numeric: tabular-nums; }
 h1 { font-size: var(--fs-lg); font-weight: 750; }
 h2 { font-size: var(--fs-md); font-weight: 700; }
 h3 { font-size: var(--fs-sm); font-weight: 650; }
 h4 { font-size: var(--fs-xs); font-weight: 650; }
 table { font-size: var(--fs-sm); }
+`)}
+.iui-stat-value, .iui-sandbox-kpi, .iui-kpi, .price, .num, [data-iui-num], td, th, time, progress + span { font-variant-numeric: tabular-nums; }
 .iui-sandbox-title, .iui-itinerary-title { font-size: var(--fs-lg); }
 .iui-sandbox-sub, .iui-itinerary-sub, .iui-kanban-card, .iui-tier li, .iui-tier .price small { font-size: var(--fs-sm); }
 .iui-sandbox-badge { font-size: var(--fs-xs); }
@@ -858,12 +707,13 @@ table { font-size: var(--fs-sm); }
 .iui-stop-card .num { background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: #fff; }
 
 /* D8 code blocks: wrap toggle + copy (bridge wraps <pre> in .iui-code-wrap). */
-:where(pre:not(.mermaid)) {
+${legacyElementLayer(`:where(pre:not(.mermaid)) {
   font: 13px/1.55 var(--font-mono); tab-size: 2;
   background: var(--color-background-secondary); color: var(--color-text-primary);
   border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg);
   padding: 12px 14px; overflow: auto; margin: 0 0 8px;
 }
+`)}
 .iui-code-wrap { position: relative; margin: 0 0 8px; min-width: 0; max-width: 100%; }
 .iui-code-wrap > pre { margin: 0; }
 .iui-code-wrap[data-wrap="1"] > pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -914,12 +764,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 :where(span, a, i, b, em, strong, small, label)[data-iui-kbd] { display: inline-flex; align-items: center; }
 button:not(.leaflet-container *), [role="button"]:not(.leaflet-container *):not(svg *), select, .iui-sandbox-tab, .iui-code-tools > button { min-height: 32px; }
 button:not(.leaflet-container *) { min-width: 32px; }
-input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-color: var(--accent-fill, #185FA5); }
+input[type="checkbox"]:not(.checkbox):not(.toggle), input[type="radio"]:not(.radio) { width: 18px; height: 18px; accent-color: var(--accent-fill, #185FA5); }
 label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
-button.primary, button[data-variant="primary"], button[type="submit"]:not(.secondary):not(.ghost) {
+button.primary:not(.btn), button[data-variant="primary"]:not(.btn), button[type="submit"]:not(.secondary):not(.ghost):not(.btn) {
   background: var(--accent-fill, #185FA5); border-color: var(--accent-fill, #185FA5); color: var(--on-accent, #fff); font-weight: 600;
 }
-button.primary:hover, button[type="submit"]:not(.secondary):not(.ghost):hover { background: var(--accent-fill, #185FA5); opacity: 0.92; }
+button.primary:not(.btn):hover, button[type="submit"]:not(.secondary):not(.ghost):not(.btn):hover { background: var(--accent-fill, #185FA5); opacity: 0.92; }
 .iui-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .iui-actions > .iui-actions-spacer { flex: 1; }
 .iui-actions > button { min-height: 40px; padding-inline: 18px; }

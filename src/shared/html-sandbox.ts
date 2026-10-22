@@ -13,6 +13,7 @@ import {
   buildTripAnimatorScriptTag,
 } from '../themes/oiu-design-system.ts'
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
+import { CSS_COLOR_RESOLVER_SRC, DEFAULT_IUI_THEME, buildIuiDaisyCss, legacyElementLayer, normalizeIuiTheme, type IuiThemeId } from '../themes/iui-daisy.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { AMAP_TILE, AMAP_TILE_ORIGINS, GCJ_CRS_JS, GCJ_JS, getNetContext, withNetContext, type NetContext } from './net-context.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
@@ -134,6 +135,8 @@ export type HtmlSandboxBuildOptions = {
   appearanceScheme?: 'auto' | 'light' | 'dark'
   /** F4: strict image policy — img-src/font-src drop the `https:` wildcard. */
   strictImages?: boolean
+  /** visual(①): built-in theme (`iui` follows light/dark; `corporate` / `dim` are fixed). */
+  theme?: IuiThemeId
   /** CSS custom properties injected as :root (active IUI theme). */
   designTokens?: Readonly<Record<string, string>>
   /** Extra base CSS after design tokens, before author css. */
@@ -468,8 +471,8 @@ export function sandboxOpenLinkUrl(action: string, payload: Record<string, unkno
 export const HTML_SANDBOX_MAX_AUTHOR_BYTES = 48_000
 /** Max author HTML bytes kept in srcdoc. */
 export const HTML_SANDBOX_MAX_HTML_BYTES = 200_000
-/** Soft ceiling for entire srcdoc (warn/truncate author assets earlier). */
-export const HTML_SANDBOX_MAX_SRCDOC_BYTES = 500_000
+/** Soft ceiling for entire srcdoc (warn/truncate author assets earlier). visual(①): +160 kB for the inlined daisyUI theme base. */
+export const HTML_SANDBOX_MAX_SRCDOC_BYTES = 660_000
 
 /** Rewrite blocked OSM.org raster URLs to the sandbox default tile endpoint. */
 export function rewriteBlockedMapTileUrls(source: string): string {
@@ -1591,7 +1594,7 @@ export function buildSandboxBaseCss(
   // Surfaces are seeded by sandboxBrandCssVars (derived from accent) — CSS only references vars.
   return `
 :root{${cssVarsToInline(vars)}}
-html,body{margin:0;padding:4px;font:${d.fontSize}/${d.lineHeight} ${vars['--iui-pack-font-family'] ?? 'system-ui,sans-serif'};color:var(--iui-pack-fg,var(--dsl-g-fg));background:transparent;letter-spacing:${d.letterSpacing};-webkit-font-smoothing:antialiased}
+${legacyElementLayer(`html,body{margin:0;padding:4px;font:${d.fontSize}/${d.lineHeight} ${vars['--iui-pack-font-family'] ?? 'system-ui,sans-serif'};color:var(--iui-pack-fg,var(--dsl-g-fg));background:transparent;letter-spacing:${d.letterSpacing};-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer;border-radius:var(--iui-pack-radius-control,${d.radiusControl});border:1px solid color-mix(in srgb,var(--iui-pack-accent,${accent}) 35%,var(--iui-pack-border));background:var(--iui-pack-accent,${accent});color:var(--iui-pack-on-accent,#fff);padding:8px 12px;min-height:var(--iui-pack-control-h,${d.controlHeight});font-weight:600;transition:transform var(--iui-pack-hover-ms,${m.hoverMs}ms) var(--iui-pack-ease,${m.ease}),box-shadow var(--iui-pack-hover-ms,${m.hoverMs}ms) ease}
@@ -1601,6 +1604,7 @@ button.secondary{background:var(--iui-pack-surface);color:var(--iui-pack-accent,
 input,select,textarea{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius-control,${d.radiusControl});padding:8px 10px;min-height:var(--iui-pack-control-h,${d.controlHeight});width:100%;background:var(--iui-pack-surface);color:var(--iui-pack-fg);outline:none}
 input:focus,select:focus,textarea:focus{border-color:color-mix(in srgb,var(--iui-pack-accent,${accent}) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--iui-pack-accent,${accent}) 28%,transparent)}
 a{color:var(--iui-pack-accent,${accent})}
+`)}
 .iui-sandbox-card{border:1px solid var(--iui-pack-border);border-radius:var(--iui-pack-radius,${d.radius});padding:var(--iui-pack-pad,${d.pad});background:var(--iui-pack-surface);box-shadow:var(--iui-pack-elev,${e[1]});min-width:0;max-width:100%}
 .iui-sandbox-muted{color:var(--iui-pack-muted-fg);font-size:var(--iui-pack-font-sm,${d.fontSizeSm})}
 .iui-sandbox-toolbar{display:flex;gap:var(--iui-pack-gap-sm,${d.gapSm});flex-wrap:wrap;margin-bottom:var(--iui-pack-gap,${d.gap});align-items:center}
@@ -1635,17 +1639,18 @@ p,li,dd,dt,h1,h2,h3,h4,blockquote,figcaption{overflow-wrap:anywhere}
 /* G14: touch screens get ≥32px tap targets */
 @media (pointer:coarse){button,.iui-sandbox-btn,[role="button"],[role="tab"],select,input:not([type=checkbox]):not([type=radio]):not([type=range]){min-height:32px}input[type=checkbox],input[type=radio]{min-width:18px;min-height:18px}}
 /* Polished defaults for raw elements so un-styled model markup never looks like a default browser page */
-:root{--iui-chart-1:#3b82f6;--iui-chart-2:#10b981;--iui-chart-3:#f59e0b;--iui-chart-4:#ef4444;--iui-chart-5:#8b5cf6;--iui-chart-6:#06b6d4}
-h1,h2,h3,h4{margin:0 0 8px;line-height:1.25;letter-spacing:-0.015em;color:var(--iui-pack-fg)}
+${legacyElementLayer(`h1,h2,h3,h4{margin:0 0 8px;line-height:1.25;letter-spacing:-0.015em;color:var(--iui-pack-fg)}
 h1{font-size:22px;font-weight:750}h2{font-size:18px;font-weight:700}h3{font-size:15px;font-weight:650}h4{font-size:13px;font-weight:650;color:var(--iui-pack-muted-fg)}
 p{margin:0 0 8px}small{color:var(--iui-pack-muted-fg)}
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;border:1px solid var(--iui-pack-border);border-radius:12px;overflow:hidden}
 th{text-align:left;font-weight:600;color:var(--iui-pack-muted-fg);background:var(--iui-pack-surface-muted);padding:8px 12px}
 td{padding:8px 12px;border-top:1px solid var(--iui-pack-border)}
+`)}
 canvas,svg,img{max-width:100%}
 .iui-sandbox-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
-button.ghost,.iui-sandbox-btn.ghost{background:transparent;color:var(--iui-pack-fg);border-color:var(--iui-pack-border)}
+${legacyElementLayer(`button.ghost,.iui-sandbox-btn.ghost{background:transparent;color:var(--iui-pack-fg);border-color:var(--iui-pack-border)}
 button.ghost:hover{background:var(--iui-pack-surface-muted)}
+`)}
 .iui-sandbox-stack{display:flex;flex-direction:column;gap:var(--iui-pack-gap,${d.gap})}
 .iui-sandbox-row{display:flex;gap:var(--iui-pack-gap-sm,${d.gapSm});align-items:center;flex-wrap:wrap}
 .iui-sandbox-title{font-size:18px;font-weight:700;letter-spacing:-0.015em;margin:0}
@@ -3914,8 +3919,9 @@ function buildChartGuardScript(): string {
     }, 40);
   }
   // G3: Chart.js follows the page tokens (font, ink, grid, tooltip, 8-colour series).
+  ${CSS_COLOR_RESOLVER_SRC}
   function tok(name, fb) {
-    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; } catch (e) { return fb; }
+    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v ? __iuiCssColor(v) : fb; } catch (e) { return fb; }
   }
   function palette() {
     return [
@@ -4175,8 +4181,9 @@ function buildChartGuardScript(): string {
 function buildEchartsGuardScript(): string {
   return `<script>
 (function () {
+  ${CSS_COLOR_RESOLVER_SRC}
   function tok(name, fb) {
-    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; } catch (e) { return fb; }
+    try { var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v ? __iuiCssColor(v) : fb; } catch (e) { return fb; }
   }
   function theme() {
     var ink = tok('--color-text-secondary', '#5f5e58');
@@ -4322,10 +4329,11 @@ function buildAgGridGuardScript(): string {
 function buildMermaidGuardScript(): string {
   return `<script>
 (function () {
+  ${CSS_COLOR_RESOLVER_SRC}
   function cssVar(name, fallback) {
     try {
       var v = getComputedStyle(document.documentElement).getPropertyValue(name);
-      if (v && String(v).trim()) return String(v).trim();
+      if (v && String(v).trim()) return __iuiCssColor(String(v).trim());
     } catch (e) {}
     return fallback;
   }
@@ -4672,8 +4680,11 @@ function buildHtmlSandboxSrcdocInner(
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
   const langAttr = typeof options.uiLang === 'string' && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u.test(options.uiLang) ? ` lang="${options.uiLang}"` : ''
   const schemeAttr = options.appearanceScheme === 'light' || options.appearanceScheme === 'dark' ? ` data-iui-scheme="${options.appearanceScheme}"` : ''
+  const theme = normalizeIuiTheme(options.theme)
+  const themeAttr = theme === DEFAULT_IUI_THEME ? '' : ` data-theme="${theme}"`
   const appearanceCss = typeof options.appearanceCss === 'string' ? options.appearanceCss.replace(/<\/style/gi, '<\\/style').slice(0, 20_000) : ''
-  let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()} ${MODEL_CONNECT_ORIGINS.join(' ')} blob: data:; worker-src blob:; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}${themeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()} ${MODEL_CONNECT_ORIGINS.join(' ')} blob: data:; worker-src blob:; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+${buildIuiDaisyCss(options.assetBase)}
 ${tokenCss}${baseCss}
 ${oiuCss}
 ${pageAccentCss(spec.accent)}

@@ -71,19 +71,22 @@ describe('S5 settings field registry', () => {
 })
 
 describe('S7 custom tokens / S3 CDN template validation', () => {
-  it('flags unknown tokens and rejects unsafe values', () => {
+  it('applies only whitelisted tokens, flags the rest and rejects unsafe values', () => {
     expect(checkCustomTokensJson('').error).toBeNull()
     expect(checkCustomTokensJson('{').error).toBe('json')
     expect(checkCustomTokensJson('[1]').error).toBe('shape')
     const r = checkCustomTokensJson(JSON.stringify({
+      '--color-primary': '#0f766e',
+      '--radius-box': '12px',
       '--color-text-primary': '#111',
       '--my-brand': 'red',
       '--evil': 'red; } body { display:none',
       '--bg': 'url(https://x/y.png)',
       color: 'red',
     }))
-    expect(r.tokens).toEqual({ '--color-text-primary': '#111', '--my-brand': 'red' })
-    expect(r.unknown).toEqual(['--my-brand'])
+    // visual(①): accent / radius / density / font size only; base & text colours stay the theme's.
+    expect(r.tokens).toEqual({ '--color-primary': '#0f766e', '--radius-box': '12px' })
+    expect(r.unknown).toEqual(['--color-text-primary', '--my-brand'])
     expect(r.rejected.sort()).toEqual(['--bg', '--evil', 'color'])
   })
 

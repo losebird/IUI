@@ -135,8 +135,8 @@ describe('html-sandbox', () => {
     expect(doc).toContain('/* css truncated */')
     expect(doc).toContain('/* js truncated */')
     // Pipeline + OIU kit + G11–G16 bridge (summary, image capture, self-check: +27k)
-    // grew the baseline; still well under srcdoc hard cap (500k).
-    expect(doc.length).toBeLessThan(400_000)
+    // grew the baseline; visual(①) inlines the daisyUI theme base (+~150k). Still under the srcdoc cap (660k).
+    expect(doc.length).toBeLessThan(560_000)
   })
 })
 

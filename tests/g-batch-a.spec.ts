@@ -8,6 +8,7 @@ import { contrastRatio, deriveAccentSet, normalizeAccent, pageAccentCss } from '
 import { buildHtmlSandboxSrcdoc, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
 import { applySandboxPatch, pageFromSpec, parseSandboxPatch } from '../src/shared/sandbox-patch.ts'
 import { OIU_DESIGN_KIT_CSS, OIU_FORM_STYLES_CSS, OIU_THEME_CSS } from '../src/themes/oiu-design-system.ts'
+import { buildIuiDaisyCss } from '../src/themes/iui-daisy.ts'
 import { GENUI_SECTION_TEXT } from '../src/plugin/section-text.ts'
 import { buildPatternNote, patternNotesFor } from '../src/config/referee-rules.ts'
 
@@ -27,7 +28,7 @@ describe('G2 page accent', () => {
       expect(contrastRatio(light.accent, '#ffffff')).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(light.onAccent, light.fill)).toBeGreaterThanOrEqual(4.5)
       const dark = deriveAccentSet(hex, 'dark')
-      expect(contrastRatio(dark.accent, '#1a1a18')).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(dark.accent, '#0a0a0a')).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(dark.onAccent, dark.fill)).toBeGreaterThanOrEqual(4.5)
     },
   )
@@ -57,8 +58,10 @@ describe('G2 page accent', () => {
   })
 
   it('theme ships the shared token scale', () => {
+    // visual(①): scale + series live in the daisyUI theme base, colour aliases in the bridge.
+    const themeBase = buildIuiDaisyCss() + OIU_THEME_CSS
     for (const t of ['--space-1', '--space-8', '--shadow-1', '--shadow-3', '--lh-body', '--accent-strong', '--iui-chart-8']) {
-      expect(OIU_THEME_CSS).toContain(t)
+      expect(themeBase).toContain(t)
     }
   })
 })

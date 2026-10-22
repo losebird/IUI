@@ -7,6 +7,8 @@
  *   components (.iui-sandbox-kpi, .iui-tier) use plain selectors so they beat the base kit.
  * - Motion is transitions only (no layout shift); prefers-reduced-motion turns it off.
  */
+import { legacyElementLayer } from './iui-daisy.ts'
+
 const CHECK_SVG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E\")"
 
@@ -32,13 +34,15 @@ export const OIU_POLISH_CSS = `
   background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 30%, var(--color-background-primary)));
 }
 /* Button hierarchy: one accent primary; everything else neutral (no accent-tinted secondary). */
-button { border-color: var(--color-border-tertiary); }
+${legacyElementLayer(`button { border-color: var(--color-border-tertiary); }
 button.secondary, button[data-variant="secondary"] {
   background: var(--color-background-primary); color: var(--color-text-primary); border-color: var(--color-border-tertiary);
 }
 button.secondary:hover, button[data-variant="secondary"]:hover { background: var(--color-background-secondary); }
 button.ghost, button[data-variant="ghost"] { background: transparent; border-color: transparent; color: var(--color-text-secondary); }
 button.ghost:hover, button[data-variant="ghost"]:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+button:not(:disabled):active { transform: scale(0.97); }
+`)}
 /* Toggle groups (runtime marks a row of buttons carrying a pressed/active state) render as one segmented control. */
 html [data-iui-seg] {
   display: inline-flex; flex-wrap: nowrap; gap: 2px; padding: 3px; width: max-content; max-width: 100%; overflow-x: auto;
@@ -123,7 +127,6 @@ button, a, input, select, textarea, .iui-chip, .iui-sandbox-tab, .iui-sandbox-kp
   :where([data-iui-clickable="card"]):hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 }
 :where([data-iui-clickable="card"]):active { transform: translateY(0) scale(0.985); }
-button:not(:disabled):active { transform: scale(0.97); }
 /* Content swapped by a click/input eases in (class added by the runtime). */
 .iui-swap-in { animation: iuiSwapIn var(--iui-dur-slow) var(--iui-ease-out) both; }
 @keyframes iuiSwapIn { from { opacity: 0.35; transform: translateY(3px); } to { opacity: 1; transform: none; } }

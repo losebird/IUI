@@ -78,16 +78,18 @@ export function serializePageAppearance(a: PageAppearance): string {
   return Object.keys(out).length ? JSON.stringify(out) : ''
 }
 
-const TOKEN_SEL = ':root,[data-iui-style],.iui-sandbox-card,.iui-sandbox-kpi'
+const TOKEN_SEL = ':root,[data-theme],[data-iui-style],.iui-sandbox-card,.iui-sandbox-kpi'
 
 const DENSITY_VARS: Record<Exclude<PageDensity, 'standard'>, Record<string, string>> = {
   compact: {
     '--iui-pack-pad': '12px', '--iui-pack-gap': '8px', '--iui-gap': '8px', '--iui-style-pad': '10px',
     '--space-2': '6px', '--space-3': '9px', '--space-4': '12px', '--space-5': '15px', '--space-6': '18px', '--space-7': '24px', '--space-8': '30px',
+    '--size-field': '.22rem', '--size-selector': '.22rem',
   },
   comfortable: {
     '--iui-pack-pad': '24px', '--iui-pack-gap': '18px', '--iui-gap': '18px', '--iui-style-pad': '26px',
     '--space-2': '10px', '--space-3': '15px', '--space-4': '20px', '--space-5': '25px', '--space-6': '30px', '--space-7': '40px', '--space-8': '50px',
+    '--size-field': '.28rem', '--size-selector': '.28rem',
   },
 }
 
@@ -95,10 +97,12 @@ const RADIUS_VARS: Record<Exclude<PageRadius, 'standard'>, Record<string, string
   square: {
     '--border-radius-md': '3px', '--border-radius-lg': '4px', '--border-radius-xl': '6px',
     '--iui-pack-radius': '4px', '--iui-pack-radius-sm': '3px', '--iui-pack-radius-control': '3px',
+    '--radius-box': '6px', '--radius-field': '4px', '--radius-selector': '3px',
   },
   round: {
     '--border-radius-md': '12px', '--border-radius-lg': '18px', '--border-radius-xl': '24px',
     '--iui-pack-radius': '18px', '--iui-pack-radius-sm': '12px', '--iui-pack-radius-control': '12px',
+    '--radius-box': '1.75rem', '--radius-field': '999px', '--radius-selector': '.75rem',
   },
 }
 

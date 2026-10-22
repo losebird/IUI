@@ -34,6 +34,8 @@ export const VENDOR_LIBS = {
   // ESM only (importmap). three.module.js imports ./three.core.js; addons import bare 'three'.
   three: { pkg: 'three', version: '0.180.0', extra: ['build/three.module.js', 'build/three.core.js', 'examples/jsm/controls', 'examples/jsm/geometries', 'examples/jsm/utils', 'examples/jsm/math', 'examples/jsm/environments', 'examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/loaders/DRACOLoader.js', 'examples/jsm/libs/meshopt_decoder.module.js', 'examples/jsm/libs/draco/gltf/draco_decoder.wasm', 'examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js'] },
   // F1: ESM only (importmap `gsap` / `gsap/…`) — the package root files are the ES modules.
+  // visual(①): Inter (variable, latin) for the IUI theme — font file only, no js/css.
+  inter: { pkg: '@fontsource-variable/inter', version: '5.3.0', extra: ['files/inter-latin-wght-normal.woff2'] },
   gsap: { pkg: 'gsap', version: '3.12.5', extra: ['index.js', 'all.js', 'gsap-core.js', 'CSSPlugin.js', 'CSSRulePlugin.js', 'CustomEase.js', 'Draggable.js', 'EasePack.js', 'EaselPlugin.js', 'Flip.js', 'MotionPathPlugin.js', 'Observer.js', 'PixiPlugin.js', 'ScrollToPlugin.js', 'ScrollTrigger.js', 'TextPlugin.js', 'utils'] },
 } as const satisfies Record<string, VendorLib>
 

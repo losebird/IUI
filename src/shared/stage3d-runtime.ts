@@ -17,6 +17,7 @@
  */
 
 import { KHRONOS_ASSETS_CDN, VENDOR_CDN_HOSTS, VENDOR_CDN_PREFIX, getVendorSource, vendorBaseOrigin } from './vendor-registry.ts'
+import { CSS_COLOR_RESOLVER_SRC } from '../themes/iui-daisy.ts'
 import { BUNDLED_MODELS, BUNDLED_MODELS_DIR } from './model-catalog.ts'
 import { IUI_VERSION } from './version.ts'
 
@@ -237,17 +238,14 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       throw why ? new Error(why + ' · ' + String(url).slice(0, 80)) : e;
     } finally { clearTimeout(stall); clearTimeout(total); }
   }
+  ${CSS_COLOR_RESOLVER_SRC}
   function cssColor(THREE, v, fb) {
     try {
       var s = String(v || '').trim();
       if (/^--/.test(s)) s = getComputedStyle(document.documentElement).getPropertyValue(s).trim();
       if (!s) return new THREE.Color(fb);
-      var probe = document.createElement('span');
-      probe.style.color = s;
-      probe.style.display = 'none';
-      document.body.appendChild(probe);
-      var c = getComputedStyle(probe).color;
-      probe.remove();
+      var c = __iuiCssColor(s);
+      if (/^#[0-9a-f]{6}$/i.test(c)) return new THREE.Color().setStyle(c, THREE.SRGBColorSpace);
       var mm = /rgba?[(]([0-9.]+)[, ]+([0-9.]+)[, ]+([0-9.]+)/.exec(c);
       if (mm) return new THREE.Color().setRGB(mm[1] / 255, mm[2] / 255, mm[3] / 255, THREE.SRGBColorSpace);
       return new THREE.Color(s);

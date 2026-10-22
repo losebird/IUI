@@ -17,7 +17,7 @@ export type AccentSet = {
 }
 
 const LIGHT_SURFACE = '#ffffff'
-const DARK_SURFACE = '#1a1a18'
+const DARK_SURFACE = '#0a0a0a'
 
 export function contrastRatio(a: string, b: string): number {
   const la = relativeLuminance(a)
@@ -143,10 +143,10 @@ export function deriveSeriesPalette(fill: string, scheme: 'light' | 'dark'): str
 
 function block(sel: string, s: AccentSet, scheme: 'light' | 'dark'): string {
   const series = deriveSeriesPalette(s.fill, scheme).map((c, i) => `--iui-chart-${i + 1}:${c}!important`).join(';')
-  return `${sel}{--accent:${s.accent}!important;--accent-fill:${s.fill}!important;--accent-strong:${s.strong}!important;--accent-soft:${s.soft}!important;--on-accent:${s.onAccent}!important;${series}}`
+  return `${sel}{--color-primary:${s.fill}!important;--color-primary-content:${s.onAccent}!important;--accent:${s.accent}!important;--accent-fill:${s.fill}!important;--accent-strong:${s.strong}!important;--accent-soft:${s.soft}!important;--on-accent:${s.onAccent}!important;${series}}`
 }
 
-/** CSS for a declared page accent (beats personality presets; dark via media query). */
+/** CSS for a declared page accent: the primary group only (daisyUI primary + legacy --accent*, series); base / text colours stay the theme's. Dark via media query. */
 export function pageAccentCss(raw: unknown): string {
   const hex = normalizeAccent(raw)
   if (hex === null) return ''

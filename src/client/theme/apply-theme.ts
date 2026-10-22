@@ -1,6 +1,7 @@
 import type { ThemePack, ThemeTokens } from '../../config/types.ts'
 import { resolveTheme, resolveThemeId } from '../../config/resolve.ts'
 import { DEFAULT_THEME_ID } from '../../config/defaults.ts'
+import { CUSTOM_TOKEN_WHITELIST } from '../../themes/iui-daisy.ts'
 
 /** Active theme id for this browser session (set by client boot / runtime-config). */
 let activeThemeId: string = DEFAULT_THEME_ID
@@ -42,6 +43,8 @@ export function setCustomTokens(json: string | undefined | null): void {
           if (!/^--[a-zA-Z0-9-]{1,80}$/.test(key)) continue
           // S7: same value rules as the settings check (no declaration / rule breakout).
           if (typeof value !== 'string' || value.length > 200 || /[;{}<>]|\/\*|url\s*\(|expression\s*\(/i.test(value)) continue
+          // visual(①): whitelist only (accent / radius / density / font size).
+          if (!CUSTOM_TOKEN_WHITELIST.includes(key)) continue
           out[key] = value
         }
         next = out

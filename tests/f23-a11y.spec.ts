@@ -26,7 +26,8 @@ describe('F23 accessibility css', () => {
   it('keeps controls ≥32px (Leaflet chrome excluded) and fills primary actions with the accent', () => {
     expect(OIU_A11Y_CSS).toMatch(/button:not\(\.leaflet-container \*\), \[role="button"\][^{]*\{ min-height: 32px; \}/)
     expect(OIU_A11Y_CSS).toContain('button:not(.leaflet-container *) { min-width: 32px; }')
-    expect(OIU_A11Y_CSS).toMatch(/button\.primary, button\[data-variant="primary"\], button\[type="submit"\]:not\(\.secondary\):not\(\.ghost\) \{\s*background: var\(--accent-fill/)
+    // visual(①): daisyUI .btn keeps its own colours.
+    expect(OIU_A11Y_CSS).toMatch(/button\.primary:not\(\.btn\), button\[data-variant="primary"\]:not\(\.btn\), button\[type="submit"\]:not\(\.secondary\):not\(\.ghost\):not\(\.btn\) \{\s*background: var\(--accent-fill/)
     expect(OIU_A11Y_CSS).toContain('.iui-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;')
   })
 
