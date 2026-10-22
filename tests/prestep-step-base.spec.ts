@@ -24,14 +24,22 @@ function harness() {
     emit({ type: 'turn/start', seq: turn * 10, time: 1, data: { turn } })
     emit({ type: 'user/message', seq: turn * 10 + 1, time: 1, data: { content: [{ type: 'text', text }], source: { kind: 'user' } } })
   }
-  const preStep = async (turn: number, step: number): Promise<string[]> => {
+  const preStep = async (turn: number, step: number, entering: unknown[] = []): Promise<string[]> => {
     const decision = await listeners.get('agent/pre-step')!(
-      { agent, messages: [], turn, step, signal: new AbortController().signal },
-      async () => ({ kind: 'enter', messages: [] }),
+      { agent, messages: entering, turn, step, signal: new AbortController().signal },
+      async () => ({ kind: 'enter', messages: entering }),
     ) as { kind: string; messages: Array<{ content: Array<{ text?: string }> }> }
-    return decision.messages.map(m => m.content.map(c => c.text ?? '').join(''))
+    return decision.messages.slice(entering.length).map(m => m.content.map(c => c.text ?? '').join(''))
   }
-  return { ask, preStep }
+  /** dsh 0.2 order: turn/start → pre-step (prompt still in the inbox) → user/message logged. */
+  const ask02 = async (turn: number, text: string): Promise<string[]> => {
+    emit({ type: 'turn/start', seq: turn * 10, time: 1, data: { turn } })
+    const prompt = { role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }
+    const notes = await preStep(turn, 1, [prompt])
+    emit({ type: 'user/message', seq: turn * 10 + 1, time: 1, data: { content: prompt.content, source: { kind: 'user' } } })
+    return notes
+  }
+  return { ask, preStep, ask02 }
 }
 
 describe('pre-step first-step notes', () => {
@@ -61,5 +69,16 @@ describe('pre-step first-step notes', () => {
     const h = harness()
     h.ask(1, '量子计算和经典计算有什么区别？简单说说。')
     expect(await h.preStep(1, 1)).toEqual([])
+  })
+
+  it('dsh 0.2: notes follow the prompt entering the step, not the previous ask', async () => {
+    const h = harness()
+    const trip = await h.ask02(1, '做一个东京3日行程，带地图。')
+    expect(trip.join('\n')).toMatch(/intent=map/)
+    // The next turn is a plain question: nothing about the old map ask.
+    expect(await h.ask02(2, '量子计算和经典计算有什么区别？简单说说。')).toEqual([])
+    const weather = await h.ask02(3, '做一个本周北京天气看板，用示例数据即可。')
+    expect(weather.join('\n')).not.toMatch(/intent=map/)
+    expect(weather.length).toBeGreaterThan(0)
   })
 })

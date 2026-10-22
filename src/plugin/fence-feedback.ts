@@ -523,6 +523,19 @@ export function currentPageNoteFor(session: Session, ask: string): string | null
   return currentPageNote(entry)
 }
 
+/** The newest direct human prompt among the messages entering a step. */
+function latestUserAskFromMessages(messages: readonly unknown[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i] as { content?: unknown; source?: { kind?: unknown; plugin?: unknown } } | null
+    if (message === null || typeof message !== 'object') continue
+    if (isFeedbackSource(message.source)) continue
+    if (message.source?.kind !== undefined && message.source.kind !== 'user') continue
+    const text = textOfContent(message.content).trim()
+    if (text !== '') return text
+  }
+  return ''
+}
+
 function latestUserAskFromSession(session: Session): string {
   const snap = typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : null
   if (snap == null) return ''
@@ -926,7 +939,12 @@ export function installFenceFeedback(
     if (data.source?.kind !== 'user') return
     const state = stateOf(sessionId)
     state.isSubagent = session.header.parentSession !== undefined
-    state.lastUserAsk = textOfContent(data.content)
+    const askText = textOfContent(data.content)
+    // dsh 0.2: this prompt was already adopted by the turn's first pre-step
+    // (turn/start reset the turn) — resetting again would drop that step's prime.
+    if (state.currentTurn !== undefined && state.firstPreStepTurn === state.currentTurn
+      && askText.trim() !== '' && askText.trim() === state.lastUserAsk.trim()) return
+    state.lastUserAsk = askText
     state.routedFormatId = null
     state.routedSource = null
     // turn/start 先于用户消息；清掉正文状态时保留正式回合身份与 ask。
@@ -981,6 +999,10 @@ export function installFenceFeedback(
 
     if (firstStep) {
       const reminder = state.pendingNextTurnReminder
+      // dsh 0.2 logs the user's message only after this pre-step: read the ask
+      // from the messages entering the step, or every note answers the previous ask.
+      const stepAsk = latestUserAskFromMessages(decision.messages)
+      if (stepAsk !== '') state.lastUserAsk = stepAsk
       const askNow = state.lastUserAsk.trim() !== ''
         ? state.lastUserAsk
         : latestUserAskFromSession(agent.session)
