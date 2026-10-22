@@ -19,7 +19,7 @@ import { parseSandboxPatch } from '../shared/sandbox-patch.ts'
 import { safeRegExp } from '../shared/safe-regexp.ts'
 
 /** Sandbox-first recipe used by every prime/steer (catalog recipes removed). */
-export const SANDBOX_RECIPE = 'title: <按当前问句起标题>\nheight: 420\n---css\n.wrap{display:grid;gap:12px}.row{display:flex;gap:8px;flex-wrap:wrap}\n---html\n<div class="iui-sandbox-card wrap"><h3>标题</h3><div class="iui-sandbox-grid" id="g"></div><div class="row"><button class="iui-sandbox-btn" id="b">操作</button></div></div>\n---js\ndocument.getElementById(\'b\').onclick = function () { /* 本地交互 */ };'
+export const SANDBOX_RECIPE = 'title: <按当前问句起标题>\nheight: 420\n---css\n.wrap{gap:12px}.row{display:flex;gap:8px;flex-wrap:wrap}\n---html\n<div class="card border"><div class="card-body wrap"><h2>标题</h2><div class="row" id="g"></div><div class="iui-actions"><button class="btn btn-primary btn-sm" id="b">操作</button></div></div></div>\n---js\ndocument.getElementById(\'b\').onclick = function () { /* 本地交互 */ };'
 
 function isSandboxSpec(raw: string): boolean {
   try { return parseHtmlSandboxFence(raw) !== null } catch { return false }

@@ -254,8 +254,28 @@ export const IUI_UTILITIES_CSS = '@layer utilities{'
   + '.border-base-200{border-color:var(--color-base-200)}.border-base-300{border-color:var(--color-base-300)}'
   + '.bg-base-100{background-color:var(--color-base-100)}.bg-base-200{background-color:var(--color-base-200)}.bg-base-300{background-color:var(--color-base-300)}'
   + '.bg-primary{background-color:var(--color-primary);color:var(--color-primary-content)}'
+  + '.bg-neutral{background-color:var(--color-neutral);color:var(--color-neutral-content)}.text-neutral-content{color:var(--color-neutral-content)}'
+  // inverted surfaces: host heading / strong colours (iui-base layer) must not paint dark-on-dark.
+  + ':where(.bg-neutral,.bg-primary) :where(h1,h2,h3,h4,h5,h6,strong,b,small){color:inherit}'
   + '.text-base-content{color:var(--color-base-content)}.text-primary{color:var(--color-primary)}'
   + ['info', 'success', 'warning', 'error'].map((c) => `.text-${c}{color:var(--color-text-${c === 'error' ? 'danger' : c})}`).join('')
+  // soft / outline badges + alerts carry small status text: use the contrast-checked text tokens (≥ 4.5:1), not the raw fill.
+  + ['info', 'success', 'warning', 'error'].map((c) => `.badge-soft.badge-${c},.badge-outline.badge-${c},.alert-soft.alert-${c}{color:var(--color-text-${c === 'error' ? 'danger' : c})}`).join('')
+  // visual(②): muted text the daisyUI way. Opacity steps are clamped to the two
+  // contrast-checked levels (secondary 68% / tertiary 58% ink), so /50 stays ≥ 4.5:1.
+  + ['80', '70', '65'].map((n) => `.text-base-content\\/${n}`).join(',') + '{color:var(--color-text-secondary)}'
+  + ['60', '55', '50', '45', '40'].map((n) => `.text-base-content\\/${n}`).join(',') + '{color:var(--color-text-tertiary)}'
+  + '}'
+
+/**
+ * The slice of Tailwind preflight daisyUI assumes (no Tailwind runtime here):
+ * form controls inherit the font, buttons start transparent and borderless,
+ * so `.tab` / `.join-item` don't show the UA ButtonFace grey (dark: #6b6b6b).
+ * `@layer base` = lowest, so host element defaults and daisyUI win over it.
+ */
+export const IUI_PREFLIGHT_CSS = '@layer base{'
+  + ':where(button,input,select,textarea,optgroup){font:inherit;letter-spacing:inherit;color:inherit}'
+  + ':where(button,[type=button],[type=reset],[type=submit]){background-color:transparent;background-image:none;border:0 solid;cursor:pointer}'
   + '}'
 
 /** Theme base injected before host tokens: layer order, font, daisyUI, themes (the colour bridge ships with the host kit, after host tokens). */
@@ -263,6 +283,7 @@ export function buildIuiDaisyCss(assetBase?: string): string {
   return [
     SANDBOX_LAYER_ORDER_CSS,
     interFontFaceCss(assetBase),
+    IUI_PREFLIGHT_CSS,
     DAISY_CSS,
     IUI_UTILITIES_CSS,
     buildIuiThemeCss(),

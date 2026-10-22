@@ -12,7 +12,7 @@ import {
   buildOiuImportmapScriptTag,
   buildTripAnimatorScriptTag,
 } from '../themes/oiu-design-system.ts'
-import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
+import { PATTERN_STARTERS } from './pattern-starters.ts'
 import { CSS_COLOR_RESOLVER_SRC, DEFAULT_IUI_THEME, buildIuiDaisyCss, legacyElementLayer, normalizeIuiTheme, type IuiThemeId } from '../themes/iui-daisy.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { AMAP_TILE, AMAP_TILE_ORIGINS, GCJ_CRS_JS, GCJ_JS, getNetContext, withNetContext, type NetContext } from './net-context.ts'
@@ -3471,12 +3471,17 @@ ${amap ? GCJ_JS : ''}
     try {
       var stats = countTiles(map);
       if (stats.ok < 1 && origTile) {
+        // visual(⑧): re-add the page's own basemap (e.g. Esri Light / Dark Gray) instead of
+        // swapping in the default street map; host fallbacks (tileerror → swapLayer) unchanged.
+        var own = null;
         map.eachLayer(function (layer) {
           if (layer && typeof layer.setUrl === 'function' && typeof layer._url === 'string') {
+            if (!own && !swapped && !isBlockedTileUrl(layer._url)) own = { url: layer._url, options: layer.options };
             try { map.removeLayer(layer); } catch (e) {}
           }
         });
-        origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
+        if (own) origTile(own.url, own.options).addTo(map);
+        else origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
         try { map.invalidateSize({ animate: false }); } catch (e) {}
       }
     } catch (e) {}
@@ -4973,7 +4978,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
 
 export const HTML_SANDBOX_STARTERS: readonly HtmlSandboxStarter[] = [
   ...HTML_SANDBOX_STARTERS_CORE,
-  ...OIU_PATTERN_STARTERS,
+  ...PATTERN_STARTERS,
 ]
 
 export function listHtmlSandboxStarters(): readonly HtmlSandboxStarter[] {

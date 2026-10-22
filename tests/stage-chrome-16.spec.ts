@@ -16,9 +16,10 @@ describe('0.13.0-iui.16 stage chrome + weather', () => {
   it('ships weather-dense starter', () => {
     const s = getHtmlSandboxStarter('weather-dense')
     expect(s).toBeTruthy()
-    expect(s!.spec.html).toMatch(/iui-weather-hero/)
-    expect(s!.spec.html).toMatch(/wxChart/)
-    expect(s!.spec.js).toMatch(/Chart|iuiCreateChart|wxChart/)
+    // visual(⑧): hero + stats strip + ECharts hourly + 7-day range bars
+    expect(s!.spec.html).toMatch(/id="hr"/)
+    expect(s!.spec.js).toMatch(/echarts\.init/)
+    expect(s!.spec.js).toMatch(/class="bar"/)
     expect(listHtmlSandboxStarters().some((x) => x.id === 'weather-dense')).toBe(true)
   })
 })

@@ -11,7 +11,7 @@ import { createFind3dModelsTool } from '../src/plugin/model-search-tool.ts'
 import { setNetworkProbeForTest } from '../src/shared/network-probe.ts'
 import { VENDOR_LIBS } from '../src/shared/vendor-registry.ts'
 import { getStreamHeuristics, isToolBeforeFenceName } from '../src/config/stream-heuristics.ts'
-import { OIU_PATTERN_STARTERS } from '../src/shared/oiu-pattern-starters.ts'
+import { OIU_PATTERN_STARTERS } from '../src/shared/pattern-starters.ts'
 import { buildTestGlb } from '../scripts/test-glb.mts'
 
 const spec = (html: string, js = ''): HtmlSandboxSpec => ({ title: 't', css: '', html, js, stages: ['html', 'js'], partial: false, cssComplete: true, htmlComplete: true, jsComplete: true }) as HtmlSandboxSpec

@@ -68,10 +68,11 @@ describe('0.13.0-iui.17 production stabilize', () => {
     expect(doc).toContain('swapLayer')
   })
 
-  it('weather-dense starter uses UMD Chart path (no ESM import)', () => {
+  it('weather-dense starter uses the UMD global chart path (no ESM import)', () => {
     const s = getHtmlSandboxStarter('weather-dense')!
-    expect(s.spec.js).toMatch(/window\.Chart|iuiCreateChart/)
-    expect(s.spec.js).not.toMatch(/import\(['"]chart\.js['"]\)/)
+    // visual(⑧): hourly chart moved to ECharts (window.echarts global, waits for it)
+    expect(s.spec.js).toMatch(/window\.echarts/)
+    expect(s.spec.js).not.toMatch(/import\(['"](chart\.js|echarts)['"]\)/)
   })
 
   it('stage chrome hides partialHint when ready + ready timeout', () => {

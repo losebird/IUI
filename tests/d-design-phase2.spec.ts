@@ -13,7 +13,7 @@ import {
 import { DESIGN_ENHANCE_JS } from '../src/shared/design-enhance'
 import { buildSandboxBridgeScript, isIuiSandboxHostMessage } from '../src/shared/html-sandbox'
 import { buildOiuDesignSystemCss, OIU_DESIGN_SKILL } from '../src/themes/oiu-design-system'
-import { OIU_PATTERN_STARTERS } from '../src/shared/oiu-pattern-starters'
+import { OIU_PATTERN_STARTERS } from '../src/shared/pattern-starters'
 import { queueDesignNote } from '../src/plugin/fence-feedback'
 import { sandboxStreamProgress } from '../src/client/sandbox-skeleton'
 import { fitSceneBounds } from '../src/client/scene3d-core'
@@ -164,7 +164,7 @@ describe('D补充 starters + 3D fit', () => {
     expect(ids).toContain('scene-3d')
     expect(ids).toContain('meeting-rooms')
     const room = OIU_PATTERN_STARTERS.find((s) => s.id === 'meeting-rooms')!
-    expect(room.spec.js + room.spec.html).toContain('iui-stat')
+    expect(room.spec.js + room.spec.html).toContain('stat-value') // visual(⑧): daisyUI stats
     const s3 = OIU_PATTERN_STARTERS.find((s) => s.id === 'scene-3d')!
     expect(s3.spec.html).toContain("data-iui-3d='")
     expect(JSON.parse(/data-iui-3d='([^']+)'/.exec(s3.spec.html)![1]!).hotspots.length).toBeGreaterThanOrEqual(3)

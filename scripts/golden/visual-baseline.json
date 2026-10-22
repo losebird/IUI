@@ -5,10 +5,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 83,
+      "whitespace": 33,
       "hero": 100
     },
-    "total": 97
+    "total": 89
   },
   "kpi-grid": {
     "scores": {
@@ -16,10 +16,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 88,
+      "whitespace": 100,
       "hero": 0
     },
-    "total": 81
+    "total": 83
   },
   "mini-form": {
     "scores": {
@@ -27,10 +27,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 57,
-      "hero": 98
+      "whitespace": 72,
+      "hero": 99
     },
-    "total": 93
+    "total": 95
   },
   "todo": {
     "scores": {
@@ -49,10 +49,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 57,
+      "whitespace": 100,
       "hero": 100
     },
-    "total": 93
+    "total": 100
   },
   "leaflet-map": {
     "scores": {
@@ -71,10 +71,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 93,
+      "whitespace": 51,
       "hero": 0
     },
-    "total": 82
+    "total": 75
   },
   "compare-cards": {
     "scores": {
@@ -93,10 +93,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 83,
+      "whitespace": 99,
       "hero": 100
     },
-    "total": 97
+    "total": 100
   },
   "echarts-mini": {
     "scores": {
@@ -104,10 +104,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 61,
+      "whitespace": 69,
       "hero": 100
     },
-    "total": 94
+    "total": 95
   },
   "ds-kit": {
     "scores": {
@@ -126,7 +126,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 96,
+      "whitespace": 100,
       "hero": 0
     },
     "total": 83
@@ -137,10 +137,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 84,
-      "hero": 46
+      "whitespace": 100,
+      "hero": 45
     },
-    "total": 88
+    "total": 91
   },
   "particle": {
     "scores": {
@@ -148,10 +148,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 99,
+      "whitespace": 90,
       "hero": 100
     },
-    "total": 100
+    "total": 98
   },
   "form-bridge": {
     "scores": {
@@ -159,14 +159,14 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 58,
+      "whitespace": 100,
       "hero": 0
     },
-    "total": 76
+    "total": 83
   },
   "itinerary-coast": {
     "scores": {
-      "minFont": 100,
+      "minFont": 99,
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
@@ -199,14 +199,14 @@
   },
   "hotel-covers": {
     "scores": {
-      "minFont": 100,
+      "minFont": 98,
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
       "whitespace": 100,
-      "hero": 45
+      "hero": 42
     },
-    "total": 91
+    "total": 90
   },
   "ag-grid-sheet": {
     "scores": {
@@ -214,10 +214,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 100,
+      "whitespace": 96,
       "hero": 100
     },
-    "total": 100
+    "total": 99
   },
   "mermaid-mindmap": {
     "scores": {
@@ -225,7 +225,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 41,
+      "whitespace": 42,
       "hero": 100
     },
     "total": 90
@@ -236,7 +236,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 95,
+      "whitespace": 94,
       "hero": 100
     },
     "total": 99
@@ -251,5 +251,16 @@
       "hero": 100
     },
     "total": 100
+  },
+  "kanban-board": {
+    "scores": {
+      "minFont": 96,
+      "contrast": 100,
+      "overflow": 100,
+      "narrow": 100,
+      "whitespace": 100,
+      "hero": 0
+    },
+    "total": 83
   }
 }

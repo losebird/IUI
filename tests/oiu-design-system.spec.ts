@@ -81,17 +81,20 @@ describe('OIU design-system port', () => {
   it('pricing starter is 3-column compare', () => {
     const starter = getHtmlSandboxStarter('pricing-3col')
     expect(starter).toBeTruthy()
-    expect(starter!.spec.html).toContain('iui-compare-3')
-    expect(starter!.spec.html).toContain('iui-tier featured')
-    const tiers = starter!.spec.html.split('iui-tier').length - 1
+    // visual(⑧): daisyUI cards, recommended tier inverted (.tier.hot)
+    expect(starter!.spec.html).toContain('class="tiers"')
+    expect(starter!.spec.html).toContain('tier hot')
+    const tiers = starter!.spec.html.split('class="tier').length - 1
     expect(tiers).toBeGreaterThanOrEqual(3)
   })
 
   it('system prompt includes OIU design skill + trip pattern', () => {
     const section = buildGenuiSectionText()
-    expect(section).toContain('--color-background-primary')
+    expect(section).toContain('--color-base-100')
+    expect(section).toContain('btn btn-primary')
+    expect(section).toContain('NO Tailwind runtime')
     expect(section).toContain('createTripAnimator')
-    expect(buildPatternNote('做个三档定价页')).toContain('iui-compare-3')
+    expect(buildPatternNote('做个三档定价页')).toContain('bg-neutral')
     expect(section).toContain('Runnable author JS')
     expect(section).toContain('in-page')
     expect(section).toContain('window.iuiCreateChart')

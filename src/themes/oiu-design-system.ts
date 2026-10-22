@@ -370,8 +370,8 @@ html body .leaflet-container, html body .leaflet-popup-content-wrapper, html bod
 .iui-pin-dot {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 50%;
-  background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: #fff; font: 600 12px var(--font-sans);
-  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: var(--iui-pin-on, var(--on-accent, #fff)); font: 600 12px var(--font-sans);
+  border: 2px solid var(--color-base-100, #fff); box-shadow: 0 1px 4px rgba(0,0,0,0.28);
   opacity: 1; transition: scale 0.18s ease, box-shadow 0.18s ease;
 }
 /* D6: category colors (data-cat on the pin or its card), numbered, selected = bigger + ring + on top.
@@ -558,7 +558,8 @@ table { font-size: var(--fs-sm); }
 .iui-text-xl { font-size: var(--fs-xl); } .iui-text-2xl { font-size: var(--fs-2xl); }
 
 /* D2 page personalities: put data-iui-style on the page root.
-   tool 工具型/简洁 · content 内容型/杂志 · data 数据型/看板 · toy 玩具型/活泼 */
+   tool 工具型/简洁 · content 内容型/杂志 · data 数据型/看板 · toy 玩具型/活泼
+   Compat only (no longer taught in the prompt). */
 [data-iui-style] {
   color: var(--color-text-primary);
   background: var(--iui-style-bg, transparent);
@@ -577,14 +578,14 @@ table { font-size: var(--fs-sm); }
   background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent);
 }
 [data-iui-style="tool"] {
-  --accent: #185FA5; --accent-fill: #185FA5; --accent-soft: #E6F1FB;
+  --accent: var(--color-base-content); --accent-fill: var(--color-neutral); --accent-soft: var(--color-base-200); --on-accent: var(--color-neutral-content);
   --iui-style-bg: var(--color-background-primary); --iui-style-pad: 12px; --iui-gap: 8px;
   --border-radius-md: 6px; --border-radius-lg: 8px; --border-radius-xl: 10px;
   line-height: 1.55;
 }
 [data-iui-style="content"] {
-  --accent: #9A3412; --accent-fill: #9A3412; --accent-soft: #FBEDE3;
-  --iui-style-bg: #FBF8F3; --iui-style-pad: 24px; --iui-gap: 20px;
+  --accent: var(--color-base-content); --accent-fill: var(--color-neutral); --accent-soft: var(--color-base-200); --on-accent: var(--color-neutral-content);
+  --iui-style-bg: var(--color-base-100); --iui-style-pad: 24px; --iui-gap: 20px;
   --border-radius-md: 4px; --border-radius-lg: 6px; --border-radius-xl: 8px;
   line-height: 1.75;
 }
@@ -592,23 +593,20 @@ table { font-size: var(--fs-sm); }
 [data-iui-style="content"] h1 { font-size: var(--fs-xl); }
 [data-iui-style="content"] p { max-width: 68ch; }
 [data-iui-style="data"] {
-  --accent: #4338CA; --accent-fill: #4338CA; --accent-soft: #EEF0FF;
+  --accent: var(--color-base-content); --accent-fill: var(--color-neutral); --accent-soft: var(--color-base-200); --on-accent: var(--color-neutral-content);
   --iui-style-bg: var(--color-background-secondary); --iui-style-pad: 16px; --iui-gap: 12px;
   --border-radius-md: 8px; --border-radius-lg: 10px; --border-radius-xl: 12px;
   font-variant-numeric: tabular-nums; line-height: 1.5;
 }
 [data-iui-style="toy"] {
-  --accent: #C2185B; --accent-fill: #D6336C; --accent-soft: #FDE7EF;
-  --iui-style-bg: linear-gradient(160deg, #FFF4E6, #FDE7EF); --iui-style-pad: 20px; --iui-gap: 16px;
+  --accent: var(--color-base-content); --accent-fill: var(--color-neutral); --accent-soft: var(--color-base-200); --on-accent: var(--color-neutral-content);
+  --iui-style-bg: var(--color-base-200); --iui-style-pad: 20px; --iui-gap: 16px;
   --border-radius-md: 14px; --border-radius-lg: 20px; --border-radius-xl: 28px;
 }
 [data-iui-style="toy"] button { border-radius: 999px; }
-@media (prefers-color-scheme: dark) {
-  [data-iui-style="tool"] { --accent: #85B7EB; --accent-soft: #0C447C; }
-  [data-iui-style="content"] { --accent: #F0A27A; --accent-fill: #C2410C; --accent-soft: #4A2412; --iui-style-bg: #201D19; }
-  [data-iui-style="data"] { --accent: #A5B4FC; --accent-fill: #4F46E5; --accent-soft: #26245A; }
-  [data-iui-style="toy"] { --accent: #F48FB1; --accent-soft: #4A1A2E; --iui-style-bg: linear-gradient(160deg, #2A1F17, #2C1822); }
-}
+/* visual(②): presets keep their spacing / radius / type personality but no
+   own hues (were blue / rust / indigo / pink) — ink + greys from the theme, so
+   light / dark follow the daisyUI tokens without a separate dark block. */
 
 /* D3 stat: big number on top, small caption below (never one line). */
 .iui-stats { display: grid; gap: var(--iui-gap, 12px); grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr)); }
@@ -704,7 +702,9 @@ table { font-size: var(--fs-sm); }
 .iui-card-summary { font-size: var(--fs-sm); line-height: 1.5; color: var(--color-text-secondary); }
 
 /* D6: card numbers match the pin colors. */
-.iui-stop-card .num { background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: #fff; }
+.iui-stop-card .num { background: var(--iui-pin-color, var(--accent-fill, #185FA5)); color: var(--iui-pin-on, var(--on-accent, #fff)); }
+/* visual(⑧): category pins keep white numbers; plain pins follow primary / primary-content (ink in light, paper in dark). */
+[data-cat] { --iui-pin-on: #fff; }
 
 /* D8 code blocks: wrap toggle + copy (bridge wraps <pre> in .iui-code-wrap). */
 ${legacyElementLayer(`:where(pre:not(.mermaid)) {
@@ -946,7 +946,10 @@ export function buildTripAnimatorScriptTag(): string {
 }
 
 /**
- * Agent-facing design skill (trip/pricing/weather patterns). Injected via system prompt.
+ * Agent-facing design skill (trip/pricing/weather patterns), OIU vocabulary.
+ * @deprecated Not injected anywhere (since .27 the prompt is `section-text.ts`
+ * + `[iui-pattern]` notes in `referee-rules.ts`, both daisyUI since visual(②)).
+ * Kept only until the OIU kit is removed; do not wire it back in.
  */
 export const OIU_DESIGN_SKILL = `
 The sandbox already includes a shared design system. Build on it — do NOT restyle from scratch.
