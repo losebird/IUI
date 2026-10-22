@@ -46,6 +46,17 @@ describe('F24 patch parse + apply', () => {
     expect(p.errors).toEqual([])
   })
 
+  it('accepts find/with text written on the marker line (live MiniMax output)', () => {
+    const p = parseSandboxPatch('page: x\n---find <h2>东京 3 日行程</h2>\n---with\n<h2>东京 3 日行程（深色）</h2>\n---find 合计 0\n---with 合计 ¥0')!
+    expect(p.errors).toEqual([])
+    expect(p.ops).toEqual([
+      { kind: 'find', find: '<h2>东京 3 日行程</h2>', with: '<h2>东京 3 日行程（深色）</h2>' },
+      { kind: 'find', find: '合计 0', with: '合计 ¥0' },
+    ])
+    // A block body still wins over nothing; an empty marker with no body stays an error.
+    expect(parseSandboxPatch('---find\n---with\nx')!.errors.join()).toContain('---find is empty')
+  })
+
   it('returns null without edits and reports dangling find', () => {
     expect(parseSandboxPatch('page: x\n随便说点')).toBeNull()
     expect(parseSandboxPatch('---find\nabc')!.errors.join()).toContain('without ---with')

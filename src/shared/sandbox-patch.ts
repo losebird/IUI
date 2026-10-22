@@ -91,8 +91,11 @@ export function parseSandboxPatch(raw: string): SandboxPatch | null {
   let pendingFind: string | null = null
   const flush = (): void => {
     if (current === null) return
-    const content = trimBlock(current.buf)
     const kind = current.kind
+    // Models sometimes write `---find <text>` / `---with <text>` on the marker line.
+    const inline = (kind === 'find' || kind === 'with') ? current.arg.trim() : ''
+    const block = trimBlock(current.buf)
+    const content = block === '' && inline !== '' ? inline : block
     if (kind === 'find') {
       if (pendingFind !== null) patch.errors.push('---find without ---with')
       pendingFind = content

@@ -56,10 +56,12 @@ import {
 import {
   fenceFirstRegex,
   getStreamHeuristics,
+  isPartialFenceOpener,
   isToolBeforeFenceName,
   looksLikeJsonMasqueradeOpen,
   matchesForbiddenFirstPrefix,
 } from '../config/stream-heuristics.ts'
+import { normalizeFenceCloseStream } from './fence-close-normalize.ts'
 import { buildPatternNote, eagernessNoteFor, eagernessWantsText, getIntentRule, isExplicitUiAsk, pageStyleNoteFor, type UiEagerness } from '../config/referee-rules.ts'
 import { recordFenceOp } from '../shared/fence-ops.ts'
 import { designLintNote, lintSandboxDesign, type DesignIssue } from '../shared/design-lint.ts'
@@ -447,7 +449,7 @@ async function* watchFirstTokenFenceStream(
       prefix += chunk.text
       const trimmed = prefix.replace(/^\s+/u, '')
       const policy = getStreamHeuristics()
-      if (trimmed.length >= policy.firstTokenDecideAfter) {
+      if (trimmed.length >= policy.firstTokenDecideAfter && !isPartialFenceOpener(trimmed, policy)) {
         decided = true
         const bad = matchesForbiddenFirstPrefix(trimmed, policy) || !fenceFirstRegex(policy).test(trimmed)
         if (bad) {
@@ -979,9 +981,10 @@ export function installFenceFeedback(
     const ask = state.lastUserAsk.trim()
     const rule = ask !== '' ? resolveAskRule(ask, state) : null
     const watchFirst = opts.formatReferee && rule !== null && rule.mode === 'must_fence'
-    if (!watchFirst && state.validatedThisTurn !== true) return next()
-    if (!watchFirst) return retryReasoningOnlyGenuiStream(options, next())
-    return watchFirstTokenFenceStream(options, next(), state, rule!.id, ctx)
+    // Normalize glued `---```` closes before anyone (referee, host markdown) reads the text.
+    if (!watchFirst && state.validatedThisTurn !== true) return normalizeFenceCloseStream(next())
+    if (!watchFirst) return retryReasoningOnlyGenuiStream(options, normalizeFenceCloseStream(next()))
+    return watchFirstTokenFenceStream(options, normalizeFenceCloseStream(next()), state, rule!.id, ctx)
   }, { global: true })
 
   // Next-turn reminder + same-turn fence-first prime + mid-turn nudge for weak models.

@@ -103,6 +103,24 @@ export function fenceFirstRegex(policy: StreamHeuristics = getStreamHeuristics()
   return re
 }
 
+/**
+ * True while the text so far is still a strict prefix of some valid opener
+ * ("`", "```", "```iui-ht"…). Streams split the opener across deltas; deciding
+ * on "```" alone flagged correct replies as first-token violations (live
+ * MiniMax run) and triggered a full same-turn regeneration.
+ */
+export function isPartialFenceOpener(
+  text: string,
+  policy: StreamHeuristics = getStreamHeuristics(),
+): boolean {
+  const trimmed = text.replace(/^\s+/u, '')
+  if (trimmed === '') return true
+  return policy.fenceLanguages.some((lang) => {
+    const opener = `\`\`\`${lang}`
+    return opener.length > trimmed.length && opener.startsWith(trimmed)
+  })
+}
+
 export function matchesForbiddenFirstPrefix(
   text: string,
   policy: StreamHeuristics = getStreamHeuristics(),
@@ -115,6 +133,7 @@ export function matchesForbiddenFirstPrefix(
     if (re && re.test(trimmed)) return true
   }
   // Any non-fence first token on must_fence is a soft violation if long enough
+  if (isPartialFenceOpener(trimmed, policy)) return false
   return trimmed.length >= policy.firstTokenDecideAfter && !fenceFirstRegex(policy).test(trimmed)
 }
 
