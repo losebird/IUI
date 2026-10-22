@@ -1,0 +1,45 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+<script src="icons2.js"></script><style>.row{display:flex;gap:1rem;align-items:center;padding:.8rem 1rem}.row+.row{border-top:1px solid var(--color-base-300)}.sec{font-size:.8rem;font-weight:600;color:color-mix(in oklab,var(--color-base-content) 55%,transparent);margin:1.4rem 0 .5rem;display:flex;gap:.4rem;align-items:center}.nw{white-space:nowrap}</style></head><body class="bg-base-100 p-5"><div id="shot">
+<div class="text-lg font-semibold">IUI</div><div class="text-sm text-base-content/60 mt-0.5">把适合可视化的问题渲染成回复里的交互页面。外观与模板立即生效，其余设置点「保存」后对新消息生效。</div>
+<div class="sec" id="h1">外观</div>
+<div class="rounded-box border border-base-300 overflow-hidden">
+ <div class="flex items-center px-4 py-2 border-b border-base-300 bg-base-200/50"><span class="text-xs text-base-content/60">实时预览 · 用当前设置渲染真实沙箱页面</span><div role="tablist" class="tabs tabs-box tabs-xs ml-auto"><a class="tab tab-active">浅色</a><a class="tab">深色</a></div></div>
+ <div class="p-4 grid grid-cols-[1.3fr_1fr] gap-3">
+  <div class="rounded-box bg-base-200/60 p-4"><div class="flex items-center gap-2 text-sm text-base-content/60">本周访问<span class="badge badge-warning badge-soft badge-xs">示例数据</span></div><div class="text-3xl font-semibold tabular-nums tracking-tight mt-1 nw">12,480</div><div class="text-xs text-success mt-0.5 nw">较上周 +12.4%</div></div>
+  <div class="rounded-box border border-base-300 p-4"><div class="text-sm text-base-content/60">近 7 天</div><div id="sp" class="text-primary mt-2"></div></div>
+  <div class="col-span-2 grid grid-cols-3 gap-3"><div class="rounded-box border border-base-300 p-3"><div class="text-xs text-base-content/60">转化率</div><div class="text-lg font-semibold tabular-nums nw">3.8%</div></div><div class="rounded-box border border-base-300 p-3"><div class="text-xs text-base-content/60">新用户</div><div class="text-lg font-semibold tabular-nums nw">1,204</div></div><div class="rounded-box border border-base-300 p-3"><div class="text-xs text-base-content/60 nw">平均时长</div><div class="text-lg font-semibold tabular-nums nw">4m 12s</div></div></div>
+  <div class="col-span-2 flex items-end gap-2"><label class="flex-1"><div class="text-xs text-base-content/60 mb-1">提醒邮箱</div><input class="input input-sm w-full" value="me@example.com"></label><select class="select select-sm w-24"><option>每天</option></select><button class="btn btn-sm btn-ghost">取消</button><button class="btn btn-sm btn-primary">保存</button></div>
+ </div>
+ <div class="border-t border-base-300 p-4 grid grid-cols-2 gap-x-5 gap-y-3">
+  <div class="col-span-2 flex items-center gap-4"><span class="text-sm w-14 shrink-0">强调色</span><div class="flex gap-2" id="sw"></div></div>
+  <div class="flex items-center gap-3"><span class="text-sm w-14 shrink-0">密度</span><div id="g1" class="flex-1"></div></div><div class="flex items-center gap-3"><span class="text-sm w-10 shrink-0">字号</span><div id="g2" class="flex-1"></div></div>
+  <div class="flex items-center gap-3"><span class="text-sm w-14 shrink-0">圆角</span><div id="g3" class="flex-1"></div></div><div class="flex items-center gap-3"><span class="text-sm w-10 shrink-0">配色</span><div id="g4" class="flex-1"></div></div>
+ </div>
+ <div class="border-t border-base-300 px-4 py-2 flex"><button class="btn btn-xs btn-ghost ml-auto">恢复默认</button></div>
+</div>
+<div class="sec" id="h2">生成</div>
+<div class="rounded-box border border-base-300">
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">界面生成积极度</div><div class="text-xs text-base-content/60">均衡：解释、对比类先用文字回答，并提供「做成交互页面」按钮</div></div><select class="select select-sm w-28"><option>均衡（默认）</option></select></div>
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">自动修复</div><div class="text-xs text-base-content/60">渲染失败时在同一条回复里让模型修好 · 每次多一轮调用</div></div><input type="checkbox" class="toggle toggle-sm" checked></div>
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">格式纠偏</div><div class="text-xs text-base-content/60">该出页面却只回了 Markdown 时，引导模型改成页面</div></div><input type="checkbox" class="toggle toggle-sm" checked></div>
+</div>
+<div class="sec" id="h3">网络与资源</div>
+<div class="rounded-box border border-base-300">
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">连通性</div><div class="text-xs text-base-content/60">15:01 检测 · 11 / 11 可用 · 库按 jsDelivr → unpkg → npmmirror 回退</div></div><button class="btn btn-sm btn-ghost nw" id="rc">重新检测</button></div>
+ <div class="px-4 pb-3 grid grid-cols-3 gap-x-4 gap-y-1.5 text-xs" id="cn"></div>
+ <div class="row"><details class="w-full"><summary class="text-sm font-medium cursor-pointer">高级：手动指定镜像与底图</summary></details></div>
+</div>
+<div class="sec" id="h4">隐私与安全</div>
+<div class="rounded-box border border-base-300">
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">严格图片策略</div><div class="text-xs text-base-content/60">只加载 data:/blob: 与白名单图库，防止页面借图片外传数据</div></div><input type="checkbox" class="toggle toggle-sm"></div>
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">页面存储</div><div class="text-xs text-base-content/60">表单、待办等状态保存在本浏览器，保留 90 天</div></div><button class="btn btn-sm btn-ghost nw">清除</button></div>
+ <div class="row"><div class="flex-1"><div class="text-sm font-medium">反馈统计</div><div class="text-xs text-base-content/60">仅存本浏览器：页面哈希、类型、评价计数，不含页面内容</div></div><button class="btn btn-sm btn-ghost nw">导出 JSON</button><button class="btn btn-sm btn-ghost nw">清除</button></div>
+</div>
+<div class="sec" id="h5">模板</div>
+<div class="rounded-box border border-base-300"><div class="row"><div class="flex-1"><div class="text-sm font-medium">我的模板 · 0 个</div><div class="text-xs text-base-content/60">在页面 ··· 菜单选「保存为模板」</div></div><button class="btn btn-sm btn-ghost nw">导入</button><button class="btn btn-sm btn-ghost nw">导出</button></div></div>
+<div class="rounded-box border border-base-300 mt-3"><div class="row"><details class="w-full"><summary class="text-sm font-medium cursor-pointer" id="h6">开发者</summary></details></div></div>
+<div class="mt-4 flex items-center gap-3 rounded-box bg-base-200 px-4 py-2.5"><span class="status status-warning"></span><span class="text-sm">2 项改动未保存 · 对新消息生效</span><button class="btn btn-sm btn-ghost ml-auto">放弃</button><button class="btn btn-sm btn-neutral">保存</button></div>
+</div>
+<script>ready((t)=>{sp.innerHTML=spark([3,5,4,7,6,9,11],200,44,t.primary);sw.innerHTML=swatches(0);g1.innerHTML=seg(['紧凑','标准','宽松'],1);g2.innerHTML=seg(['小','中','大'],1);g3.innerHTML=seg(['直角','标准','圆润'],1);g4.innerHTML=seg(['跟随','浅色','深色'],0);
+h1.insertAdjacentHTML('afterbegin',ic('pal',14));h2.insertAdjacentHTML('afterbegin',ic('spark',14));h3.insertAdjacentHTML('afterbegin',ic('globe',14));h4.insertAdjacentHTML('afterbegin',ic('lock',14));h5.insertAdjacentHTML('afterbegin',ic('bm',14));rc.insertAdjacentHTML('afterbegin',ic('refresh',14));
+cn.innerHTML=[['jsDelivr',71],['npmmirror',217],['unpkg',81],['Zstatic',582],['staticfile',1354],['Wikipedia',854],['Wikimedia 图片',547],['Esri 瓦片',549],['高德瓦片',775],['Poly Haven',1159]].map(([n,ms])=>`<div class="flex items-center gap-2"><span class="status ${ms>1000?'status-warning':'status-success'}"></span><span class="truncate">${n}</span><span class="ml-auto tabular-nums text-base-content/50">${ms} ms</span></div>`).join('')})</script></body></html>

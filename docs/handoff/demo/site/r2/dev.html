@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+<script src="../nm/prismjs/prism.js" data-manual></script><script src="../nm/prismjs/components/prism-typescript.min.js"></script>
+<style>.token.keyword{color:#cf222e}.token.function,.token.class-name{color:#8250df}.token.string{color:#0a3069}.token.number{color:#0550ae}.token.punctuation,.token.operator{color:color-mix(in oklab,currentColor 55%,transparent)}[data-theme=dim] .token.keyword{color:#ff7b72}[data-theme=dim] .token.function,[data-theme=dim] .token.class-name{color:#d2a8ff}[data-theme=dim] .token.string{color:#a5d6ff}[data-theme=dim] .token.number{color:#79c0ff}.code{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.7}
+[data-theme=dim] .hljs-keyword,[data-theme=dim] .hljs-title{color:#ff7b72}</style>
+</head><body class="bg-base-200 p-4"><div id="shot"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5">
+<div class="breadcrumbs text-sm py-0 text-base-content/60"><ul><li>项目</li><li>IUI</li><li>src</li><li class="text-base-content font-medium">themes</li></ul></div>
+<div class="rounded-box border border-base-300 overflow-hidden"><div class="flex items-center justify-between px-4 py-2 border-b border-base-300 bg-base-200/60"><span class="text-xs font-medium text-base-content/60">summarize.ts</span><button class="btn btn-ghost btn-xs gap-1" id="cp1"></button></div>
+<pre class="code px-4 py-3 overflow-x-auto" id="code"></pre></div>
+<div class="rounded-box border border-base-300 overflow-hidden"><div class="flex items-center justify-between px-4 py-2 border-b border-base-300 bg-base-200/60"><span class="text-xs font-medium">src/theme.ts</span><span class="text-xs num"><b class="text-success">+3</b> <b class="text-error">−3</b></span></div>
+<div class="code" id="diff"></div></div>
+<div class="grid grid-cols-2 gap-4">
+ <div class="rounded-box border border-base-300 p-2"><ul class="menu menu-sm w-full p-0" id="tree"></ul></div>
+ <div class="rounded-box border border-base-300 overflow-hidden"><div class="flex items-center justify-between px-4 py-2 border-b border-base-300 bg-base-200/60"><span class="text-xs font-medium text-base-content/60">config.json</span><span class="text-xs text-base-content/40">4 个字段</span></div><pre class="code px-4 py-3" id="json"></pre></div></div>
+<div class="flex flex-col gap-1.5"><span class="text-sm font-medium">安装命令</span><div class="join w-full"><div class="join-item input w-full code bg-base-200/60">dsh plugin add @losebird/iui</div><button class="btn join-item btn-primary gap-1.5" id="cp2"></button></div></div>
+</div></div></div>
+<script>window.__hl=(s)=>Prism.highlight(s,Prism.languages.typescript,"typescript")</script>
+<script>ready(() => {
+ document.getElementById('code').innerHTML = __hl('export function summarize(rows: Row[]) {\n  const total = rows.reduce((s, r) => s + r.amount, 0)\n  return { total, avg: total / rows.length }\n}')
+ cp1.innerHTML = ic('copy', 13) + '复制'; cp2.innerHTML = ic('copy', 15) + '复制'
+ const L = [['-', "accent: '#185FA5'", 3], ['-', 'radius: 8', 4], ['-', "shadow: 'double'", 5], ['+', "accent: '#0a0a0a'", 3], ['+', 'radius: 20', 4], ['+', "shadow: 'none'", 5]]
+ diff.innerHTML = L.map(([k, t, n]) => `<div class="flex ${k === '+' ? 'bg-success/10' : 'bg-error/10'}"><span class="w-10 shrink-0 text-right pr-3 text-base-content/35 num">${n}</span><span class="w-5 shrink-0 ${k === '+' ? 'text-success' : 'text-error'}">${k}</span><span>${__hl(t)}</span></div>`).join('')
+ const f = (n) => `<li><a>${ic('file', 14, 'opacity-50')}${n}</a></li>`, d = (n, c, open = true) => `<li><details ${open ? 'open' : ''}><summary>${ic('folder', 14, 'opacity-60')}${n}</summary><ul>${c}</ul></details></li>`
+ tree.innerHTML = d('src', d('themes', f('daisy.ts') + `<li><a class="menu-active">${ic('file', 14)}tokens.ts</a></li>`) + f('index.ts')) + f('package.json')
+ const J = { theme: 'iui', radius: 20, dark: false, fonts: ['Inter'] }
+ json.innerHTML = JSON.stringify(J, null, 2).replace(/"(\w+)":/g, '<span class="text-base-content/50">"$1"</span>:').replace(/: "([^"]+)"/g, ': <span class="text-success">"$1"</span>').replace(/: (\d+|true|false)/g, ': <span class="text-info">$1</span>').replace(/\["Inter"\]/, '[<span class="text-success">"Inter"</span>]')
+})</script></body></html>

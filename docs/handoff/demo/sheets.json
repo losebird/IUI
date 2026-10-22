@@ -1,0 +1,33 @@
+[
+{"title":"① 整体界面：现在的 OIU 主题 vs daisyUI（同一份内容）","cols":4,"tw":560,"out":"final/1-ui.png","tiles":[
+ ["cur-01-demo-light.png","现在 · OIU 主题","IUI 沙箱实际渲染","现状"],
+ ["ui-iui.png","daisyUI · IUI 中性（自定义）","黑白灰 · 胶囊按钮 · 大圆角 · 无阴影","推荐"],
+ ["ui-iui-dark.png","daisyUI · IUI 中性 暗色","同一套变量的暗色版",""],
+ ["ui-lofi.png","daisyUI · lofi","极简线框感，状态色偏淡",""],
+ ["ui-corporate.png","daisyUI · corporate","企业蓝，稳重",""],
+ ["ui-nord.png","daisyUI · nord","北欧灰蓝，柔和",""],
+ ["ui-silk.png","daisyUI · silk","暖白 + 黑，质感细腻",""],
+ ["ui-dim.png","daisyUI · dim","暗色 + 荧光绿强调",""]]},
+{"title":"② 图表：现在 vs 三种精修方案（同一份数据）","cols":2,"tw":760,"out":"final/2-charts.png","tiles":[
+ ["cur-charts.png","现在 · Chart.js + OIU 主题","蓝绿双色、图例居中、网格偏重","现状"],
+ ["ch-chartjs.png","Chart.js 精修预设","墨色主系列 + 浅灰对比，弱网格，图例并入标题",""],
+ ["ch-echarts.png","ECharts 精修预设","同上 + 柱顶直接标注 + 末点气泡","推荐"],
+ ["ch-plot.png","Observable Plot","默认就很克制，适合分析类，交互较少",""]]},
+{"title":"③ 表格 Grid：现在 vs 三种方案（同一份订单）","cols":2,"tw":760,"out":"final/3-grid.png","tiles":[
+ ["cur-grid.png","现在 · AG Grid + OIU","列宽溢出，状态/日期被挤出，表头图标多","现状"],
+ ["gr-ag.png","AG Grid 精修","铺满宽度、勾选、金额右对齐、状态徽标","推荐"],
+ ["gr-tab.png","Tabulator（MIT）","轻量，自带分页/选择/排序",""],
+ ["gr-daisy.png","daisyUI 原生表格","最轻，无需库；复杂功能要自己写",""]]},
+{"title":"④ 脑图：现在 vs 三种方案（同一棵树）","cols":2,"tw":760,"out":"final/4-mindmap.png","tiles":[
+ ["cur-mindmap.png","现在 · Mermaid + OIU","高饱和色块、粗连线、米色底","现状"],
+ ["mm-mermaid.png","Mermaid 精修主题","浅色分支底 + 墨色中心，改主题变量即可",""],
+ ["mm-markmap.png","markmap（MIT）","经典思维导图形态，可折叠/缩放","推荐"],
+ ["mm-echarts.png","ECharts 树图","层级清晰，分支色 + 曲线，可折叠",""]]},
+{"title":"⑤ 3D：现在 vs 五套视觉预设（运行时负责灯光/阴影/后期）","cols":3,"tw":620,"out":"final/5-3d.png","tiles":[
+ ["cur-scene-3d.png","现在 · 3D 展示台","塑料蓝、底座、背景大字","现状"],
+ ["3d-clay.png","陶土 Clay","哑光单色 + 环境光遮蔽，最不容易翻车","推荐"],
+ ["3d-studio.png","影棚产品 Studio","HDR 环境 + 清漆/金属 + 暗角",""],
+ ["3d-toon.png","卡通 Toon","三阶着色 + 描边，活泼",""],
+ ["3d-glass.png","玻璃 Glass","透射折射 + 色散 + 辉光，适合主视觉",""],
+ ["3d-data.png","极简数据 Data","3D 柱状，只高亮最大值，直接标注",""]]}
+]

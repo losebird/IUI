@@ -1,0 +1,44 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script><script src="icons2.js"></script></head><body class="bg-base-100 p-5"><div id="shot" class="flex flex-col gap-5">
+<div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-base-content/50 mr-1">继续修改</span>
+ <button class="btn btn-sm btn-outline border-base-300 rounded-full font-normal" id="n1">换成深色</button><button class="btn btn-sm btn-outline border-base-300 rounded-full font-normal" id="n2">加一个筛选</button><button class="btn btn-sm btn-outline border-base-300 rounded-full font-normal" id="n3">做成手机版</button></div>
+<div role="alert" class="alert alert-warning alert-soft items-start border-warning/25">
+ <span id="w1" class="mt-0.5"></span>
+ <div class="flex flex-col gap-2 w-full">
+  <div><div class="font-medium">这次修改没能应用到页面上</div><div class="text-sm opacity-80">页面已保留修改前的版本，没有丢内容。可以让模型整页重写这一页。</div></div>
+  <div class="flex gap-2"><button class="btn btn-sm btn-neutral" id="b1">让模型整页重写</button><button class="btn btn-sm btn-ghost" id="b2">查看修改内容</button></div>
+  <details class="text-xs opacity-70"><summary class="cursor-pointer select-none">技术细节</summary></details>
+ </div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+ <div class="rounded-box border border-base-300 p-4 flex flex-col gap-3">
+  <div class="flex items-center gap-2 text-sm"><span class="loading loading-spinner loading-xs"></span><span>正在生成页面</span><span class="text-base-content/50 ml-auto tabular-nums text-xs">已接收 12.4 KB</span></div>
+  <div class="skeleton rounded-lg h-6 w-48"></div><div class="grid grid-cols-3 gap-2"><div class="skeleton rounded-lg h-14"></div><div class="skeleton rounded-lg h-14"></div><div class="skeleton rounded-lg h-14"></div></div><div class="skeleton rounded-lg h-20"></div>
+ </div>
+ <div class="flex flex-col gap-3">
+  <div role="alert" class="alert bg-base-100 border-base-300 shadow-lg"><span id="t1" class="text-warning"></span><div><div class="text-sm font-medium">解锁成就 · 第一张看板</div><div class="text-xs text-base-content/60">已生成 1 个仪表盘页面</div></div><button class="btn btn-xs btn-ghost btn-square" id="tx"></button></div>
+  <div role="alert" class="alert bg-base-100 border-base-300 shadow-lg"><span id="t2" class="text-success"></span><span class="text-sm">已保存为模板「东京行程」</span><button class="btn btn-xs btn-ghost">撤销</button></div>
+ </div>
+</div>
+<div class="rounded-box border border-base-300 bg-base-100">
+ <div class="flex items-center gap-3 px-4 py-3 border-b border-base-300"><span class="font-medium">模板</span><span class="text-xs text-base-content/50">从模板开始一个新页面</span><button class="btn btn-xs btn-ghost btn-square ml-auto" id="px"></button></div>
+ <div class="p-4 flex flex-col gap-3">
+  <div class="flex gap-3 items-center"><div role="tablist" class="tabs tabs-box tabs-sm flex-nowrap"><a class="tab tab-active font-medium">全部</a><a class="tab">我的</a><a class="tab">仪表盘</a><a class="tab">数据</a><a class="tab">流程</a><a class="tab">图表</a><a class="tab">交互</a><a class="tab">测验</a></div>
+   <label class="input input-sm flex-1"><span id="sr" class="opacity-50"></span><input placeholder="搜索模板，例如 看板 / 行程 / 表单"></label></div>
+  <div class="grid grid-cols-3 gap-3" id="cards"></div>
+ </div>
+</div>
+</div>
+<script>
+const T=[['项目仪表盘','仪表盘','数字 + 环比 + 进度条，决策一眼可见','kpi'],['方案对比卡','数据','并排对照成本 / 风险 / 收益','cmp'],['五步上手流程','流程','步骤时间线，每步一句要点','steps'],['随堂测验','测验','选中即知对错，附讲解','quiz'],['趋势柱状图','图表','分组柱状 + 目标线','bar'],['东京行程','我的','3 天 · 13 站 · 地图','map']]
+function th(k,t){const p=t.primary,m=t.a(t.ink,.12),s=t.a(t.ink,.06);const r=(x,y,w,h,c,rx=3)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${c}"/>`;let g='';
+if(k=='kpi')g=r(8,8,40,30,s)+r(52,8,40,30,s)+r(96,8,40,30,s)+r(12,14,18,4,m)+r(12,24,26,8,p)+r(56,24,22,8,m)+r(100,24,22,8,m)+r(8,44,128,8,s)+r(8,44,84,8,p);
+if(k=='cmp')g=[8,54,100].map((x,i)=>r(x,8,38,48,i==1?t.a(t.primary,.12):s)+r(x+5,14,20,4,m)+r(x+5,24,26,3,m)+r(x+5,31,22,3,m)+r(x+5,38,24,3,m)).join('');
+if(k=='steps')g=[0,1,2,3,4].map(i=>`<circle cx="${14+i*29}" cy="20" r="5" fill="${i<2?p:m}"/>`+r(8+i*29,32,14,3,m)).join('')+r(14,19,116,2,s,1);
+if(k=='quiz')g=r(8,8,90,5,m)+[0,1,2].map(i=>r(8,18+i*12,128,9,i==1?t.a(t.success,.25):s)).join('');
+if(k=='bar')g=[18,30,22,38,28,44].map((h,i)=>r(12+i*21,52-h,12,h,i==5?p:m,2)).join('')+`<line x1="8" x2="136" y1="16" y2="16" stroke="${t.warning}" stroke-dasharray="3 3"/>`;
+if(k=='map')g=r(8,8,80,48,s)+`<path d="M18 44 L38 26 L58 34 L76 16" stroke="${p}" stroke-width="2" fill="none"/>`+r(94,10,42,8,m)+r(94,24,42,8,m)+r(94,38,42,8,m);
+return `<svg viewBox="0 0 144 60" class="w-full h-16">${g}</svg>`}
+ready((t)=>{n1.insertAdjacentHTML('afterbegin',ic('moon',14));n2.insertAdjacentHTML('afterbegin',ic('filter',14));n3.insertAdjacentHTML('afterbegin',ic('phone',14));w1.innerHTML=ic('warn',18);b1.insertAdjacentHTML('afterbegin',ic('wand',14));b2.insertAdjacentHTML('afterbegin',ic('diff',14));
+document.querySelector('summary').insertAdjacentHTML('afterend','');t1.innerHTML=ic('trophy',20);t2.innerHTML=ic('ok',18);tx.innerHTML=ic('x',14);px.innerHTML=ic('x',14);sr.innerHTML=ic('search',14);
+cards.innerHTML=T.map(([n,c,d,k])=>`<div class="rounded-box border border-base-300 hover:border-base-content/30 p-3 flex flex-col gap-2"><div class="rounded-lg bg-base-200 px-2 py-1">${th(k,t)}</div><div class="flex items-center gap-2"><span class="font-medium text-sm">${n}</span><span class="badge badge-ghost badge-xs ml-auto">${c}</span></div><div class="text-xs text-base-content/60 leading-relaxed">${d}</div></div>`).join('')})
+</script></body></html>

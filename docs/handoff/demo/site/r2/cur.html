@@ -1,0 +1,11 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="standalone-theme.css">
+<style>body{margin:0;padding:16px;background:#f4f4f5}#shot{width:688px}</style><script src="specs.js"></script></head>
+<body><div id="shot"><main id="genui-root"></main></div>
+<script>
+const q = new URLSearchParams(location.search); const name = q.get('s'); if (q.get('dark')) document.body.setAttribute('data-ds-dark-theme', '')
+const engines = (q.get('e') || '').split(',').filter(Boolean)
+const load = (src) => new Promise((r, j) => { const s = document.createElement('script'); s.src = src; s.onload = r; s.onerror = j; document.head.appendChild(s) })
+;(async () => { for (const e of engines) await load('/iui/' + e + '.js'); await load('/iui/standalone-runtime.js')
+ window.__GenuiStandalone__.mount(document.querySelector('#genui-root'), { format: 'dsh-genui', version: 1, spec: SPECS[name], presentation: { locale: 'zh', theme: q.get('dark') ? 'dark' : 'light' } })
+ setTimeout(() => window.__ready = true, 2500) })().catch(e => { document.body.textContent = String(e); window.__ready = true })
+</script></body></html>

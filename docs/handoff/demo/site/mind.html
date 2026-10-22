@@ -1,0 +1,50 @@
+<!doctype html><html data-theme="iui"><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="common.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script>
+<script src="nm/d3/dist/d3.min.js"></script><script src="nm/markmap-view/dist/browser/index.js"></script><script src="nm/markmap-lib/dist/browser/index.iife.js"></script>
+<script src="nm/echarts/dist/echarts.min.js"></script><script src="nm/mermaid/dist/mermaid.min.js"></script><script src="data.js"></script>
+<style>#m svg{max-width:100%;height:auto}.markmap{font-family:var(--font)!important}</style>
+</head><body class="bg-base-200 p-4">
+<div id="shot" class="w-[688px]"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-3">
+ <div class="flex items-baseline justify-between"><h3 class="font-semibold tracking-tight">门店增长计划</h3><span class="text-sm text-base-content/60">5 个方向 · 12 项举措</span></div>
+ <div id="m" class="h-[420px]"></div>
+</div></div></div>
+<script>
+const D=window.DEMO, lib=new URLSearchParams(location.search).get('lib')||'markmap', m=document.getElementById('m');
+const HUES=['#2563eb','#16a34a','#d97706','#db2777','#7c3aed'];
+const done=()=>setTimeout(()=>window.__ready=1,600);
+document.fonts.ready.then(async()=>{
+if(lib==='mermaid'){
+ const tv={fontFamily:'InterVar, "Noto Sans SC", sans-serif',fontSize:'14px',primaryColor:'#0a0a0a',primaryTextColor:'#ffffff',lineColor:'#a1a1aa'};
+ const tints=['#eef2ff','#ecfdf3','#fff7ed','#fdf2f8','#f5f3ff'], inks=['#1e3a8a','#14532d','#7c2d12','#831843','#4c1d95'];
+ for(let i=0;i<12;i++){tv['cScale'+i]=tints[i%5];tv['cScaleLabel'+i]=inks[i%5];tv['cScaleInv'+i]='#0a0a0a'}
+ mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:tv});
+ const md=['mindmap','  root(("门店增长计划"))',...D.tree.children.flatMap(c=>['    ('+c.name+')',...c.children.map(x=>'      '+x.name)])].join('\n');
+ const {svg}=await mermaid.render('mm',md); m.innerHTML=svg; m.querySelector('svg').style.height='420px';
+ m.querySelectorAll('.mindmap-node path, .mindmap-node rect').forEach(e=>{e.setAttribute('rx',10)});
+ m.querySelectorAll('.edge, path[class*=edge]').forEach(e=>{e.style.strokeWidth='1.5px'});
+ done();
+} else if(lib==='markmap'){
+ const md='# 门店增长计划\n'+D.tree.children.map(c=>'## '+c.name+'\n'+c.children.map(x=>'- '+x.name).join('\n')).join('\n');
+ const {Transformer,Markmap}=window.markmap; const {root}=new Transformer().transform(md);
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('class','markmap'); svg.style.width='100%';svg.style.height='420px'; m.appendChild(svg);
+ let bi=-1; const col=(n)=>{const p=n.state?.path||'';const parts=p.split('.');return parts.length<2?'#0a0a0a':HUES[(parseInt(parts[1])-1+5)%5]};
+ const mm=Markmap.create(svg,{duration:0,spacingVertical:10,spacingHorizontal:70,paddingX:10,color:(n)=>{const d=n.state?.depth;if(d===1)return '#0a0a0a';let k=n;return HUES[(D.tree.children.findIndex(c=>c.name===(n.state?.depth===2?n.content:(n.parent?.content)))+5)%5]},fitRatio:.95});
+ // color by branch using content lookup
+ const branchOf={};D.tree.children.forEach((c,i)=>{branchOf[c.name]=i;c.children.forEach(x=>branchOf[x.name]=i)});
+ const dec=(h)=>{const t=document.createElement('textarea');t.innerHTML=h;return t.value.trim()};
+ mm.setOptions({color:(n)=>n.state?.depth===1?'#0a0a0a':HUES[branchOf[dec(n.content)]??0]});
+ await mm.setData(root); await mm.fit(); done();
+} else {
+ const ch=echarts.init(m);
+ const data={name:D.tree.name,children:D.tree.children.map((c,i)=>({name:c.name,itemStyle:{color:HUES[i],borderColor:HUES[i]},lineStyle:{color:HUES[i]+'66'},label:{color:'#0a0a0a',fontWeight:600},
+  children:c.children.map(x=>({name:x.name,itemStyle:{color:'#fff',borderColor:HUES[i]},lineStyle:{color:HUES[i]+'55'}}))}))};
+ ch.setOption({animation:false,textStyle:{fontFamily:'InterVar, "Noto Sans SC", sans-serif'},series:[{type:'tree',data:[data],top:'4%',bottom:'4%',left:'21%',right:'18%',symbol:'circle',symbolSize:9,edgeShape:'curve',
+  initialTreeDepth:-1,itemStyle:{color:'#0a0a0a',borderWidth:2},lineStyle:{width:1.5,curveness:.5},
+  label:{position:'left',verticalAlign:'middle',align:'right',fontSize:13,color:'#0a0a0a',distance:8},
+  leaves:{label:{position:'right',align:'left',color:'#3f3f46'}},
+  emphasis:{focus:'descendant'},expandAndCollapse:true}]});
+ ch.setOption({series:[{data:[{...data,label:{fontSize:15,fontWeight:700,backgroundColor:'#0a0a0a',color:'#fff',padding:[6,10],borderRadius:999,position:'inside'},symbolSize:1}]}]});
+ done();
+}});
+</script></body></html>

@@ -1,0 +1,15 @@
+Object.assign(ICON, {
+  max: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>',
+  up: '<path d="M7 10v10H4V10Z"/><path d="M7 10l4-7a2 2 0 0 1 3 1.7V9h5a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 17.7 20H7"/>',
+  down: '<g transform="rotate(180 12 12)"><path d="M7 10v10H4V10Z"/><path d="M7 10l4-7a2 2 0 0 1 3 1.7V9h5a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 17.7 20H7"/></g>',
+  share: '<path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>', dl: '<path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/>',
+  img: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>', code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+  bm: '<path d="M6 4h12v17l-6-4-6 4Z"/>', pal: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.6-1.7 0-1.2-1-1.6-1-2.6 0-.9.7-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10" cy="7.5" r="1" fill="currentColor"/><circle cx="14.5" cy="7.5" r="1" fill="currentColor"/>',
+  back: '<path d="m15 6-6 6 6 6"/>', moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/>', filter: '<path d="M4 5h16l-6 7.5V19l-4 2v-8.5Z"/>', phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0Z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9.5 17h5"/>', chev: '<path d="m6 9 6 6 6-6"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  wand: '<path d="m4 20 11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1ZM19 11l.7 1.3L21 13l-1.3.7L19 15l-.7-1.3L17 13l1.3-.7Z"/>', diff: '<path d="M12 3v8M8 7h8M8 17h8"/><rect x="3" y="3" width="18" height="18" rx="2"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>', lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', wrench: '<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8M14.7 6.3 11 2.6 9.6 4l3.7 3.7"/>',
+})
+function swatches(sel = 0) { const cs = ['conic-gradient(#3b82f6,#10b981,#f59e0b,#ef4444,#8b5cf6,#3b82f6)', '#18181b', '#2563eb', '#0d9488', '#4f46e5', '#ea580c', '#db2777']; return cs.map((c, i) => `<button class="w-6 h-6 rounded-full ${i === sel ? 'ring-2 ring-offset-2 ring-offset-base-100 ring-base-content' : 'ring-1 ring-black/10'}" style="background:${c}" title="${i ? '' : '跟随页面'}"></button>`).join('') + `<button class="w-6 h-6 rounded-full border border-dashed border-base-content/30 grid place-items-center text-base-content/50">${ic('plus', 14)}</button>` }
+function seg(opts, sel) { return `<div role="tablist" class="tabs tabs-box tabs-sm w-full flex-nowrap">${opts.map((o, i) => `<a role="tab" class="tab flex-1 ${i === sel ? 'tab-active font-medium' : ''}">${o}</a>`).join('')}</div>` }

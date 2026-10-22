@@ -1,0 +1,28 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script><script src="icons2.js"></script></head><body class="bg-base-200 p-5"><div id="shot" class="flex gap-6 items-start">
+<div class="relative flex-1">
+ <div class="flex justify-end gap-1 mb-2"><button class="btn btn-sm btn-ghost btn-square tooltip" data-tip="全屏" id="bmax"></button><button class="btn btn-sm btn-square btn-active" id="bmore"></button></div>
+ <div class="rounded-box border border-base-300 bg-base-100 h-[430px] p-6">
+  <div class="text-2xl font-semibold tracking-tight">3 天 · 13 站 · 约 46 km</div><div class="text-sm text-base-content/60 mt-1">浅草起 · 涩谷收 · 地铁 + 步行全覆盖</div>
+  <div class="flex gap-2 mt-4"><span class="badge badge-neutral">第 1 天</span><span class="badge badge-ghost">第 2 天</span><span class="badge badge-ghost">第 3 天</span></div>
+  <div class="grid grid-cols-2 gap-3 mt-4"><div class="skeleton h-56 opacity-60"></div><div class="flex flex-col gap-2"><div class="skeleton h-12 opacity-60"></div><div class="skeleton h-12 opacity-60"></div><div class="skeleton h-12 opacity-60"></div></div></div>
+ </div>
+ <ul class="menu menu-sm bg-base-100 rounded-box border border-base-300 shadow-lg w-60 absolute right-0 top-10 z-10 p-1.5">
+  <li><a id="m1">外观…</a></li><li><a id="m2">重新加载</a></li>
+  <li class="menu-title pt-2 pb-1 text-xs">导出与分享</li><li><a id="m3">分享 HTML</a></li><li><a id="m4">下载离线版</a></li><li><a id="m5">保存为图片</a></li><li><a id="m6">复制源码</a></li>
+  <div class="h-px bg-base-300 my-1 mx-2"></div><li><a id="m7">保存为模板</a></li><div class="h-px bg-base-300 my-1 mx-2"></div>
+  <div class="flex items-center justify-between px-3 py-1.5"><span class="text-xs text-base-content/60 whitespace-nowrap">这页怎么样？</span><span class="flex gap-1"><button class="btn btn-xs btn-ghost btn-square" id="fu"></button><button class="btn btn-xs btn-ghost btn-square" id="fd"></button></span></div>
+ </ul>
+</div>
+<div class="card bg-base-100 border border-base-300 shadow-lg w-72 shrink-0"><div class="card-body p-4 gap-3">
+ <div class="flex items-center gap-1 -ml-1"><button class="btn btn-xs btn-ghost btn-square" id="bk"></button><span class="font-medium text-sm">外观</span><span class="text-xs text-base-content/50 ml-auto">仅此页</span></div>
+ <div><div class="text-xs text-base-content/60 mb-2">强调色</div><div class="flex flex-wrap gap-2" id="sw"></div></div>
+ <div><div class="text-xs text-base-content/60 mb-1.5">密度</div><div id="g1"></div></div>
+ <div><div class="text-xs text-base-content/60 mb-1.5">字号</div><div id="g2"></div></div>
+ <div><div class="text-xs text-base-content/60 mb-1.5">圆角</div><div id="g3"></div></div>
+ <div><div class="text-xs text-base-content/60 mb-1.5">配色</div><div id="g4"></div></div>
+ <div class="flex gap-2 pt-1"><button class="btn btn-sm btn-ghost">重置</button><button class="btn btn-sm btn-neutral flex-1">设为我的默认风格</button></div>
+</div></div>
+</div>
+<script>ready(()=>{bmax.innerHTML=ic('max',16);bmore.innerHTML=ic('more',16);bk.innerHTML=ic('back',14);fu.innerHTML=ic('up',14);fd.innerHTML=ic('down',14);
+[['m1','pal'],['m2','refresh'],['m3','share'],['m4','dl'],['m5','img'],['m6','code'],['m7','bm']].forEach(([id,n])=>document.getElementById(id).insertAdjacentHTML('afterbegin',ic(n,15,'opacity-70')));
+sw.innerHTML=swatches(0);g1.innerHTML=seg(['紧凑','标准','宽松'],1);g2.innerHTML=seg(['小','中','大'],1);g3.innerHTML=seg(['直角','标准','圆润'],1);g4.innerHTML=seg(['跟随宿主','浅色','深色'],0)})</script></body></html>

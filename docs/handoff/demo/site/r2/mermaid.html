@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+<script src="../nm/mermaid/dist/mermaid.min.js"></script>
+<style>.mm svg{max-width:100%!important;height:auto}</style>
+</head><body class="bg-base-200 p-4"><div id="shot"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5" id="body"></div></div></div>
+<script>
+const MODE = Q.get('m') || 'flow'
+const FLOW = 'flowchart LR\n  A([用户下单]):::input --> B[库存检查]\n  B -- 有货 --> C[支付]:::focal\n  B -. 缺货 .-> X[提示缺货]:::muted\n  C -.-> E[微信支付]:::ext\n  C ==> D[(订单库)]\n  D --> F[发货通知]:::muted'
+const SEQ = 'sequenceDiagram\n  participant U as 用户\n  participant S as 门店系统\n  participant P as 支付\n  U->>S: 提交订单\n  S->>P: 发起支付\n  P-->>S: 支付成功\n  S-->>U: 订单确认'
+const GANTT = 'gantt\n  dateFormat YYYY-MM-DD\n  axisFormat %m-%d\n  section 设计\n  主题替换 :done, a1, 2025-10-20, 5d\n  组件对齐 :active, a2, after a1, 4d\n  section 开发\n  图表精修 :b1, 2025-10-23, 6d\n  3D 预设 :b2, after b1, 5d'
+ready(async (t) => {
+ const ink = t.ink, mut = t.a(t.ink, .55), line = t.a(t.ink, .35), b3 = t.b3, bg = t.bg, b2 = t.b2
+ mermaid.initialize({ startOnLoad: false, theme: 'base', fontFamily: FONT, flowchart: { curve: 'basis', padding: 14, nodeSpacing: 36, rankSpacing: 46 }, gantt: { barHeight: 22, barGap: 8, topPadding: 40, leftPadding: 70, fontSize: 12, sectionFontSize: 12, useWidth: 620 }, sequence: { mirrorActors: false, actorMargin: 90, boxMargin: 6, width: 110, height: 40, messageFontSize: 13 },
+  themeVariables: { fontSize: '13px', primaryColor: bg, primaryBorderColor: b3, primaryTextColor: ink, lineColor: line, textColor: ink, secondaryColor: b2, tertiaryColor: b2, clusterBkg: b2, edgeLabelBackground: bg,
+   actorBkg: bg, actorBorder: b3, actorTextColor: ink, signalColor: line, signalTextColor: ink, labelBoxBkgColor: bg, noteBkgColor: b2, activationBkgColor: b2,
+   sectionBkgColor: t.a(t.ink, .03), altSectionBkgColor: bg, sectionBkgColor2: t.a(t.ink, .03), taskBkgColor: t.a(t.ink, .14), taskBorderColor: 'transparent', taskTextColor: ink, taskTextDarkColor: ink, taskTextOutsideColor: ink, activeTaskBkgColor: ink, activeTaskBorderColor: ink, doneTaskBkgColor: t.a(t.ink, .35), doneTaskBorderColor: 'transparent', critBkgColor: t.error, gridColor: t.a(t.ink, .08), todayLineColor: t.error, taskTextLightColor: bg } })
+ const css = `.node rect{rx:10;ry:10}.focal rect,.focal path{fill:${ink}!important;stroke:${ink}!important}.focal .nodeLabel{color:${bg}!important;font-weight:600}.ext rect{stroke-dasharray:4 3!important}.muted rect{fill:${b2}!important;stroke:transparent!important}.muted .nodeLabel{color:${mut}!important}.input rect{fill:${b2}!important;stroke:transparent!important}.edgeLabel{font-size:12px;color:${mut}}rect.actor{rx:10;ry:10;stroke:${b3}!important}text.actor>tspan{font-size:13px!important;font-weight:500}.messageText{font-size:12.5px!important;fill:${mut}!important}.grid .tick line{stroke:${t.a(t.ink,.07)}!important}.grid .tick text{fill:${mut}!important;font-size:11px!important}.grid path{stroke:none!important}rect.task{rx:6;ry:6}.activeText0,.activeText1,.activeText2,.activeText3{fill:${bg}!important;font-weight:600}.sectionTitle{fill:${mut}!important}`
+ const blocks = MODE === 'flow' ? [['下单流程', '6 个节点 · 支付为关键路径', FLOW]] : [['流程图', '', FLOW], ['时序图', '', SEQ], ['甘特图', '10-20 → 11-03', GANTT]]
+ document.head.insertAdjacentHTML('beforeend', '<style>' + css.split('}').filter(Boolean).map((r) => { const [sel, body] = r.split('{'); return sel.split(',').map((x) => '#shot .mm ' + x.trim()).join(',') + '{' + body + '}' }).join('') + '</style>')
+ let i = 0
+ for (const [h, s, code] of blocks) {
+  const el = document.createElement('div'); el.innerHTML = `<div class="flex items-baseline justify-between mb-3"><h3 class="font-medium text-sm">${h}</h3><span class="text-xs text-base-content/50">${s}</span></div><div class="mm"></div>`; body.append(el)
+  const { svg } = await mermaid.render('m' + i++, code); el.querySelector('.mm').innerHTML = svg
+ }
+ if (MODE === 'flow') body.insertAdjacentHTML('beforeend', `<div class="flex gap-4 text-xs text-base-content/60 border-t border-base-300 pt-4"><span class="flex items-center gap-1.5"><i class="inline-block w-4 h-2.5 rounded bg-base-content"></i>关键</span><span class="flex items-center gap-1.5"><i class="inline-block w-4 h-2.5 rounded border border-base-300"></i>服务</span><span class="flex items-center gap-1.5"><i class="inline-block w-4 h-2.5 rounded border border-dashed border-base-content/40"></i>外部</span><span class="flex items-center gap-1.5"><i class="inline-block w-4 h-2.5 rounded bg-base-200"></i>可选 / 入口</span></div>`)
+}, 600)</script></body></html>

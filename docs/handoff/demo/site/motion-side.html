@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="common.css"><style>
+body{margin:0;background:#e4e4e7;font-family:var(--font);display:flex;gap:16px;padding:16px;box-sizing:border-box;height:100vh}
+.col{flex:1;display:flex;flex-direction:column;gap:8px}.lab{font-size:18px;font-weight:600;color:#0a0a0a}.lab small{font-weight:400;color:#52525b;font-size:13px;margin-left:8px}
+iframe{border:0;width:610px;height:640px;border-radius:14px;background:#f4f4f5}</style></head><body>
+<div class="col"><div class="lab">现在：模型临场写 GSAP<small>弹跳 / 旋转 / 无限循环 / 抖动</small></div><iframe id="a" src="motion.html?mode=now"></iframe></div>
+<div class="col"><div class="lab">配方：动效规范 + Motion / Flip<small>250ms · 缓出 · 布局过渡 · 数字滚动</small></div><iframe id="b" src="motion.html?mode=recipe"></iframe></div>
+<script>let n=0;const go=()=>{if(++n===2){setTimeout(()=>{a.contentWindow.start();b.contentWindow.start();window.__ready=1},600)}};a.onload=go;b.onload=go;</script>
+</body></html>

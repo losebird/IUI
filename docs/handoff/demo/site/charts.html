@@ -1,0 +1,47 @@
+<!doctype html><html data-theme="iui"><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="common.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script>
+<script src="nm/chart.js/dist/chart.umd.js"></script><script src="nm/echarts/dist/echarts.min.js"></script>
+<script src="nm/d3/dist/d3.min.js"></script><script src="nm/@observablehq/plot/dist/plot.umd.min.js"></script><script src="data.js"></script>
+</head><body class="bg-base-200 p-4">
+<div id="shot" class="w-[688px]"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5">
+ <div class="flex items-baseline justify-between"><h3 class="font-medium">各门店销售（千元）</h3><div class="flex gap-3 text-xs text-base-content/60"><span class="flex items-center gap-1"><i class="inline-block size-2 rounded-full bg-[#0a0a0a]"></i>本周</span><span class="flex items-center gap-1"><i class="inline-block size-2 rounded-full bg-[#d4d4d8]"></i>上周</span></div></div>
+ <div id="a" class="h-56"></div>
+ <div class="flex items-baseline justify-between"><h3 class="font-medium">近 8 周销售额（万元）</h3><span class="text-sm text-base-content/60">W42 <b class="text-base-content num">128.5</b> · 8 周 +31%</span></div>
+ <div id="b" class="h-56"></div>
+</div></div></div>
+<script>
+const D=window.DEMO, lib=new URLSearchParams(location.search).get('lib')||'chartjs';
+const INK='#0a0a0a', MUTED='#71717a', GRID='#ececee', LIGHT='#d4d4d8', F='InterVar, "Noto Sans SC", sans-serif';
+function cjs(){
+ Chart.defaults.font.family=F; Chart.defaults.color=MUTED;
+ const mk=(id)=>{const c=document.createElement('canvas');document.getElementById(id).appendChild(c);return c};
+ new Chart(mk('a'),{type:'bar',data:{labels:D.stores,datasets:[{data:D.thisWeek,backgroundColor:INK,borderRadius:5,categoryPercentage:.62,barPercentage:.8},{data:D.lastWeek,backgroundColor:LIGHT,borderRadius:5,categoryPercentage:.62,barPercentage:.8}]},
+  options:{maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},border:{display:false}},y:{border:{display:false},grid:{color:GRID},ticks:{maxTicksLimit:4}}}}});
+ const ctx=mk('b');const g=ctx.getContext('2d').createLinearGradient(0,0,0,220);g.addColorStop(0,'rgba(10,10,10,.10)');g.addColorStop(1,'rgba(10,10,10,0)');
+ new Chart(ctx,{type:'line',data:{labels:D.weeks,datasets:[{data:D.trend,borderColor:INK,borderWidth:2,backgroundColor:g,fill:true,tension:.3,pointRadius:(c)=>c.dataIndex===7?4:0,pointBackgroundColor:INK}]},
+  options:{maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},border:{display:false}},y:{border:{display:false},grid:{color:GRID},ticks:{maxTicksLimit:4}}}}});
+}
+function ech(){
+ const base={textStyle:{fontFamily:F,color:MUTED},grid:{left:36,right:30,top:30,bottom:28},animation:false};
+ const ax={axisLine:{show:false},axisTick:{show:false},axisLabel:{color:MUTED},splitLine:{lineStyle:{color:GRID}}};
+ echarts.init(document.getElementById('a')).setOption({...base,xAxis:{type:'category',data:D.stores,...ax,splitLine:{show:false}},yAxis:{type:'value',...ax,splitNumber:3},
+  series:[{type:'bar',data:D.thisWeek,itemStyle:{color:INK,borderRadius:[5,5,0,0]},barWidth:16,barGap:'25%',label:{show:true,position:'top',color:INK,fontSize:11}},{type:'bar',data:D.lastWeek,itemStyle:{color:LIGHT,borderRadius:[5,5,0,0]},barWidth:16}]});
+ echarts.init(document.getElementById('b')).setOption({...base,xAxis:{type:'category',data:D.weeks,boundaryGap:false,...ax,splitLine:{show:false}},yAxis:{type:'value',min:90,...ax,splitNumber:3},
+  series:[{type:'line',data:D.trend,smooth:.3,symbol:'circle',symbolSize:(v,p)=>p.dataIndex===7?8:0,lineStyle:{color:INK,width:2},itemStyle:{color:INK},
+   areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(10,10,10,.10)'},{offset:1,color:'rgba(10,10,10,0)'}])},
+   markPoint:{symbol:'roundRect',symbolSize:[46,22],symbolOffset:[0,-20],data:[{coord:[7,128.5],value:'128.5'}],itemStyle:{color:INK},label:{color:'#fff',fontSize:11}}}]});
+}
+function plot(){
+ const rows=D.stores.flatMap((s,i)=>[{s,w:'本周',v:D.thisWeek[i]},{s,w:'上周',v:D.lastWeek[i]}]);
+ const W=640;
+ document.getElementById('a').append(Plot.plot({width:W,height:224,style:{fontFamily:F,fontSize:'12px',color:MUTED},marginLeft:36,marginBottom:28,fx:{domain:D.stores,label:null,tickSize:0,padding:.25,axis:'bottom'},x:{domain:['本周','上周'],axis:null,padding:.12},y:{grid:true,label:null,ticks:3,tickSize:0},color:{domain:['本周','上周'],range:[INK,LIGHT]},
+  marks:[Plot.barY(rows,{fx:'s',x:'w',y:'v',fill:'w',rx:4}),Plot.text(rows.filter(r=>r.w==='本周'),{fx:'s',x:'w',y:'v',text:'v',dy:-8,fill:INK,fontSize:11}),Plot.ruleY([0],{stroke:LIGHT})]}));
+ const tr=D.weeks.map((w,i)=>({w,i,v:D.trend[i]}));
+ document.getElementById('b').append(Plot.plot({width:W,height:224,style:{fontFamily:F,fontSize:'12px',color:MUTED},marginLeft:36,x:{type:'point',domain:D.weeks,label:null,tickSize:0},y:{grid:true,label:null,ticks:3,tickSize:0,domain:[90,135]},
+  marks:[Plot.areaY(tr,{x:'w',y1:90,y2:'v',fill:INK,fillOpacity:.06,curve:'monotone-x'}),Plot.lineY(tr,{x:'w',y:'v',stroke:INK,strokeWidth:2,curve:'monotone-x'}),
+   Plot.dot(tr.slice(-1),{x:'w',y:'v',fill:INK,r:4}),Plot.text(tr.slice(-1),{x:'w',y:'v',text:(d)=>d.v,dy:-14,fill:INK,fontWeight:600}),
+   Plot.text(tr.slice(0,1),{x:'w',y:'v',text:(d)=>d.v,dy:-12,fill:MUTED})]}));
+}
+document.fonts.ready.then(()=>{({chartjs:cjs,echarts:ech,plot})[lib]();setTimeout(()=>window.__ready=1,300)});
+</script></body></html>

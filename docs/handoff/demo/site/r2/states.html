@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script><style>@keyframes none{}</style></head><body class="bg-base-200 p-4"><div id="shot" class="grid grid-cols-2 gap-3">
+<div class="card bg-base-100 border border-base-300"><div class="card-body p-5 gap-3"><div class="text-xs font-medium text-base-content/50">加载中 · 骨架屏</div>
+ <div class="skeleton h-4 w-32"></div><div class="skeleton h-9 w-48"></div><div class="grid grid-cols-3 gap-2"><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div></div><div class="skeleton h-24"></div>
+ <div class="flex items-center gap-2 text-xs text-base-content/55"><span class="loading loading-spinner loading-xs"></span>正在生成界面…</div></div></div>
+<div class="card bg-base-100 border border-base-300"><div class="card-body p-5 gap-3 items-center text-center justify-center"><div class="text-xs font-medium text-base-content/50 self-start">空状态</div>
+ <div class="w-12 h-12 rounded-full bg-base-200 grid place-items-center text-base-content/50 mt-2">${'f'}</div><div class="font-medium">还没有退款记录</div><div class="text-sm text-base-content/55 -mt-2">本周 0 笔退款，表现不错。</div><button class="btn btn-sm btn-outline border-base-300">查看上周</button></div></div>
+<div class="card bg-base-100 border border-base-300"><div class="card-body p-5 gap-3"><div class="text-xs font-medium text-base-content/50">出错 · 可重试</div>
+ <div role="alert" class="alert alert-error alert-soft items-start"><span id="e1"></span><div><div class="font-medium">数据加载失败</div><div class="text-sm opacity-80">门店接口超时（504），已保留上次结果。</div></div></div>
+ <div class="flex gap-2"><button class="btn btn-sm btn-neutral" id="rt">重试</button><button class="btn btn-sm btn-ghost">查看详情</button></div></div></div>
+<div class="card bg-base-100 border border-base-300"><div class="card-body p-5 gap-3"><div class="text-xs font-medium text-base-content/50">部分可用 · 数据过期 / 渲染降级</div>
+ <div role="alert" class="alert alert-warning alert-soft py-2.5"><span id="e2"></span><span class="text-sm">数据更新于 2 小时前</span><button class="btn btn-xs btn-ghost ml-auto">刷新</button></div>
+ <div class="rounded-box border border-dashed border-base-300 p-4 text-sm text-base-content/60 flex items-center gap-3"><span id="e3"></span><div>这张图表没能渲染，已改为表格显示。<button class="link link-hover text-base-content ml-1">查看原始数据</button></div></div></div></div>
+</div>
+<script>ready((t)=>{e1.innerHTML=ic('err',20);e2.innerHTML=ic('warn',18);e3.innerHTML=ic('info',18);document.querySelector('.place-items-center').innerHTML=ic('file',22);rt.insertAdjacentHTML('afterbegin',ic('refresh',14))})</script></body></html>

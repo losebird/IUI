@@ -1,0 +1,23 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+</head><body class="bg-base-200 p-4"><div id="shot"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5">
+<div class="flex items-start justify-between"><div><h2 class="text-lg font-semibold tracking-tight">订单 SO-24815</h2><p class="text-sm text-base-content/60">徐汇店 · 10-18 09:12</p></div><span class="badge badge-success badge-soft">已付款</span></div>
+<div class="grid grid-cols-2 gap-3" id="alerts"></div>
+<dl class="grid grid-cols-4 gap-4 rounded-box border border-base-300 p-4" id="kv"></dl>
+<div><h3 class="text-sm font-medium mb-3">物流进度</h3><ol class="relative flex flex-col gap-4" id="tl"></ol></div>
+<div class="flex items-center justify-between border-t border-base-300 pt-4"><div class="flex items-center gap-3"><div class="avatar-group -space-x-2" id="av"></div><span class="text-sm text-base-content/60">3 位同事关注</span></div><div class="flex gap-1.5" id="bd"></div></div>
+<div class="flex gap-2" id="chips"></div>
+<div class="flex items-center gap-3 rounded-box border border-base-300 p-3"><div class="size-10 rounded-field bg-base-200 grid place-items-center" id="eic"></div><div class="flex-1"><div class="text-sm font-medium">徐汇店</div><div class="text-xs text-base-content/60">徐汇区天钥桥路 123 号</div></div><span class="badge badge-sm badge-success badge-soft">营业中</span></div>
+<ul class="list rounded-box border border-base-300" id="ls"></ul>
+</div></div></div>
+<script>ready(() => {
+ const A = [['info', 'info', '提示', '数据每 5 分钟同步一次。'], ['success', 'ok', '已完成', '付款已到账。'], ['warning', 'warn', '注意', '库存低于 20 件。'], ['error', 'err', '失败', '退款接口超时，请重试。']]
+ alerts.innerHTML = A.map(([t, i, h, c]) => `<div role="alert" class="alert alert-${t} alert-soft items-start py-3">${ic(i, 18)}<div><div class="text-sm font-medium">${h}</div><div class="text-xs opacity-80">${c}</div></div></div>`).join('')
+ kv.innerHTML = [['门店', '徐汇'], ['客户', '陈一鸣'], ['金额', '¥2,310'], ['支付', '微信支付']].map(([k, v]) => `<div><dt class="text-xs text-base-content/50">${k}</dt><dd class="text-sm font-medium mt-1 num">${v}</dd></div>`).join('')
+ const T = [['下单', '陈一鸣 · 徐汇店', '10-18 09:12', 1], ['付款成功', '微信支付 ¥2,310', '10-18 09:13', 1], ['已发货', '顺丰 SF1234567', '10-18 14:40', 2], ['派送中', '预计明天送达', '—', 0]]
+ tl.innerHTML = T.map(([t, d, tm, s], i) => `<li class="flex gap-3"><div class="flex flex-col items-center"><span class="mt-1 size-2.5 rounded-full ${s ? 'bg-base-content' : 'border border-base-content/30'} ${s === 2 ? 'ring-4 ring-base-content/10' : ''}"></span>${i < T.length - 1 ? '<span class="w-px flex-1 bg-base-300 mt-1"></span>' : ''}</div><div class="flex-1 flex justify-between pb-1"><div><div class="text-sm ${s ? 'font-medium' : 'text-base-content/50'}">${t}</div><div class="text-xs text-base-content/55">${d}</div></div><div class="text-xs text-base-content/45 num">${tm}</div></div></li>`).join('')
+ av.innerHTML = ['陈', '林', '王'].map((n, i) => `<div class="avatar avatar-placeholder border-base-100"><div class="w-8 rounded-full ${['bg-neutral text-neutral-content', 'bg-base-300', 'bg-base-200'][i]}"><span class="text-xs">${n}</span></div></div>`).join('')
+ bd.innerHTML = [['success', '已付款'], ['warning', '待发货'], ['error', '已退款'], ['neutral', '新品']].map(([t, l]) => `<span class="badge badge-sm badge-${t} ${t === 'neutral' ? '' : 'badge-soft'}">${l}</span>`).join('')
+ chips.innerHTML = ['静安', '徐汇', '浦东', '长宁'].map((c, i) => `<button class="btn btn-sm ${i === 1 ? 'btn-primary' : 'btn-outline border-base-300 font-normal'}">${c}</button>`).join('')
+ eic.innerHTML = ic('pin', 18)
+ ls.innerHTML = [['周报自动化', '每周一 9:00 推送到群', true], ['库存预警', '低于 20 件时提醒店长', false]].map(([t, d, on]) => `<li class="list-row items-center"><div><div class="text-sm font-medium">${t}</div><div class="text-xs text-base-content/55">${d}</div></div><div></div><input type="checkbox" class="toggle toggle-sm" ${on ? 'checked' : ''}></li>`).join('')
+})</script></body></html>

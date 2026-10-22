@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+<script src="specs.js"></script></head><body class="bg-base-200 p-4"><div id="shot"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5">
+<h2 class="text-lg font-semibold tracking-tight">媒体</h2>
+<div class="grid grid-cols-3 grid-rows-2 gap-2 h-64" id="gal"></div>
+<div class="relative rounded-box overflow-hidden aspect-video" id="vid"></div>
+<div class="flex items-center gap-4 rounded-box border border-base-300 p-3" id="aud"></div>
+</div></div></div>
+<script>ready(() => {
+ const cap = ['外滩酒店', '海景房', '泳池', '大堂']
+ gal.innerHTML = PHOTOS.slice(0, 3).map((p, i) => `<figure class="relative overflow-hidden rounded-box ${i === 0 ? 'col-span-2 row-span-2' : ''}"><img src="${p}" class="size-full object-cover"><figcaption class="absolute left-2 bottom-2 badge badge-sm bg-black/55 text-white border-0 backdrop-blur">${cap[i]}</figcaption>${i === 2 ? '<span class="absolute inset-0 grid place-items-center bg-black/40 text-white font-medium">+12</span>' : ''}</figure>`).join('')
+ vid.innerHTML = `<img src="${PHOTOS[2]}" class="absolute inset-0 size-full object-cover"><div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent"></div><button class="btn btn-circle btn-lg absolute inset-0 m-auto bg-white/90 border-0 text-black">${ic('play', 22)}</button><div class="absolute inset-x-4 bottom-3 flex items-center gap-3 text-white text-xs num"><span>0:00</span><div class="h-1 flex-1 rounded-full bg-white/30"><div class="h-1 w-1/4 rounded-full bg-white"></div></div><span>0:03</span></div><span class="absolute left-4 top-3 text-white text-sm font-medium">酒店 30 秒导览</span>`
+ aud.innerHTML = `<button class="btn btn-circle btn-primary">${ic('play', 18)}</button><div class="flex-1"><div class="flex justify-between text-sm"><span class="font-medium">门店背景音乐</span><span class="text-base-content/50 num text-xs">0:02 / 0:08</span></div><div class="mt-2 flex items-end gap-[3px] h-6" id="wv"></div></div>`
+ wv.innerHTML = Array.from({ length: 64 }, (_, i) => `<i class="w-[3px] rounded-full ${i < 16 ? 'bg-base-content' : 'bg-base-300'}" style="height:${20 + 80 * Math.abs(Math.sin(i * 1.7) * Math.cos(i * .3))}%"></i>`).join('')
+}, 1500)</script></body></html>

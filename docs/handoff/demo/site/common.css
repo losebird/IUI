@@ -1,0 +1,30 @@
+@font-face{font-family:"InterVar";src:url(nm/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:block}
+:root{--font:"InterVar","PingFang SC","Noto Sans SC","Noto Sans CJK SC",system-ui,sans-serif}
+html,body{font-family:var(--font);font-feature-settings:"cv11","ss01";-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+/* IUI neutral: EasyUI-like monochrome */
+[data-theme="iui"]{color-scheme:light;
+ --color-base-100:#ffffff;--color-base-200:#f4f4f5;--color-base-300:#e7e7e9;--color-base-content:#0a0a0a;
+ --color-primary:#0a0a0a;--color-primary-content:#ffffff;
+ --color-secondary:#f4f4f5;--color-secondary-content:#0a0a0a;
+ --color-accent:#16a34a;--color-accent-content:#ffffff;
+ --color-neutral:#18181b;--color-neutral-content:#fafafa;
+ --color-info:#2563eb;--color-info-content:#fff;--color-success:#16a34a;--color-success-content:#fff;
+ --color-warning:#d97706;--color-warning-content:#fff;--color-error:#dc2626;--color-error-content:#fff;
+ --radius-selector:.375rem;--radius-field:999px;--radius-box:1.25rem;
+ --size-selector:.25rem;--size-field:.25rem;--border:1px;--depth:0;--noise:0}
+[data-theme="iui-dark"]{color-scheme:dark;
+ --color-base-100:#0a0a0a;--color-base-200:#161618;--color-base-300:#26262a;--color-base-content:#fafafa;
+ --color-primary:#fafafa;--color-primary-content:#0a0a0a;
+ --color-secondary:#1c1c1f;--color-secondary-content:#fafafa;
+ --color-accent:#22c55e;--color-accent-content:#0a0a0a;
+ --color-neutral:#e4e4e7;--color-neutral-content:#0a0a0a;
+ --color-info:#60a5fa;--color-info-content:#0a0a0a;--color-success:#22c55e;--color-success-content:#0a0a0a;
+ --color-warning:#f59e0b;--color-warning-content:#0a0a0a;--color-error:#f87171;--color-error-content:#0a0a0a;
+ --radius-selector:.375rem;--radius-field:999px;--radius-box:1.25rem;
+ --size-selector:.25rem;--size-field:.25rem;--border:1px;--depth:0;--noise:0}
+[data-theme^="iui"] .toggle{border-radius:999px}[data-theme^="iui"] .toggle:before{border-radius:999px}
+[data-theme^="iui"] .textarea{border-radius:1rem}
+.radial-progress{background:radial-gradient(closest-side,transparent calc(100% - var(--thickness,5px)),color-mix(in oklab,currentColor 10%,transparent) calc(100% - var(--thickness,5px)) 100%,transparent 0)}
+[data-theme^="iui"] .join-vertical>.collapse{border-radius:0}[data-theme^="iui"] .join-vertical>.collapse:first-child{border-radius:1rem 1rem 0 0}[data-theme^="iui"] .join-vertical>.collapse:last-child{border-radius:0 0 1rem 1rem}
+.divide-base-300>:not(:last-child){border-color:var(--color-base-300)!important}

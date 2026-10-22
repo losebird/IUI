@@ -1,0 +1,103 @@
+<!doctype html><html data-theme="iui"><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="common.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script><script src="data.js"></script>
+<script type="importmap">{"imports":{"three":"./nm/three/build/three.module.js","three/addons/":"./nm/three/examples/jsm/","three/examples/jsm/":"./nm/three/examples/jsm/","postprocessing":"./nm/postprocessing/build/index.js","n8ao":"./nm/n8ao/dist/N8AO.js"}}</script>
+</head><body class="bg-base-200 p-4">
+<div id="shot" class="w-[688px]"><div class="card bg-base-100 border border-base-300 overflow-hidden"><div class="card-body p-6 gap-3">
+ <div class="flex items-baseline justify-between"><div><h3 class="font-semibold tracking-tight" id="ttl">3D 展示台</h3><p class="text-sm text-base-content/60" id="sub">拖动旋转 · 滚轮缩放</p></div><span class="badge badge-ghost badge-sm" id="tag"></span></div>
+ <div id="stage" class="relative rounded-box overflow-hidden h-[400px]"></div>
+</div></div></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+import { EffectComposer, RenderPass, EffectPass, SMAAEffect, VignetteEffect, BloomEffect, ToneMappingEffect, ToneMappingMode } from 'postprocessing';
+import { N8AOPostPass } from 'n8ao';
+const P=new URLSearchParams(location.search).get('preset')||'clay';
+const NAMES={clay:'陶土 Clay',studio:'影棚产品 Studio',toon:'卡通扁平 Toon',glass:'玻璃质感 Glass',data:'极简数据 Data'};
+document.getElementById('tag').textContent=NAMES[P];
+const host=document.getElementById('stage'), W=host.clientWidth, H=host.clientHeight;
+const renderer=new THREE.WebGLRenderer({antialias:P==='toon',alpha:false,powerPreference:'high-performance',stencil:false,depth:true});
+renderer.setPixelRatio(2); renderer.setSize(W,H); host.appendChild(renderer.domElement);
+renderer.outputColorSpace=THREE.SRGBColorSpace; renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.VSMShadowMap;
+const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(32,W/H,.1,100);
+const pm=new THREE.PMREMGenerator(renderer);
+function ground(color,opacity){const g=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.ShadowMaterial({color,opacity}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;scene.add(g);return g}
+function floor(color,rough=1){scene.fog=new THREE.Fog(color,9,22);const g=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshStandardMaterial({color,roughness:rough}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;scene.add(g);return g}
+function key(int,pos=[3,6,4],color=0xffffff,radius=8){const l=new THREE.DirectionalLight(color,int);l.position.set(...pos);l.castShadow=true;l.shadow.mapSize.set(2048,2048);
+ Object.assign(l.shadow.camera,{left:-4,right:4,top:4,bottom:-4,near:.5,far:20});l.shadow.radius=radius;l.shadow.blurSamples=16;l.shadow.bias=-.0005;scene.add(l);return l}
+const add=(geo,mat,pos,rot=[0,0,0],s=1)=>{const m=new THREE.Mesh(geo,mat);m.position.set(...pos);m.rotation.set(...rot);m.scale.setScalar(s);m.castShadow=m.receiveShadow=true;scene.add(m);return m};
+const knotG=new THREE.TorusKnotGeometry(.62,.2,320,48), sphG=new THREE.SphereGeometry(.42,96,64), boxG=new RoundedBoxGeometry(.8,.8,.8,6,.14);
+function trio(mk){ // hero knot + sphere + rounded box
+ add(knotG,mk(0),[0,1.02,0],[0.35,0.5,0]); add(sphG,mk(1),[1.45,.42,.55]); add(boxG,mk(2),[-1.5,.4,.35],[0,.55,0]); }
+let composer=null, outline=null;
+cam.position.set(0,2.3,6.6); cam.lookAt(0,.75,0);
+async function hdr(){const t=await new HDRLoader().loadAsync('hdr/studio.hdr');t.mapping=THREE.EquirectangularReflectionMapping;return pm.fromEquirectangular(t).texture}
+function post(ao={},extra=[],mode=ToneMappingMode.AGX){
+ composer=new EffectComposer(renderer,{frameBufferType:THREE.HalfFloatType,multisampling:0});
+ composer.addPass(new RenderPass(scene,cam));
+ const n8=new N8AOPostPass(scene,cam,W*2,H*2); Object.assign(n8.configuration,{aoRadius:1.2,distanceFalloff:.6,intensity:3,halfRes:false,aoSamples:16,denoiseSamples:8,denoiseRadius:12,gammaCorrection:false,...ao}); composer.addPass(n8);
+ composer.addPass(new EffectPass(cam,...extra,new ToneMappingEffect({mode}),new SMAAEffect()));
+ renderer.toneMapping=THREE.NoToneMapping;
+}
+if(P==='clay'){
+ const bg=0xeceae6; scene.background=new THREE.Color(bg); floor(bg,1);
+ scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture; scene.environmentIntensity=.55;
+ scene.add(new THREE.HemisphereLight(0xffffff,0xd8d2c8,.6)); key(2.2,[3,7,4],0xfff4e8,10);
+ const cm=(i)=>new THREE.MeshStandardMaterial({color:[0xe9e4dc,0xd9cfc1,0xf1eee9][i],roughness:.92,metalness:0});
+ trio(cm); post({intensity:3.2,aoRadius:1.4},[],ToneMappingMode.NEUTRAL);
+ document.getElementById('sub').textContent='单色哑光 · 柔光 · 环境光遮蔽 + 接触阴影';
+}
+if(P==='studio'){
+ scene.background=new THREE.Color(0xf3f3f4); ground(0x000000,.18);
+ scene.environment=await hdr(); scene.environmentIntensity=1.0; key(1.6,[2,7,3],0xffffff,12);
+ const mk=(i)=>[new THREE.MeshPhysicalMaterial({color:0x111113,roughness:.18,metalness:.0,clearcoat:1,clearcoatRoughness:.06}),
+  new THREE.MeshPhysicalMaterial({color:0xd4af7a,roughness:.22,metalness:1}),new THREE.MeshPhysicalMaterial({color:0xe9e9ec,roughness:.45,sheen:.6})][i];
+ trio(mk); post({intensity:2.2,aoRadius:1}, [new VignetteEffect({darkness:.35,offset:.35})]);
+ document.getElementById('sub').textContent='HDR 影棚环境光 · 清漆/金属材质 · 软阴影 · 暗角';
+}
+if(P==='toon'){
+ scene.background=new THREE.Color(0xffedd5); floor(0xffedd5,1);
+ const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,170,170,170,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
+ scene.add(new THREE.AmbientLight(0xffffff,1.1)); const k=key(2.4,[4,8,5],0xffffff,1); k.shadow.radius=1;
+ const mk=(i)=>new THREE.MeshToonMaterial({color:[0xf97316,0x2563eb,0x10b981][i],gradientMap:grad});
+ trio(mk); outline=new OutlineEffect(renderer,{defaultThickness:.006,defaultColor:[.09,.09,.11]});
+ renderer.toneMapping=THREE.NoToneMapping;
+ document.getElementById('sub').textContent='三阶卡通着色 · 描边 · 主题色';
+}
+if(P==='glass'){
+ scene.background=new THREE.Color(0x0b0b0f); ground(0x000000,.5);
+ scene.environment=await hdr(); scene.environmentIntensity=.9; key(1.2,[2,7,3],0xffffff,12);
+ // colourful things behind/inside the glass to refract
+ const emis=(c)=>new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:1.6,roughness:.4});
+ add(new THREE.SphereGeometry(.34,64,48),emis(0x7c3aed),[-.55,1.05,-1.1]); add(new THREE.SphereGeometry(.26,64,48),emis(0x06b6d4),[.7,1.4,-1.3]); add(new THREE.SphereGeometry(.22,64,48),emis(0xf43f5e),[.2,.5,-1.0]);
+ const glass=new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.04,metalness:0,transmission:1,thickness:.9,ior:1.45,iridescence:.35,attenuationColor:new THREE.Color(0xe0e7ff),attenuationDistance:2.5,dispersion:2});
+ add(knotG,glass,[0,1.02,0],[0.35,0.5,0]);
+ add(sphG,new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.08,transmission:1,thickness:.6,ior:1.5}),[1.45,.42,.55]);
+ add(boxG,new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.35,transmission:1,thickness:.8,ior:1.5}),[-1.5,.4,.35],[0,.55,0]);
+ post({intensity:1.5,aoRadius:.8},[new BloomEffect({intensity:1.1,luminanceThreshold:.6,mipmapBlur:true}),new VignetteEffect({darkness:.5,offset:.3})]);
+ document.getElementById('sub').textContent='透射折射 · 色散 · HDR 反射 · 辉光';
+}
+if(P==='data'){
+ document.getElementById('ttl').textContent='各门店本周销售（千元）'; document.getElementById('sub').textContent='3D 柱状 · 主题配色 · 无网格 · 直接标注';
+ scene.background=new THREE.Color(0xffffff); floor(0xffffff,1);
+ scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture; scene.environmentIntensity=.5;
+ scene.add(new THREE.HemisphereLight(0xffffff,0xeeeeee,.7)); key(1.8,[-3,8,5],0xffffff,10);
+ const D=window.DEMO, mx=Math.max(...D.thisWeek);
+ D.stores.forEach((s,i)=>{const h=D.thisWeek[i]/mx*1.5, x=(i-2.5)*.78;
+  const top=i===D.thisWeek.indexOf(mx);
+  add(new RoundedBoxGeometry(.5,h,.5,4,.06),new THREE.MeshStandardMaterial({color:top?0x0a0a0a:0xd4d4d8,roughness:.6}),[x,h/2,0]);
+
+  const cv=document.createElement('canvas');cv.width=256;cv.height=128;const c=cv.getContext('2d');c.font='600 56px InterVar, "Noto Sans SC"';c.textAlign='center';c.fillStyle=top?'#0a0a0a':'#52525b';c.fillText(D.thisWeek[i],128,70);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true}));sp.scale.set(.6,.3,1);sp.position.set(x,h+.25,0);scene.add(sp);
+  const cv2=document.createElement('canvas');cv2.width=256;cv2.height=128;const c2=cv2.getContext('2d');c2.font='600 64px "Noto Sans SC"';c2.textAlign='center';c2.fillStyle='#71717a';c2.fillText(s,128,70);
+  const t=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv2),transparent:true,depthWrite:false}));t.scale.set(.56,.28,1);t.position.set(x,.08,.62);scene.add(t);
+ });
+ cam.position.set(2.7,2.8,5.5); cam.lookAt(0,.6,0); post({intensity:2.4,aoRadius:.9},[],ToneMappingMode.NEUTRAL);
+}
+await document.fonts.ready;
+for(let i=0;i<3;i++){ if(composer) composer.render(); else if(outline) outline.render(scene,cam); else renderer.render(scene,cam); await new Promise(r=>requestAnimationFrame(r)); }
+window.__ready=1;
+</script></body></html>

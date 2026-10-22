@@ -1,0 +1,66 @@
+<!doctype html><html data-theme="iui"><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="common.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script>
+<script src="nm/gsap/dist/gsap.min.js"></script><script src="nm/gsap/dist/Flip.min.js"></script><script src="nm/motion/dist/motion.js"></script><script src="data.js"></script>
+<style>body{overflow:hidden}.cursor{position:fixed;left:0;top:0;width:18px;height:18px;border-radius:50%;background:rgba(10,10,10,.25);border:2px solid #0a0a0a;z-index:99;pointer-events:none;transition:transform .55s cubic-bezier(.4,0,.2,1)}
+.cursor.down{background:rgba(10,10,10,.55)} .reveal{opacity:0}
+.glow{box-shadow:0 0 0 0 rgba(10,10,10,.6)} </style>
+</head><body class="bg-base-200 p-3">
+<div class="cursor" id="cur"></div>
+<div class="card bg-base-100 border border-base-300 w-[580px]"><div class="card-body p-5 gap-4">
+ <div class="flex items-center justify-between reveal"><div><h3 class="font-semibold tracking-tight flex items-center gap-2"><span id="spin">◐</span>本周订单</h3><p class="text-sm text-base-content/60">实时 · 上海 6 家门店</p></div>
+  <button id="go" class="btn btn-sm btn-primary">生成周报</button></div>
+ <div class="grid grid-cols-3 gap-3">
+  <div class="rounded-box bg-base-200 p-3 reveal"><div class="text-xs text-base-content/60">订单数</div><div class="text-2xl font-semibold num" id="k1">3,912</div></div>
+  <div class="rounded-box bg-base-200 p-3 reveal"><div class="text-xs text-base-content/60">销售额</div><div class="text-2xl font-semibold num" id="k2">¥128.5万</div></div>
+  <div class="rounded-box bg-base-200 p-3 reveal"><div class="text-xs text-base-content/60">待发货</div><div class="text-2xl font-semibold num" id="k3">14</div></div>
+ </div>
+ <div class="flex gap-2 reveal" id="chips"><button class="btn btn-xs btn-active" data-f="">全部</button><button class="btn btn-xs" data-f="已付款">已付款</button><button class="btn btn-xs" data-f="配送中">配送中</button></div>
+ <ul id="list" class="flex flex-col gap-2 h-[300px]"></ul>
+</div></div>
+<div id="toast" class="toast toast-top toast-end" style="display:none"><div class="alert alert-success text-sm py-2"><span>✓ 周报已生成</span></div></div>
+<script>
+gsap.registerPlugin(Flip);const mode=new URLSearchParams(location.search).get('mode')||'recipe', D=window.DEMO, {animate,stagger}=window.Motion;
+const B={'已付款':'badge-success','配送中':'badge-info','待发货':'badge-warning','已退款':'badge-ghost'};
+let data=D.orders.slice(0,5), filter='';
+const li=(o)=>`<li data-id="${o.id}" class="flex items-center justify-between rounded-box border border-base-300 px-3 py-2.5 reveal"><div class="flex items-center gap-3"><span class="num text-xs text-base-content/50">${o.id}</span><span>${o.customer}</span><span class="text-sm text-base-content/50">${o.store}</span></div><div class="flex items-center gap-3"><span class="num">¥${o.amount.toLocaleString()}</span><span class="badge badge-sm badge-soft ${B[o.status]}">${o.status}</span></div></li>`;
+const list=document.getElementById('list');
+function render(){list.innerHTML=data.filter(o=>!filter||o.status===filter).map(li).join('');}
+const EASE=[.22,1,.36,1];
+// ---------- typical model-written motion ("now") ----------
+const NOW={
+ enter(){gsap.fromTo('.reveal',{opacity:0,y:60,scale:.8},{opacity:1,y:0,scale:1,duration:1.1,ease:'back.out(2.5)',stagger:.14});
+  gsap.to('#spin',{rotation:360,repeat:-1,duration:1.2,ease:'none'}); gsap.to('#go',{boxShadow:'0 0 0 10px rgba(10,10,10,0)',repeat:-1,duration:1,ease:'power1.out',startAt:{boxShadow:'0 0 0 0 rgba(10,10,10,.5)'}});
+  gsap.to('.rounded-box.bg-base-200',{y:-6,repeat:-1,yoyo:true,duration:1.4,ease:'sine.inOut',stagger:.3});},
+ filter(){render();gsap.fromTo('#list li',{opacity:0,x:-80,rotation:-4},{opacity:1,x:0,rotation:0,duration:.9,ease:'elastic.out(1,.5)',stagger:.12});},
+ add(o){data.unshift(o);render();gsap.fromTo('#list li',{opacity:0,scale:.3},{opacity:1,scale:1,duration:1,ease:'elastic.out(1.2,.4)',stagger:.08});},
+ kpi(){document.getElementById('k1').textContent='3,958';document.getElementById('k3').textContent='15';gsap.fromTo(['#k1','#k3'],{scale:2,color:'#16a34a'},{scale:1,color:'#0a0a0a',duration:1,ease:'bounce.out'});},
+ press(){const t=document.getElementById('toast');t.style.display='';gsap.fromTo(t,{x:400,rotation:10},{x:0,rotation:0,duration:1.2,ease:'elastic.out(1,.4)'});gsap.fromTo('body',{x:-8},{x:0,duration:.5,ease:'elastic.out(3,.2)'});}
+};
+// ---------- recipe motion (tokens: 150/250/400ms, ease-out-quint, spring) ----------
+const REC={
+ enter(){animate('.reveal',{opacity:[0,1],y:[8,0]},{duration:.32,ease:EASE,delay:stagger(.04)});},
+ filter(){const st=Flip.getState('#list li');render();document.querySelectorAll('#list li').forEach(e=>e.style.opacity=1);
+  Flip.from(st,{duration:.3,ease:'power3.out',absolute:true,onEnter:(els)=>gsap.fromTo(els,{opacity:0,y:6},{opacity:1,y:0,duration:.25,ease:'power2.out'}),onLeave:(els)=>gsap.to(els,{opacity:0,duration:.15})});},
+ add(o){const st=Flip.getState('#list li');data.unshift(o);render();const els=[...document.querySelectorAll('#list li')];els.forEach(e=>e.style.opacity=1);
+  Flip.from(st,{duration:.3,ease:'power3.out',onEnter:(n)=>{gsap.fromTo(n,{opacity:0,y:-6},{opacity:1,y:0,duration:.25,ease:'power2.out'});gsap.fromTo(n,{backgroundColor:'rgba(22,163,74,.10)'},{backgroundColor:'rgba(22,163,74,0)',duration:1.4,delay:.3})}});},
+ kpi(){const k=document.getElementById('k1');animate(3912,3958,{duration:.6,ease:EASE,onUpdate:v=>k.textContent=Math.round(v).toLocaleString()});
+  const k3=document.getElementById('k3');animate(14,15,{duration:.4,onUpdate:v=>k3.textContent=Math.round(v)});},
+ press(){const b=document.getElementById('go');animate(b,{scale:[1,.96,1]},{type:'spring',stiffness:500,damping:22});b.innerHTML='<span class="loading loading-spinner loading-xs"></span>生成中';
+  setTimeout(()=>{b.textContent='已生成 ✓';const t=document.getElementById('toast');t.style.display='';animate(t,{opacity:[0,1],y:[-8,0]},{duration:.25,ease:EASE});},900);}
+};
+const M=mode==='now'?NOW:REC;
+const cur=document.getElementById('cur');
+const moveTo=(el)=>{const r=el.getBoundingClientRect();cur.style.transform=`translate(${r.x+r.width/2-9}px,${r.y+r.height/2-9}px)`};
+const click=(el,fn)=>{moveTo(el);setTimeout(()=>{cur.classList.add('down');setTimeout(()=>cur.classList.remove('down'),160);fn()},650)};
+cur.style.transform='translate(560px,520px)';
+render();
+window.start=()=>{
+ M.enter();
+ setTimeout(()=>{const c=document.querySelector('[data-f="配送中"]');click(c,()=>{document.querySelectorAll('#chips .btn').forEach(x=>x.classList.toggle('btn-active',x===c));filter='配送中';M.filter()})},2200);
+ setTimeout(()=>{const c=document.querySelector('[data-f=""]');click(c,()=>{document.querySelectorAll('#chips .btn').forEach(x=>x.classList.toggle('btn-active',x===c));filter='';M.filter()})},4000);
+ setTimeout(()=>{M.add({id:'SO-24818',store:'徐汇',customer:'新订单 · 何以宁',amount:658,status:'待发货',date:'10-20'});M.kpi()},5800);
+ setTimeout(()=>{click(document.getElementById('go'),()=>M.press())},7600);
+};
+window.__ready=1;
+</script></body></html>

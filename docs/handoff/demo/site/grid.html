@@ -1,0 +1,45 @@
+<!doctype html><html data-theme="iui"><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="nm/ag-grid-community/styles/ag-grid.css"><link rel="stylesheet" href="nm/ag-grid-community/styles/ag-theme-quartz.css">
+<link rel="stylesheet" href="nm/tabulator-tables/dist/css/tabulator_simple.min.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script>
+<script src="nm/ag-grid-community/dist/ag-grid-community.min.js"></script><script src="nm/tabulator-tables/dist/js/tabulator.min.js"></script><script src="data.js"></script>
+<style>
+.ag-theme-quartz.iui{--ag-font-family:var(--font);--ag-font-size:13px;--ag-foreground-color:#0a0a0a;--ag-header-foreground-color:#71717a;--ag-header-background-color:#fff;--ag-background-color:#fff;
+ --ag-border-color:#ececee;--ag-row-border-color:#f0f0f2;--ag-wrapper-border-radius:16px;--ag-row-hover-color:#fafafa;--ag-selected-row-background-color:#f4f4f5;--ag-header-column-resize-handle-color:transparent;
+ --ag-checkbox-checked-color:#0a0a0a;--ag-range-selection-border-color:#0a0a0a;--ag-input-focus-border-color:#0a0a0a;--ag-cell-horizontal-padding:14px;--ag-header-height:40px;--ag-row-height:44px;--ag-active-color:#0a0a0a}
+.ag-theme-quartz.iui .ag-header{border-bottom-color:#ececee}.ag-theme-quartz.iui .ag-header-cell-text{font-weight:500}
+.tabulator.iui{border:1px solid #ececee;border-radius:16px;overflow:hidden;font-family:var(--font);font-size:13px;background:#fff}
+.tabulator.iui .tabulator-header{background:#fff;border-bottom:1px solid #ececee;color:#71717a;font-weight:500}
+.tabulator.iui .tabulator-header .tabulator-col{background:#fff;border-right:0}
+.tabulator.iui .tabulator-row{border-bottom:1px solid #f2f2f4;min-height:44px}.tabulator.iui .tabulator-row .tabulator-cell{border-right:0;padding:12px 14px}
+.tabulator.iui .tabulator-row.tabulator-row-even{background:#fff}.tabulator.iui .tabulator-row:hover{background:#fafafa}
+.tabulator.iui .tabulator-footer{background:#fff;border-top:1px solid #ececee;padding:8px 12px}.tabulator.iui .tabulator-page{border:0!important;border-radius:999px!important;padding:4px 10px!important;background:transparent!important;color:#52525b!important;font-family:var(--font)}.tabulator.iui .tabulator-page.active{background:#0a0a0a!important;color:#fff!important}.tabulator.iui .tabulator-col .tabulator-col-sorter{opacity:.35}.tabulator.iui .tabulator-row.tabulator-selected{background:#f4f4f5}
+</style></head><body class="bg-base-200 p-4">
+<div id="shot" class="w-[688px]"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-4">
+ <div class="flex items-center justify-between gap-2"><div><h3 class="font-semibold tracking-tight">本周订单</h3><p class="text-sm text-base-content/60">8 笔 · 合计 <span class="num text-base-content">¥7,035</span></p></div>
+  <div class="flex gap-2"><label class="input input-sm w-44"><svg class="h-[1em] opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="搜索订单 / 客户"></label><button class="btn btn-sm btn-primary">导出</button></div></div>
+ <div id="g"></div>
+</div></div></div>
+<script>
+const D=window.DEMO, lib=new URLSearchParams(location.search).get('lib')||'ag';
+const B={'已付款':'badge-success','配送中':'badge-info','待发货':'badge-warning','已退款':'badge-ghost'};
+const badge=(s)=>`<span class="badge badge-sm badge-soft ${B[s]}">${s}</span>`, money=(v)=>'¥'+v.toLocaleString();
+const g=document.getElementById('g');
+if(lib==='ag'){g.className='ag-theme-quartz iui';
+ agGrid.createGrid(g,{domLayout:'autoHeight',rowData:D.orders,rowSelection:'multiple',suppressCellFocus:true,
+  defaultColDef:{sortable:true,resizable:false,flex:1,minWidth:70,suppressHeaderMenuButton:true},
+  columnDefs:[{field:'id',headerName:'订单号',checkboxSelection:true,headerCheckboxSelection:true,minWidth:130,cellClass:'num'},{field:'store',headerName:'门店',flex:.7},{field:'customer',headerName:'客户'},
+   {field:'amount',headerName:'金额',type:'rightAligned',valueFormatter:p=>money(p.value),cellClass:'num ag-right-aligned-cell',sort:'desc'},{field:'status',headerName:'状态',cellRenderer:p=>badge(p.value)},{field:'date',headerName:'日期',flex:.7,cellClass:'num text-base-content/60'}],
+  onFirstDataRendered:(e)=>{e.api.getRowNode('2')?.setSelected(true);window.__ready=1}});
+} else if(lib==='tabulator'){g.className='iui';
+ const t=new Tabulator(g,{data:[...D.orders].sort((a,b)=>b.amount-a.amount),layout:'fitColumns',selectableRows:true,rowHeader:{formatter:'rowSelection',titleFormatter:'rowSelection',headerSort:false,width:44,hozAlign:'center'},
+  pagination:true,paginationSize:6,
+  columns:[{title:'订单号',field:'id',width:110},{title:'门店',field:'store'},{title:'客户',field:'customer'},{title:'金额',field:'amount',hozAlign:'right',formatter:c=>money(c.getValue())},{title:'状态',field:'status',formatter:c=>badge(c.getValue())},{title:'日期',field:'date'}]});
+ t.on('tableBuilt',()=>{t.getRows()[0].select();setTimeout(()=>window.__ready=1,200)});
+} else {
+ const rows=[...D.orders].sort((a,b)=>b.amount-a.amount);
+ g.innerHTML=`<div class="overflow-hidden rounded-box border border-base-300"><table class="table"><thead><tr><th class="w-8"><input type="checkbox" class="checkbox checkbox-sm"></th><th>订单号</th><th>门店</th><th>客户</th><th class="text-right">金额 ↓</th><th>状态</th><th>日期</th></tr></thead><tbody>${rows.slice(0,6).map((o,i)=>`<tr class="${i===1?'bg-base-200':''} hover:bg-base-200/60"><td><input type="checkbox" class="checkbox checkbox-sm" ${i===1?'checked':''}></td><td class="num">${o.id}</td><td>${o.store}</td><td>${o.customer}</td><td class="text-right num">${money(o.amount)}</td><td>${badge(o.status)}</td><td class="num text-base-content/60">${o.date}</td></tr>`).join('')}</tbody></table></div>
+ <div class="flex items-center justify-between mt-3 text-sm text-base-content/60"><span>已选 1 / 8</span><div class="join"><button class="join-item btn btn-sm">‹</button><button class="join-item btn btn-sm btn-active">1</button><button class="join-item btn btn-sm">2</button><button class="join-item btn btn-sm">›</button></div></div>`;
+ window.__ready=1}
+</script></body></html>

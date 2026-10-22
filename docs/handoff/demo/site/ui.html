@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="nm/daisyui/daisyui.css"><link rel="stylesheet" href="nm/daisyui/themes.css"><link rel="stylesheet" href="common.css">
+<script src="nm/@tailwindcss/browser/dist/index.global.js"></script>
+<script src="nm/chart.js/dist/chart.umd.js"></script><script src="data.js"></script>
+<script>document.documentElement.dataset.theme=new URLSearchParams(location.search).get('theme')||'iui'</script>
+</head><body class="bg-base-200 p-4">
+<div id="shot" class="w-[688px]">
+<div class="card bg-base-100 border border-base-300">
+ <div class="card-body gap-6 p-6">
+  <div class="flex items-start justify-between gap-3">
+   <div><div class="flex items-center gap-2"><h2 class="text-lg font-semibold tracking-tight">本周门店销售</h2><span class="badge badge-sm badge-ghost">示例数据</span></div>
+   <p class="text-sm text-base-content/60 mt-0.5">上海 6 家门店 · 截至周日 22:00</p></div>
+   <div role="tablist" class="tabs tabs-box tabs-sm"><a role="tab" class="tab tab-active">本周</a><a role="tab" class="tab">本月</a><a role="tab" class="tab">本季</a></div>
+  </div>
+  <div><div class="text-5xl font-semibold tracking-tight num">¥1,284,600</div>
+   <div class="mt-2 flex items-center gap-2 text-sm"><span class="badge badge-sm badge-success badge-soft num">▲ 12.4%</span><span class="text-base-content/60">总销售额 · 较上周</span></div></div>
+  <div class="stats stats-horizontal border border-base-300 w-full">
+   <div class="stat py-3"><div class="stat-title">订单数</div><div class="stat-value text-2xl num">3,912</div><div class="stat-desc">较上周 +8.1%</div></div>
+   <div class="stat py-3"><div class="stat-title">客单价</div><div class="stat-value text-2xl num">¥328</div><div class="stat-desc">较上周 +3.9%</div></div>
+   <div class="stat py-3"><div class="stat-title">复购率</div><div class="stat-value text-2xl num">27.6%</div><div class="stat-desc text-error">较上周 −1.2pt</div></div>
+  </div>
+  <div><div class="flex items-center justify-between mb-2"><h3 class="font-medium">各门店销售（千元）</h3>
+   <div class="flex gap-3 text-xs text-base-content/60"><span class="flex items-center gap-1"><i class="inline-block size-2 rounded-full bg-primary"></i>本周</span><span class="flex items-center gap-1"><i class="inline-block size-2 rounded-full bg-base-300"></i>上周</span></div></div>
+   <div class="h-52"><canvas id="c"></canvas></div></div>
+  <div>
+   <div class="flex items-center justify-between gap-2 mb-2"><h3 class="font-medium">最新订单</h3>
+    <div class="flex items-center gap-2"><label class="input input-sm w-40"><svg class="h-[1em] opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="搜索客户"></label>
+    <select class="select select-sm w-28"><option>全部门店</option><option>浦东</option></select>
+    <label class="label text-sm"><input type="checkbox" class="toggle toggle-sm" checked>仅未完成</label></div></div>
+   <div class="overflow-hidden rounded-box border border-base-300"><table class="table table-sm"><thead><tr><th>订单号</th><th>门店</th><th>客户</th><th class="text-right">金额</th><th>状态</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </div>
+  <div class="grid grid-cols-2 gap-4">
+   <div class="rounded-box border border-dashed border-base-300 p-6 text-center"><p class="text-sm text-base-content/60">还没有退款记录</p><button class="btn btn-sm btn-outline mt-3">查看上周</button></div>
+   <div class="flex flex-col gap-3 justify-center"><div class="skeleton h-4 w-full"></div><div class="skeleton h-4 w-4/5"></div><div class="skeleton h-4 w-3/5"></div></div>
+  </div>
+  <div class="flex justify-end gap-2"><button class="btn btn-ghost">导出 CSV</button><button class="btn btn-primary">生成周报</button></div>
+ </div></div></div>
+<script>
+const D=window.DEMO, B={'已付款':'badge-success','配送中':'badge-info','待发货':'badge-warning','已退款':'badge-ghost'};
+document.getElementById('rows').innerHTML=D.orders.slice(0,5).map(o=>`<tr class="hover:bg-base-200/60"><td class="font-mono text-xs">${o.id}</td><td>${o.store}</td><td>${o.customer}</td><td class="text-right num">¥${o.amount.toLocaleString()}</td><td><span class="badge badge-sm badge-soft ${B[o.status]}">${o.status}</span></td></tr>`).join('');
+function cv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+setTimeout(()=>{const ink=cv('--color-base-content');
+new Chart(document.getElementById('c'),{type:'bar',data:{labels:D.stores,datasets:[{label:'本周',data:D.thisWeek,backgroundColor:cv('--color-primary'),borderRadius:6,barPercentage:.7,categoryPercentage:.6},{label:'上周',data:D.lastWeek,backgroundColor:cv('--color-base-300'),borderRadius:6,barPercentage:.7,categoryPercentage:.6}]},
+options:{maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},border:{display:false},ticks:{color:ink+'99'}},y:{border:{display:false},grid:{color:cv('--color-base-300')+'88'},ticks:{color:ink+'80',maxTicksLimit:4}}},font:{family:'InterVar'}}});
+window.__ready=1},400);
+</script></body></html>

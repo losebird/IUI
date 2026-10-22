@@ -1,0 +1,15 @@
+const { chromium } = await import('/vercel/sandbox/node_modules/playwright/index.mjs')
+const b = await chromium.launch({ executablePath: '/usr/local/bin/chromium', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
+const jobs = JSON.parse(process.argv[2])
+for (const [url, out, w = 720, wait = 1500] of jobs) {
+  const p = await b.newPage({ viewport: { width: w, height: 900 }, deviceScaleFactor: 2 })
+  p.on('pageerror', (e) => console.log('ERR', out, String(e).slice(0, 200)))
+  p.on('console', (m) => { if (m.type() === 'error') console.log('CERR', out, m.text().slice(0, 200)) })
+  await p.goto('http://localhost:8765/' + url, { waitUntil: 'load' })
+  await p.waitForFunction(() => (window).__ready, null, { timeout: 30000 }).catch(() => console.log('noready', out))
+  await p.waitForTimeout(wait)
+  const el = await p.$('#shot')
+  await (el ? el.screenshot({ path: '/data/work/cmp/out/' + out + '.png' }) : p.screenshot({ path: '/data/work/cmp/out/' + out + '.png', fullPage: true }))
+  await p.close()
+}
+await b.close(); process.exit(0)

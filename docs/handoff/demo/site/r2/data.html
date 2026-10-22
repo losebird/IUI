@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="../nm/daisyui/daisyui.css"><link rel="stylesheet" href="../nm/daisyui/themes.css"><link rel="stylesheet" href="../common.css"><script src="../nm/@tailwindcss/browser/dist/index.global.js"></script><script src="kit.js"></script>
+</head><body class="bg-base-200 p-4"><div id="shot"><div class="card bg-base-100 border border-base-300"><div class="card-body p-6 gap-5">
+<h2 class="text-lg font-semibold tracking-tight">本周经营</h2>
+<div class="flex items-end justify-between"><div><div class="text-sm text-base-content/60">总销售额 · 较上周</div><div class="text-5xl font-semibold tracking-tight num mt-1">¥1,284,600</div><span class="badge badge-sm badge-success badge-soft num mt-2">▲ 12.4%</span></div><div id="hs"></div></div>
+<div class="grid grid-cols-3 gap-0 rounded-box border border-base-300 divide-x divide-base-300">
+ <div class="p-4"><div class="text-xs text-base-content/55">订单数</div><div class="flex items-end justify-between"><div><div class="text-2xl font-semibold num mt-1">3,912</div><div class="text-xs text-success num">+8.1%</div></div><div id="s1"></div></div></div>
+ <div class="p-4"><div class="text-xs text-base-content/55">客单价</div><div class="text-2xl font-semibold num mt-1">¥328</div><div class="text-xs text-success num">+3.9%</div></div>
+ <div class="p-4 flex items-center justify-between"><div><div class="text-xs text-base-content/55">复购率</div><div class="text-2xl font-semibold num mt-1">27.6%</div><div class="text-xs text-error num">−1.2pt</div></div><div class="radial-progress text-base-content" style="--value:27.6;--size:2.75rem;--thickness:4px"></div></div></div>
+<div class="rounded-box border border-base-300 overflow-hidden"><table class="table table-sm"><thead><tr class="text-base-content/55"><th>门店</th><th class="text-right">销售（千元）</th><th class="w-40">占比</th><th class="text-right">较上周</th><th>状态</th></tr></thead><tbody id="tb"></tbody></table></div>
+</div></div></div>
+<script>ready((t) => {
+ hs.innerHTML = spark([98, 104, 101, 112, 108, 115, 121, 128], 200, 56, t.ink); s1.innerHTML = spark([3.1, 3.4, 3.2, 3.6, 3.9], 64, 28, t.ink, false)
+ const R = [['浦东', 312, '+15.6%', '达标'], ['静安', 286, '+13.9%', '达标'], ['徐汇', 241, '+5.2%', '达标'], ['长宁', 168, '+5.0%', '待提升'], ['杨浦', 139, '+6.1%', '待提升']]
+ tb.innerHTML = R.map(([s, v, d, st]) => `<tr><td class="font-medium">${s}</td><td class="text-right num">${v}</td><td><div class="h-1.5 rounded-full bg-base-200"><div class="h-1.5 rounded-full bg-base-content" style="width:${v / 312 * 100}%"></div></div></td><td class="text-right num text-success">${d}</td><td><span class="badge badge-sm badge-soft ${st === '达标' ? 'badge-success' : 'badge-warning'}">${st}</span></td></tr>`).join('')
+})</script></body></html>
