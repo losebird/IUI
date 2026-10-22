@@ -16,7 +16,9 @@
  * Source deliberately has no backslashes or template placeholders (embedded in a template literal).
  */
 
-import { KHRONOS_ASSETS_CDN } from './vendor-registry.ts'
+import { KHRONOS_ASSETS_CDN, VENDOR_CDN_HOSTS, VENDOR_CDN_PREFIX, getVendorSource, vendorBaseOrigin } from './vendor-registry.ts'
+import { BUNDLED_MODELS, BUNDLED_MODELS_DIR } from './model-catalog.ts'
+import { IUI_VERSION } from './version.ts'
 
 /** Pinned commit of KhronosGroup/glTF-Sample-Assets (immutable URLs, jsDelivr-cacheable). */
 export const KHRONOS_SAMPLE_COMMIT = '15cd02d304e54cb42a4db4eefe719f76190f4b68'
@@ -62,10 +64,52 @@ export function pageWants3d(source: string, streaming: boolean): boolean {
   return streaming || /data-iui-3d(?!-)|iuiStage3d/.test(source)
 }
 
-export function buildStage3dRuntimeScript(): string {
+/** R5-3b: published copy of the bundled models (same files as the plugin's asset route). */
+export const BUNDLED_MODEL_NPM = '@losebird/iui'
+
+/**
+ * Ordered folders (ending in `/`) the stage tries for a bundled model: the plugin's own asset
+ * route first (same machine, works offline / behind the GFW), then the published npm package on
+ * npmmirror and jsDelivr (jsDelivr first for the `global` CDN preset).
+ */
+export function bundledModelBases(assetBase?: string): string[] {
+  const local = assetBase ? `${assetBase.replace(/\/+$/, '')}/vendor/${BUNDLED_MODELS_DIR}/` : null
+  const file = `lib/assets/vendor/${BUNDLED_MODELS_DIR}/`
+  const npmm = `${VENDOR_CDN_PREFIX.npmmirror}${BUNDLED_MODEL_NPM}/${IUI_VERSION}/files/${file}`
+  const jsd = `${VENDOR_CDN_PREFIX.jsdelivr}${BUNDLED_MODEL_NPM}@${IUI_VERSION}/${file}`
+  const mirrors = getVendorSource().preset === 'global' ? [jsd, npmm] : [npmm, jsd]
+  return local ? [local, ...mirrors] : mirrors
+}
+
+export interface Stage3dRuntimeOptions {
+  /** Plugin asset route (bundled models + the `/proxy` for hosts outside connect-src). */
+  assetBase?: string | undefined
+  /** Abort a model download after this long without new bytes (default 15 s). */
+  stallMs?: number
+  /** Abort a model download after this long in total (default 90 s). */
+  totalMs?: number
+}
+
+/** Config object the in-frame runtime reads (exported for tests). */
+export function stage3dRuntimeConfig(opts: Stage3dRuntimeOptions = {}): { bundled: Record<string, string>; bases: string[]; proxy: string; direct: string[]; stallMs: number; totalMs: number } {
+  const local = vendorBaseOrigin(opts.assetBase)
+  const direct = [...new Set([...MODEL_CONNECT_ORIGINS, ...VENDOR_CDN_HOSTS.map((h) => `https://${h}`), ...(local ? [local] : [])])]
+  return {
+    bundled: Object.fromEntries(BUNDLED_MODELS.map((b) => [b.ref.toLowerCase(), b.file])),
+    bases: bundledModelBases(opts.assetBase),
+    proxy: local && opts.assetBase ? `${opts.assetBase.replace(/\/+$/, '')}/proxy` : '',
+    direct,
+    stallMs: opts.stallMs ?? 15_000,
+    totalMs: opts.totalMs ?? 90_000,
+  }
+}
+
+export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): string {
+  const cfg = JSON.stringify(stage3dRuntimeConfig(opts)).replace(/</g, '\\u003c')
   return `<script>
 (function () {
   if (window.iuiStage3d) return;
+  var CFG = ${cfg};
   var KHR = '${KHRONOS_SAMPLE_COMMIT}';
   var KHR_CDN = '${KHRONOS_ASSETS_CDN}';
   var ZH = /^zh/i.test(document.documentElement.lang || navigator.language || '');
@@ -131,31 +175,67 @@ export function buildStage3dRuntimeScript(): string {
       return m['three/'] || '';
     } catch (e) { return ''; }
   }
+  function creditFor(s) {
+    var m = /^(polyhaven|khronos):([A-Za-z0-9_-]{1,80})$/.exec(s);
+    if (!m) return null;
+    return m[1] === 'polyhaven'
+      ? { name: m[2], by: 'Poly Haven', license: 'CC0', href: 'https://polyhaven.com/a/' + m[2] }
+      : { name: m[2], by: 'Khronos glTF Sample Assets', license: 'CC0', href: 'https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/' + m[2] };
+  }
+  // Hosts outside the frame's connect-src go through the plugin's same-origin model proxy.
+  function route(u) {
+    if (!CFG.proxy || !/^https?:/i.test(u)) return u;
+    try { if (CFG.direct.indexOf(new URL(u).origin) >= 0) return u; } catch (e) { return u; }
+    return CFG.proxy + '?kind=model&u=' + encodeURIComponent(u);
+  }
+  // Remote candidates (Poly Haven needs its files API to find the 1k glTF + textures).
   async function resolveModel(ref) {
     var s = String(ref || '').trim();
     var m = /^polyhaven:([A-Za-z0-9_-]{1,80})$/.exec(s);
     if (m) {
       var id = m[1];
-      var r = await fetch('https://api.polyhaven.com/files/' + encodeURIComponent(id));
-      if (!r.ok) throw new Error('Poly Haven ' + r.status);
-      var j = await r.json();
+      var r = await fetchBuf(route('https://api.polyhaven.com/files/' + encodeURIComponent(id)), null);
+      var j = JSON.parse(new TextDecoder().decode(r));
       var res = j && j.gltf ? (j.gltf['1k'] || j.gltf['2k'] || j.gltf[Object.keys(j.gltf)[0]]) : null;
       var g = res && res.gltf;
       if (!g || !g.url) throw new Error('Poly Haven: no glTF for ' + id);
       var base = g.url.slice(0, g.url.lastIndexOf('/') + 1), map = {};
       Object.keys(g.include || {}).forEach(function (k) { if (g.include[k] && g.include[k].url) map[base + k] = g.include[k].url; });
-      return { urls: [g.url], modifier: function (u) { return map[u] || u; }, credit: { name: id, by: 'Poly Haven', license: 'CC0', href: 'https://polyhaven.com/a/' + id } };
+      return { urls: [g.url], modifier: function (u) { return map[u] || u; } };
     }
     m = /^khronos:([A-Za-z0-9_-]{1,80})$/.exec(s);
     if (m) {
       var n = m[1], path = '/Models/' + n + '/glTF-Binary/' + n + '.glb';
-      return {
-        urls: [KHR_CDN + KHR + path, 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/' + KHR + path],
-        credit: { name: n, by: 'Khronos glTF Sample Assets', license: 'CC0', href: 'https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/' + n }
-      };
+      return { urls: [KHR_CDN + KHR + path, 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/' + KHR + path] };
     }
     if (!/^(https:|blob:|data:)/i.test(s) && !/^[./]/.test(s)) throw new Error('model must be https URL, polyhaven:ID or khronos:Name');
     return { urls: [s] };
+  }
+  // Download with a stall timer (no new bytes) and an overall cap, reporting progress.
+  async function fetchBuf(url, onProg) {
+    var ctl = new AbortController(), why = '', stall = 0;
+    function arm() { clearTimeout(stall); stall = setTimeout(function () { why = 'stalled'; ctl.abort(); }, CFG.stallMs); }
+    var total = setTimeout(function () { why = 'timeout'; ctl.abort(); }, CFG.totalMs);
+    arm();
+    try {
+      var r = await fetch(url, { signal: ctl.signal, credentials: 'omit' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var len = Number(r.headers.get('content-length')) || 0;
+      if (!r.body || !r.body.getReader) return await r.arrayBuffer();
+      var rd = r.body.getReader(), chunks = [], got = 0;
+      for (;;) {
+        var x = await rd.read();
+        if (x.done) break;
+        arm();
+        chunks.push(x.value); got += x.value.byteLength;
+        if (onProg) onProg(got, len);
+      }
+      var out = new Uint8Array(got), off = 0;
+      for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].byteLength; }
+      return out.buffer;
+    } catch (e) {
+      throw why ? new Error(why + ' · ' + String(url).slice(0, 80)) : e;
+    } finally { clearTimeout(stall); clearTimeout(total); }
   }
   function cssColor(THREE, v, fb) {
     try {
@@ -264,26 +344,40 @@ export function buildStage3dRuntimeScript(): string {
     }
     if (o.model) {
       try {
-        var ref = await resolveModel(o.model);
-        credit = o.credit === false ? null : (typeof o.credit === 'string' ? { text: o.credit } : ref.credit || null);
+        var spec = String(o.model).trim(), mkey = spec.toLowerCase();
+        credit = o.credit === false ? null : (typeof o.credit === 'string' ? { text: o.credit } : creditFor(spec));
+        var mapFn = null;
         var manager = new THREE.LoadingManager();
-        if (ref.modifier) manager.setURLModifier(ref.modifier);
+        manager.setURLModifier(function (u) { return route(mapFn ? mapFn(u) : u); });
         var loader = new mods[3].GLTFLoader(manager);
         try {
           var root = threeRoot();
           if (root) { var dl = new mods[4].DRACOLoader(); dl.setDecoderPath(root + 'examples/jsm/libs/draco/gltf/'); loader.setDRACOLoader(dl); }
           if (mods[5] && mods[5].MeshoptDecoder) loader.setMeshoptDecoder(mods[5].MeshoptDecoder);
         } catch (eDec) {}
+        var onProg = function (got, len) {
+          status.textContent = T.loading + (len ? ' ' + Math.min(100, Math.round(got / len * 100)) + '%' : ' ' + (got / 1048576).toFixed(1) + ' MB');
+        };
+        var tryUrl = async function (u) {
+          var buf = await fetchBuf(route(u), onProg);
+          var dir = /^https?:/i.test(u) ? u.slice(0, u.split(/[?#]/)[0].lastIndexOf('/') + 1) : '';
+          return await new Promise(function (res, rej) { loader.parse(buf, dir, res, rej); });
+        };
+        // Order: offline-export inline copy → bundled copy (plugin route, npm mirrors) → original host.
+        var cands = [], inl = window.__iuiModelInline || {};
+        if (inl[spec] || inl[mkey]) cands.push(inl[spec] || inl[mkey]);
+        var bfile = CFG.bundled[mkey];
+        if (bfile) CFG.bases.forEach(function (b) { cands.push(b + bfile); });
         var lastErr = null;
-        for (var ui = 0; ui < ref.urls.length && !gltf; ui++) {
-          try {
-            gltf = await new Promise(function (res, rej) {
-              loader.load(ref.urls[ui], res, function (ev) {
-                if (!ev) return;
-                status.textContent = T.loading + (ev.lengthComputable && ev.total ? ' ' + Math.round(ev.loaded / ev.total * 100) + '%' : (ev.loaded ? ' ' + (ev.loaded / 1048576).toFixed(1) + ' MB' : ''));
-              }, rej);
-            });
-          } catch (eL) { lastErr = eL; }
+        for (var ci = 0; ci < cands.length && !gltf; ci++) {
+          try { gltf = await tryUrl(cands[ci]); stage.source = ci === 0 && cands[0].indexOf('data:') === 0 ? 'inline' : 'bundled'; } catch (eB) { lastErr = eB; }
+        }
+        if (!gltf) {
+          var ref = await resolveModel(spec);
+          mapFn = ref.modifier || null;
+          for (var ui = 0; ui < ref.urls.length && !gltf; ui++) {
+            try { gltf = await tryUrl(ref.urls[ui]); stage.source = 'remote'; } catch (eL) { lastErr = eL; }
+          }
         }
         if (!gltf) throw lastErr || new Error('load failed');
         subject = gltf.scene || (gltf.scenes && gltf.scenes[0]);
@@ -472,6 +566,14 @@ export function buildStage3dRuntimeScript(): string {
         dir = out.lengthSq() > 1e-6 ? out.normalize().multiplyScalar(0.65).add(cur.multiplyScalar(0.35)).normalize() : cur;
       }
       var dist = home.dist * (Number(hsp.spec.zoom) > 0 ? Number(hsp.spec.zoom) : 0.6);
+      if (!(Number(hsp.spec.zoom) > 0) && hsp.node !== pivot) {
+        // Node hotspot: frame the part itself (its bounding sphere fills ~60% of the short side), so a big
+        // part (a lid, a seat) is never cropped and a tiny one is not flown into; 0.5–1.2 × the home distance.
+        var sph = new THREE.Box3().setFromObject(hsp.node).getBoundingSphere(new THREE.Sphere());
+        var halfFov = Math.min(camera.fov, 2 * Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect) * 180 / Math.PI) * Math.PI / 360;
+        var need = sph.radius / Math.sin(halfFov) / 0.6;
+        dist = Math.min(home.dist * 1.2, Math.max(home.dist * 0.5, isFinite(need) ? need : 0));
+      }
       flyTo(pt.clone().addScaledVector(dir, dist), pt, 900);
       active = hsp.id;
       stage.hotspots.forEach(function (x) { x.el.setAttribute('aria-pressed', x.id === active ? 'true' : 'false'); });

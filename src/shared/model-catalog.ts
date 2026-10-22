@@ -19,6 +19,8 @@ export interface ModelHit {
   readonly dimensionsM?: readonly [number, number, number]
   readonly polycount?: number
   readonly animated?: boolean
+  /** R5-3b: shipped with the plugin (loads offline / from the plugin's own asset route). */
+  readonly bundled?: boolean
   readonly score: number
 }
 
@@ -42,11 +44,12 @@ export const KHRONOS_CC0: readonly KhronosEntry[] = [
 /** Common Chinese object words → English search terms (the model is asked for English, this is a safety net). */
 const ZH_EN: Readonly<Record<string, string>> = {
   扶手椅: 'armchair', 椅子: 'chair', 椅: 'chair', 凳子: 'stool', 沙发: 'sofa', 桌子: 'table', 桌: 'table', 柜子: 'cabinet', 柜: 'cabinet', 床: 'bed', 架子: 'shelf', 书架: 'shelf',
-  灯: 'lamp', 台灯: 'lamp', 吊灯: 'chandelier', 路灯: 'lantern', 植物: 'plant', 盆栽: 'potted plant', 树: 'tree', 花: 'flower', 草: 'grass', 石头: 'rock', 岩石: 'rock',
+  灯: 'lamp', 吊灯: 'chandelier', 路灯: 'lantern', 植物: 'plant', 盆栽: 'potted plant', 树: 'tree', 花: 'flower', 草: 'grass', 石头: 'rock', 岩石: 'rock',
   车: 'car', 汽车: 'car', 自行车: 'bicycle', 船: 'boat', 杯子: 'cup', 茶杯: 'teacup', 杯: 'cup', 瓶子: 'bottle', 瓶: 'bottle', 碗: 'bowl', 盘子: 'plate', 锅: 'pot',
   书: 'book', 钟: 'clock', 时钟: 'clock', 相机: 'camera', 电视: 'tv', 收音机: 'radio', 电话: 'phone', 键盘: 'keyboard', 鞋: 'shoe', 帽子: 'hat', 包: 'bag',
   雕像: 'statue', 雕塑: 'sculpture', 头骨: 'skull', 动物: 'animal', 鱼: 'fish', 鸟: 'bird', 食物: 'food', 水果: 'fruit', 面包: 'bread', 蛋糕: 'cake',
   工具: 'tool', 锤子: 'hammer', 斧头: 'axe', 桶: 'barrel', 木桶: 'barrel', 箱子: 'crate', 箱: 'box', 盒子: 'box', 门: 'door', 窗: 'window', 栅栏: 'fence',
+  鸭子: 'duck', 鸭: 'duck', 小黄鸭: 'rubber duck', 苹果: 'apple', 仙人掌: 'cactus', 电视机: 'tv', 音箱: 'speaker', 台灯: 'desk lamp',
   花瓶: 'vase', 罐子: 'jar', 蜡烛: 'candle', 镜子: 'mirror', 地毯: 'rug', 枕头: 'pillow', 厨房: 'kitchen', 家具: 'furniture', 武器: 'weapon', 剑: 'sword',
 }
 
@@ -164,5 +167,82 @@ export async function searchPolyhaven(query: string, fetchJson: FetchJson, opts:
 
 /** Merge both sources: best matches first; on ties prefer the smaller download (chat bubbles). */
 export function rankHits(hits: readonly ModelHit[], max: number): ModelHit[] {
-  return [...hits].sort((a, b) => b.score - a.score || (a.sizeMb ?? 50) - (b.sizeMb ?? 50)).slice(0, max)
+  return [...hits].sort((a, b) => b.score - a.score || Number(!!b.bundled) - Number(!!a.bundled) || (a.sizeMb ?? 50) - (b.sizeMb ?? 50)).slice(0, max)
+}
+
+// ---------------------------------------------------------------------------
+// R5-3b: models shipped inside the plugin package (CC0, optimised with gltf-transform:
+// meshopt geometry + WebP textures ≤1024px). They load from the plugin's own asset
+// route first (offline / mainland-China safe), then npm mirrors, then the original host.
+
+/** Folder version under lib/assets/vendor (bump when the files change). */
+export const BUNDLED_MODELS_DIR = 'iui-models@1'
+
+export interface BundledModel {
+  /** The public ref the page uses (`polyhaven:<id>` / `khronos:<Name>`). */
+  readonly ref: string
+  /** File name under lib/assets/vendor/iui-models@N/. */
+  readonly file: string
+  readonly name: string
+  readonly source: ModelHit['source']
+  readonly author: string
+  readonly kb: number
+  readonly tags: readonly string[]
+  readonly dimensionsM?: readonly [number, number, number]
+}
+
+export const BUNDLED_MODELS: readonly BundledModel[] = [
+  { ref: 'polyhaven:ArmChair_01', file: 'ArmChair_01.glb', name: 'Arm Chair 01', source: 'Poly Haven', author: 'Kirill Sannikov', kb: 415, dimensionsM: [0.85, 0.77, 1.07], tags: ['armchair', 'chair', 'seat', 'furniture', 'sofa', 'couch', 'vintage', 'wood', '扶手椅', '椅子', '沙发', '家具'] },
+  { ref: 'polyhaven:Camera_01', file: 'Camera_01.glb', name: 'Camera 01', source: 'Poly Haven', author: 'Rajil Jose Macatangay', kb: 433, dimensionsM: [0.21, 0.26, 0.08], tags: ['camera', 'vintage', 'photography', 'lens', 'retro', 'analog', 'electronics', '相机', '摄影', '复古'] },
+  { ref: 'polyhaven:Television_01', file: 'Television_01.glb', name: 'Television 01', source: 'Poly Haven', author: 'Gabriel Radić', kb: 212, dimensionsM: [0.6, 0.47, 0.46], tags: ['tv', 'television', 'vintage', 'retro', 'video', 'screen', 'electronics', '电视', '电视机', '复古'] },
+  { ref: 'polyhaven:antique_ceramic_vase_01', file: 'antique_ceramic_vase_01.glb', name: 'Antique Ceramic Vase 01', source: 'Poly Haven', author: 'James Ray Cock', kb: 175, dimensionsM: [0.26, 0.26, 0.44], tags: ['vase', 'ceramic', 'antique', 'pot', 'pottery', 'decor', '花瓶', '陶瓷', '瓷器', '古董'] },
+  { ref: 'polyhaven:boombox', file: 'boombox.glb', name: 'Boombox', source: 'Poly Haven', author: 'Thomas Paul Mouilleron', kb: 482, dimensionsM: [0.72, 0.19, 0.47], tags: ['boombox', 'radio', 'speaker', 'stereo', 'music', 'audio', 'retro', '收音机', '音箱', '音响'] },
+  { ref: 'polyhaven:desk_lamp_arm_01', file: 'desk_lamp_arm_01.glb', name: 'Desk Lamp Arm 01', source: 'Poly Haven', author: 'Yann Kervran, Kuutti Siitonen', kb: 514, dimensionsM: [0.62, 0.41, 0.88], tags: ['lamp', 'desk', 'light', 'industrial', 'arm', 'lighting', '台灯', '灯', '灯具'] },
+  { ref: 'polyhaven:food_apple_01', file: 'food_apple_01.glb', name: 'Food Apple 01', source: 'Poly Haven', author: 'Oliver Harries', kb: 185, dimensionsM: [0.1, 0.1, 0.09], tags: ['apple', 'fruit', 'food', 'red', 'fresh', '苹果', '水果', '食物'] },
+  { ref: 'polyhaven:potted_plant_04', file: 'potted_plant_04.glb', name: 'Potted Plant 04', source: 'Poly Haven', author: 'James Ray Cock', kb: 390, dimensionsM: [0.17, 0.19, 0.27], tags: ['plant', 'potted', 'cactus', 'succulent', 'pot', 'decor', '植物', '盆栽', '仙人掌', '多肉'] },
+  { ref: 'polyhaven:rubber_duck_toy', file: 'rubber_duck_toy.glb', name: 'Rubber Duck Toy', source: 'Poly Haven', author: 'Plat251', kb: 89, dimensionsM: [0.21, 0.3, 0.29], tags: ['duck', 'rubber duck', 'toy', 'bath', 'cute', 'animal', 'bird', '小黄鸭', '鸭子', '玩具'] },
+  { ref: 'khronos:ToyCar', file: 'ToyCar.glb', name: 'Toy car', source: 'Khronos glTF Sample Assets', author: 'Guido Odendahl, Eric Chadwick', kb: 880, tags: ['car', 'toy', 'vehicle', 'auto', '汽车', '玩具', '车'] },
+  { ref: 'khronos:WaterBottle', file: 'WaterBottle.glb', name: 'Water bottle', source: 'Khronos glTF Sample Assets', author: 'Microsoft', kb: 90, tags: ['bottle', 'water', 'flask', 'drink', 'product', '水瓶', '瓶子', '水杯'] },
+]
+
+const BUNDLED_BY_REF = new Map(BUNDLED_MODELS.map((b) => [b.ref.toLowerCase(), b]))
+
+/** The bundled entry for a ref (case-insensitive), if the plugin ships it. */
+export function bundledModel(ref: string): BundledModel | undefined {
+  return BUNDLED_BY_REF.get(String(ref ?? '').trim().toLowerCase())
+}
+
+/** Search only the models shipped with the plugin (works with no network at all). */
+export function searchBundled(query: string): ModelHit[] {
+  const terms = queryTerms(query)
+  if (!terms.length) return []
+  return BUNDLED_MODELS.map((b) => {
+    const id = b.ref.slice(b.ref.indexOf(':') + 1)
+    return {
+      model: b.ref,
+      name: b.name,
+      source: b.source,
+      license: 'CC0-1.0' as const,
+      author: b.author,
+      page: b.source === 'Poly Haven' ? `https://polyhaven.com/a/${id}` : `https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/${id}`,
+      tags: b.tags.filter((t) => /^[a-z]/.test(t)),
+      sizeMb: Math.round(b.kb / 102.4) / 10,
+      ...(b.dimensionsM ? { dimensionsM: b.dimensionsM } : {}),
+      bundled: true,
+      score: scoreText(terms, { name: `${b.name} ${id.replace(/_/g, ' ')}`, tags: b.tags }),
+    }
+  }).filter((h) => h.score > 0)
+}
+
+/** Bundled copies replace remote hits of the same ref (smaller, offline-safe) and win ties. */
+export function preferBundled(hits: readonly ModelHit[]): ModelHit[] {
+  const out = new Map<string, ModelHit>()
+  for (const h of hits) {
+    const k = h.model.toLowerCase()
+    const prev = out.get(k)
+    const b = bundledModel(h.model)
+    const merged: ModelHit = b && !h.bundled ? { ...h, bundled: true, sizeMb: Math.round(b.kb / 102.4) / 10 } : h
+    if (!prev || merged.score > prev.score) out.set(k, merged)
+  }
+  return [...out.values()]
 }

@@ -14,12 +14,19 @@ import {
   type VendorId,
   type VendorSource,
 } from '../shared/vendor-registry.ts'
+import { bundledModel } from '../shared/model-catalog.ts'
+import { BUNDLED_MODEL_NPM, bundledModelBases, parseModelRef } from '../shared/stage3d-runtime.ts'
+import { IUI_VERSION } from '../shared/version.ts'
 
 export const OFFLINE_EXPORT_MAX_BYTES = 15 * 1024 * 1024
 const MAX_ASSET_BYTES = 3 * 1024 * 1024
 const MAX_TILES = 96
 const MAX_MODULES = 400
 const FETCH_TIMEOUT_MS = 12_000
+/** R5-3b: at most this many distinct 3D stage models are inlined. */
+const MAX_MODELS = 6
+/** Model downloads the stage made itself (inlined as models, not as images). */
+const MODEL_ASSET_RE = /dl\.polyhaven\.org|glTF-Sample-Assets|\/iui-models@|\.(?:glb|gltf|bin)(?:[?#]|$)/i
 
 export interface SandboxResource { url: string; type: string }
 
@@ -93,6 +100,23 @@ const TILE_RE = /\/tile\/\d+\/\d+\/\d+|\/\d+\/\d+\/\d+(?:@2x)?\.(?:png|jpe?g|web
 const IMAGE_RE = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp)(?:[?#]|$)/i
 const MODULE_RE = /\.m?js(?:[?#]|$)|^https:\/\/esm\.sh\//i
 
+/** R5-3b: model refs the page's 3D stages use (`data-iui-3d` attributes + `model:` literals in scripts). */
+export function stageModelRefs(html: string): string[] {
+  const out: string[] = []
+  const add = (v: unknown): void => {
+    const s = typeof v === 'string' ? v.trim() : ''
+    if (s && parseModelRef(s) && !/^(?:blob|data):/i.test(s) && !/^[./]/.test(s) && !out.includes(s)) out.push(s)
+  }
+  for (const m of html.matchAll(/\sdata-iui-3d\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const raw = decodeAttr(m[1] ?? m[2] ?? '').trim()
+    if (raw.startsWith('{')) {
+      try { add((JSON.parse(raw) as { model?: unknown }).model) } catch { /* invalid JSON: the stage shows the error */ }
+    } else if (/^(?:polyhaven|khronos):|^https:/i.test(raw)) add(raw)
+  }
+  for (const m of html.matchAll(/["']?\bmodel["']?\s*:\s*["']((?:polyhaven|khronos):[A-Za-z0-9_-]{1,80}|https:\/\/[^"'\s<>]+)["']/g)) add(m[1])
+  return out.slice(0, MAX_MODELS)
+}
+
 function guessMime(url: string, fallback: string): string {
   const t = fallback.split(';')[0]!.trim()
   if (t && t !== 'application/octet-stream' && t !== 'binary/octet-stream') return t
@@ -118,6 +142,41 @@ async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): P
 
 /** Import specifiers (static, re-export, side-effect, dynamic literal). */
 const SPEC_RE = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)(["'])([^"'\n]+)\2/g
+
+/** glTF JSON → self-contained `data:model/gltf+json` (external buffers / images become data: URIs). */
+export async function inlineGltfJson(text: string, url: string, fetcher: ExportFetcher, map: Record<string, string> = {}): Promise<string | null> {
+  let gltf: { asset?: unknown; buffers?: Array<{ uri?: string }>; images?: Array<{ uri?: string; mimeType?: string }> }
+  try { gltf = JSON.parse(text) } catch { return null }
+  if (!gltf || typeof gltf !== 'object' || !gltf.asset) return null
+  const parts: Array<{ uri?: string; mimeType?: string }> = [...(gltf.buffers ?? []), ...(gltf.images ?? [])].filter((p) => p.uri && !/^data:/i.test(p.uri))
+  for (const part of parts) {
+    let abs: string
+    try { abs = new URL(part.uri!, url).href } catch { return null }
+    const got = await fetcher(map[abs] ?? abs, 'bytes')
+    if (!got || typeof got.body === 'string') return null
+    const mime = part.mimeType ? part.mimeType : /\.bin(?:[?#]|$)/i.test(abs) ? 'application/octet-stream' : guessMime(abs, got.type)
+    part.uri = dataUri(got.body, mime)
+  }
+  return dataUri(utf8(JSON.stringify(gltf)), 'model/gltf+json')
+}
+
+/** `polyhaven:<id>` → its 1k glTF with every texture / buffer inlined. */
+async function inlinePolyhaven(id: string, fetcher: ExportFetcher): Promise<string | null> {
+  const files = await fetcher(`https://api.polyhaven.com/files/${encodeURIComponent(id)}`, 'text')
+  if (!files) return null
+  let g: { url?: string; include?: Record<string, { url?: string }> } | undefined
+  try {
+    const j = JSON.parse(String(files.body)) as { gltf?: Record<string, { gltf?: typeof g }> }
+    g = (j.gltf?.['1k'] ?? j.gltf?.['2k'])?.gltf
+  } catch { return null }
+  if (!g?.url) return null
+  const main = await fetcher(g.url, 'text')
+  if (!main) return null
+  const dir = g.url.slice(0, g.url.lastIndexOf('/') + 1)
+  const map: Record<string, string> = {}
+  for (const [rel, f] of Object.entries(g.include ?? {})) if (f?.url) map[new URL(rel, dir).href] = f.url
+  return inlineGltfJson(String(main.body), g.url, fetcher, map)
+}
 
 export async function buildOfflineExport(
   doc: string,
@@ -272,7 +331,8 @@ export async function buildOfflineExport(
   const imgUrls = [...new Set([
     ...docImgs,
     ...resources.filter((r) => !handled.has(r.url) && !moduleData.has(r.url) && !classic.has(r.url)
-      && (r.type === 'img' || r.type === 'css' || IMAGE_RE.test(r.url))).map((r) => r.url),
+      && (r.type === 'img' || r.type === 'css' || IMAGE_RE.test(r.url))
+      && !(r.type !== 'img' && r.type !== 'css' && MODEL_ASSET_RE.test(r.url))).map((r) => r.url),
   ])]
   let tiles = 0
   const wanted = imgUrls.filter((u) => {
@@ -282,6 +342,48 @@ export async function buildOfflineExport(
   await pool(wanted, 6, async (u) => { await fetchAsset(u) })
   // CSS backgrounds written in the page itself.
   html = html.replace(/url\(\s*(["']?)(https?:[^"')]+)\1\s*\)/g, (m, _q: string, u: string) => (assets[u] ? `url("${assets[u]}")` : m))
+
+  // ---- R5-3b: 3D stage models → window.__iuiModelInline (ref → data: URL), within the size budget.
+  const modelInline: Record<string, string> = {}
+  const refs = stageModelRefs(html)
+  if (refs.length) {
+    let budget = maxBytes - utf8(html).byteLength - Object.values(assets).reduce((n, a) => n + a.length, 0) - 512 * 1024
+    const bytesOf = async (cands: string[]): Promise<Uint8Array | null> => {
+      const hit = await fetchFirst(cands, 'bytes')
+      return hit && typeof hit.got.body !== 'string' ? hit.got.body : null
+    }
+    for (const ref of refs) {
+      try {
+        let uri: string | null = null
+        const b = bundledModel(ref)
+        const parsed = parseModelRef(ref)
+        if (b) {
+          const bases = withVendorSource(options.cdnSource, () => bundledModelBases(options.assetBase))
+          const buf = await bytesOf(bases.map((x) => x + b.file))
+          if (buf) uri = dataUri(buf, 'model/gltf-binary')
+        }
+        if (!uri && parsed?.kind === 'khronos') {
+          const buf = await bytesOf(parsed.urls)
+          if (buf) uri = dataUri(buf, 'model/gltf-binary')
+        }
+        if (!uri && parsed?.kind === 'polyhaven') uri = await inlinePolyhaven(parsed.id, fetcher)
+        if (!uri && parsed?.kind === 'url' && /^https:/i.test(parsed.url)) {
+          const buf = await bytesOf([parsed.url])
+          if (buf && buf[0] === 0x67 && buf[1] === 0x6c && buf[2] === 0x54 && buf[3] === 0x46) uri = dataUri(buf, 'model/gltf-binary')
+          else if (buf) uri = await inlineGltfJson(new TextDecoder().decode(buf), parsed.url, fetcher)
+        }
+        if (!uri || uri.length > budget) { failed.push(ref); continue }
+        budget -= uri.length
+        modelInline[ref] = uri
+        inlined.push(ref)
+      } catch {
+        failed.push(ref)
+      }
+    }
+  }
+  if (Object.keys(modelInline).length) {
+    head.push(`<script data-iui-offline-models>window.__iuiModelInline = ${JSON.stringify(modelInline).replace(/</g, '\\u003c')};</script>`)
+  }
 
   const zh = /^zh/i.test(options.lang ?? '')
   const note = zh ? '离线：只保存了导出时看到的地图范围' : 'Offline: only the map area visible at export was saved'
@@ -330,7 +432,12 @@ export async function buildOfflineExport(
     }
     return a + next + c
   })
-  if (localVendor) html = html.split(localVendor).join(VENDOR_CDN_PREFIX.jsdelivr)
+  if (localVendor) {
+    // Bundled models live in this package, not in a third-party npm package; the proxy is local-only.
+    html = html.split(`${localVendor}iui-models@`).join(`${VENDOR_CDN_PREFIX.jsdelivr}${BUNDLED_MODEL_NPM}@${IUI_VERSION}/lib/assets/vendor/iui-models@`)
+    html = html.split(`"proxy":"${base}/proxy"`).join('"proxy":""')
+    html = html.split(localVendor).join(VENDOR_CDN_PREFIX.jsdelivr)
+  }
 
   const bytes = utf8(html).byteLength
   return { html, bytes, tooLarge: bytes > maxBytes, inlined, failed: [...new Set(failed)] }

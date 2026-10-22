@@ -77,7 +77,7 @@ describe('R5-3 model refs + runtime', () => {
     const extra = VENDOR_LIBS.three.extra as readonly string[]
     for (const f of ['examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/loaders/DRACOLoader.js', 'examples/jsm/environments', 'examples/jsm/libs/meshopt_decoder.module.js', 'examples/jsm/libs/draco/gltf/draco_decoder.wasm']) expect(extra).toContain(f)
     const plugin = readFileSync('src/plugin/index.ts', 'utf8')
-    expect(/const VENDOR_FILE_RE = .*\|wasm\)/.test(plugin)).toBe(true)
+    expect(/const VENDOR_FILE_RE = .*\|wasm(\|glb)?\)/.test(plugin)).toBe(true)
     expect(plugin).toContain("wasm: 'application/wasm'")
     expect(readFileSync('scripts/verify-pack.mjs', 'utf8')).toContain('draco_decoder.wasm')
   })
@@ -98,7 +98,7 @@ describe('R5-3 model catalog', () => {
   it('queryTerms maps Chinese + singularises', () => {
     expect(queryTerms('扶手椅')).toContain('armchair')
     expect(queryTerms('花瓶')).toEqual(['vase'])
-    expect(queryTerms('台灯')).toEqual(['lamp'])
+    expect(queryTerms('台灯')).toEqual(['desk', 'lamp'])
     expect(queryTerms('Toy Cars')).toEqual(expect.arrayContaining(['toy', 'car']))
     expect(queryTerms('')).toEqual([])
   })
@@ -130,7 +130,8 @@ describe('R5-3 find_3d_models tool', () => {
     const ok = String(await tool.execute({ query: 'armchair' } as never, {} as never))
     expect(ok).toContain('status=ok')
     expect(ok).toContain('model=polyhaven:ArmChair_01')
-    expect(ok).toContain('size_mb=1')
+    expect(ok).toContain('bundled=yes') // R5-3b: the shipped copy (0.4 MB) replaces the 1 MB remote hit
+    expect(ok).toContain('size_mb=0.4')
     expect(ok).toContain('usage=<div data-iui-3d=')
     expect(String(await tool.execute({ query: 'xyzzy' } as never, {} as never))).toContain('status=empty')
     expect(String(await tool.execute({} as never, {} as never))).toContain('status=invalid')

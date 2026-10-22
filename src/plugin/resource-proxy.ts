@@ -13,6 +13,9 @@ import { isIP } from 'node:net'
 
 export const PROXY_MAX_BYTES = 8 * 1024 * 1024
 export const PROXY_TIMEOUT_MS = 8000
+/** R5-3b: `kind=model` — glTF / GLB (+ .bin buffers and textures) for the 3D stage. */
+export const MODEL_PROXY_MAX_BYTES = 32 * 1024 * 1024
+export const MODEL_PROXY_TIMEOUT_MS = 60_000
 const PROXY_MAX_REDIRECTS = 3
 
 function ipv4Private(ip: string): boolean {
@@ -94,6 +97,29 @@ export function allowedProxyContentType(ct: string): string | null {
   return null
 }
 
+/**
+ * R5-3b: what a model fetch may return — decided from the bytes, not the (often generic) upstream
+ * type: GLB magic, glTF JSON (has an "asset" object), raw buffers by `.bin` path, or images.
+ */
+export function modelProxyType(ct: string, pathname: string, body: Uint8Array): string | null {
+  const img = allowedProxyContentType(ct)
+  if (img && img.startsWith('image/')) return img
+  if (body.byteLength >= 12 && body[0] === 0x67 && body[1] === 0x6c && body[2] === 0x54 && body[3] === 0x46) return 'model/gltf-binary'
+  const p = pathname.toLowerCase()
+  if (/\.bin$/.test(p)) return 'application/octet-stream'
+  let i = 0
+  while (i < body.byteLength && i < 64 && (body[i] === 0x20 || body[i] === 0x0a || body[i] === 0x0d || body[i] === 0x09 || body[i] === 0xef || body[i] === 0xbb || body[i] === 0xbf)) i++
+  if (body[i] === 0x7b) {
+    try {
+      const j = JSON.parse(new TextDecoder().decode(body)) as { asset?: unknown }
+      if (j && typeof j === 'object' && j.asset && typeof j.asset === 'object') return 'model/gltf+json'
+      // Poly Haven's files API (resolves a polyhaven:<id> ref) is plain JSON.
+      if (/^\/files\/[a-z0-9_-]+$/i.test(pathname)) return 'application/json'
+    } catch { /* not JSON */ }
+  }
+  return null
+}
+
 export interface ProxyDeps {
   fetch?: typeof fetch
   resolve?: ProxyResolver
@@ -117,16 +143,20 @@ export async function serveResourceProxy(req: IncomingMessage, res: ServerRespon
     return
   }
   let target: URL | string
+  let model = false
   try {
-    target = parseProxyTarget(new URL(req.url ?? '/', 'http://x').searchParams.get('u'))
+    const q = new URL(req.url ?? '/', 'http://x').searchParams
+    model = q.get('kind') === 'model'
+    target = parseProxyTarget(q.get('u'))
   } catch {
     target = 'bad-url'
   }
+  const maxBytes = model ? MODEL_PROXY_MAX_BYTES : PROXY_MAX_BYTES
   if (typeof target === 'string') return fail(res, 400, target)
   const doFetch = deps.fetch ?? fetch
   const resolver = deps.resolve ?? defaultResolver
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT_MS)
+  const timer = setTimeout(() => ctrl.abort(), model ? MODEL_PROXY_TIMEOUT_MS : PROXY_TIMEOUT_MS)
   try {
     let url = target
     let upstream: Response | undefined
@@ -135,7 +165,7 @@ export async function serveResourceProxy(req: IncomingMessage, res: ServerRespon
       upstream = await doFetch(url.href, {
         redirect: 'manual',
         signal: ctrl.signal,
-        headers: { accept: 'image/*,text/css;q=0.9,*/*;q=0.1', 'user-agent': 'IUI-image-export/1' },
+        headers: model ? { accept: 'model/gltf-binary,model/gltf+json,application/json,image/*,*/*;q=0.1', 'user-agent': 'IUI-3d-stage/1' } : { accept: 'image/*,text/css;q=0.9,*/*;q=0.1', 'user-agent': 'IUI-image-export/1' },
       })
       if (upstream.status >= 300 && upstream.status < 400) {
         const loc = upstream.headers.get('location')
@@ -149,10 +179,12 @@ export async function serveResourceProxy(req: IncomingMessage, res: ServerRespon
     }
     if (!upstream) return fail(res, 508, 'too-many-redirects')
     if (!upstream.ok) return fail(res, 502, `upstream-${upstream.status}`)
-    const ct = allowedProxyContentType(upstream.headers.get('content-type') ?? '')
+    const upstreamType = upstream.headers.get('content-type') ?? ''
+    let ct = model ? 'pending' : allowedProxyContentType(upstreamType)
     if (!ct) return fail(res, 415, 'bad-type')
+    if (model && /^\s*text\/html/i.test(upstreamType)) return fail(res, 415, 'bad-type')
     const declared = Number(upstream.headers.get('content-length') ?? '0')
-    if (declared > PROXY_MAX_BYTES) return fail(res, 413, 'too-large')
+    if (declared > maxBytes) return fail(res, 413, 'too-large')
     const chunks: Uint8Array[] = []
     let total = 0
     if (upstream.body) {
@@ -161,7 +193,7 @@ export async function serveResourceProxy(req: IncomingMessage, res: ServerRespon
         const { done, value } = await reader.read()
         if (done) break
         total += value.byteLength
-        if (total > PROXY_MAX_BYTES) {
+        if (total > maxBytes) {
           void reader.cancel().catch(() => {})
           return fail(res, 413, 'too-large')
         }
@@ -169,6 +201,10 @@ export async function serveResourceProxy(req: IncomingMessage, res: ServerRespon
       }
     }
     const body = Buffer.concat(chunks)
+    if (model) {
+      ct = modelProxyType(upstreamType, url.pathname, body)
+      if (!ct) return fail(res, 415, 'bad-type')
+    }
     res.writeHead(200, {
       'content-type': ct,
       'content-length': String(body.byteLength),

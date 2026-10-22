@@ -8,7 +8,7 @@
  * duplicate intervals / listeners (zone stats stable), no failure strip, and
  * pages without CDN libs settle without waiting for them.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS, type HtmlSandboxSpec } from '../src/shared/html-sandbox.ts'
@@ -216,6 +216,8 @@ export async function stage3dCase(browser: any): Promise<number> {
     { name: 'shape', html: `<div data-iui-3d='{"shape":"torusKnot","ground":"plinth","hotspots":[{"id":"a","label":"A","at":[0.6,0.6,0.6]},{"id":"b","label":"B","at":[0,-0.9,0.9]}]}'><h2 data-iui-3d-layer="back">BACK</h2></div><div style="height:1200px"></div>`, js: "window.hs=[];document.addEventListener('iui3d:hotspot',function(e){hs.push(e.detail.id)})" },
     { name: 'glb', html: `<div data-iui-3d='{"model":"https://raw.githubusercontent.com/iui-test/box.glb","animation":true,"hotspots":[{"id":"lid","label":"Lid","node":"Lid"}]}'></div>` },
     { name: 'bad', html: `<div data-iui-3d='{"model":"https://raw.githubusercontent.com/iui-test/missing.glb"}'></div>` },
+    // R5-3b: a bundled CC0 model (meshopt + WebP) from this package's mirror copy, never the original host.
+    { name: 'bundled', html: `<div data-iui-3d='{"model":"polyhaven:rubber_duck_toy"}'></div>` },
   ]
   const stage = (pg: any) => pg.evaluate(async () => {
     const el = document.querySelector('[data-iui-3d]') as any
@@ -223,7 +225,7 @@ export async function stage3dCase(browser: any): Promise<number> {
     const cv = el.querySelector('canvas') as HTMLCanvasElement | null
     let lit = 0
     if (cv) { const c = document.createElement('canvas'); c.width = 64; c.height = 48; const x = c.getContext('2d')!; x.drawImage(cv, 0, 0, 64, 48); const d = x.getImageData(0, 0, 64, 48).data; for (let i = 3; i < d.length; i += 4) if (d[i]! > 10) lit++ }
-    return { ready: el.hasAttribute('data-iui-3d-ready'), error: el.hasAttribute('data-iui-3d-error'), clips: st?.clips ?? null, lit: lit / (64 * 48), pins: el.querySelectorAll('.iui-3d-pin').length, dist: st ? st.camera.position.distanceTo(st.controls.target) : 0, cam: st ? st.camera.position.toArray().map((v: number) => v.toFixed(3)).join(',') : '', layer: !!el.querySelector('[data-iui-3d-layer]') }
+    return { ready: el.hasAttribute('data-iui-3d-ready'), error: el.hasAttribute('data-iui-3d-error'), clips: st?.clips ?? null, lit: lit / (64 * 48), pins: el.querySelectorAll('.iui-3d-pin').length, dist: st ? st.camera.position.distanceTo(st.controls.target) : 0, cam: st ? st.camera.position.toArray().map((v: number) => v.toFixed(3)).join(',') : '', layer: !!el.querySelector('[data-iui-3d-layer]'), source: st?.source ?? null }
   })
   for (const c of cases) {
     const page = await browser.newPage({ viewport: { width: 720, height: 700 }, reducedMotion: 'reduce' })
@@ -232,6 +234,12 @@ export async function stage3dCase(browser: any): Promise<number> {
     await page.route('https://raw.githubusercontent.com/iui-test/**', (r: any) => r.request().url().endsWith('box.glb')
       ? r.fulfill({ status: 200, body: glb, headers: { 'content-type': 'model/gltf-binary', 'access-control-allow-origin': '*' } })
       : r.fulfill({ status: 404, body: 'no', headers: { 'access-control-allow-origin': '*' } }))
+    const origin: string[] = []
+    await page.route(/^https:\/\/(?:api\.polyhaven\.com|dl\.polyhaven\.org)\//, (r: any) => { origin.push(r.request().url()); return r.abort() })
+    await page.route(/\/@losebird\/iui[@/][^/]+\/(?:files\/)?lib\/assets\/vendor\/(iui-models@\d+\/[A-Za-z0-9_.-]+\.glb)$/, async (r: any) => {
+      const file = /(iui-models@\d+\/[A-Za-z0-9_.-]+\.glb)$/.exec(r.request().url())![1]!
+      try { await r.fulfill({ status: 200, body: readFileSync(new URL(`../lib/assets/vendor/${file}`, import.meta.url)), headers: { 'content-type': 'model/gltf-binary', 'access-control-allow-origin': '*' } }) } catch { await r.fulfill({ status: 404, body: 'no', headers: { 'access-control-allow-origin': '*' } }) }
+    })
     await page.setContent(buildHtmlSandboxSrcdoc(spec(c.html, c.js ?? ''), { frameId: `r53-${c.name}`, uiLang: 'zh' }), { waitUntil: 'load' })
     await page.waitForSelector('[data-iui-3d-ready]', { timeout: 45000 }).catch(() => {})
     await page.waitForTimeout(400)
@@ -240,6 +248,7 @@ export async function stage3dCase(browser: any): Promise<number> {
     if (s0.lit < 0.08) problems.push(`${c.name}: canvas looks blank (${(s0.lit * 100).toFixed(0)}% lit)`)
     if (c.name === 'bad' ? !s0.error : s0.error) problems.push(`${c.name}: error flag ${s0.error}`)
     if (errors.length) problems.push(`${c.name}: page errors ${errors.join(' | ')}`)
+    if (c.name === 'bundled' && (s0.source !== 'bundled' || origin.length)) problems.push(`bundled: source ${s0.source}, original host hits ${origin.length}`)
     if (c.name === 'glb') {
       if (JSON.stringify(s0.clips) !== '["Spin"]') problems.push(`glb: clips ${JSON.stringify(s0.clips)}`)
       if (s0.pins !== 1) problems.push(`glb: node pin missing (${s0.pins})`)
@@ -270,7 +279,7 @@ export async function stage3dCase(browser: any): Promise<number> {
     }
     await page.close()
   }
-  console.log(`${problems.length ? '✗' : '✓'} R5-3 3D stage: primitive + pins · fixture GLB (clip, node pin) · fallback · wheel/Ctrl-zoom · keys${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  console.log(`${problems.length ? '✗' : '✓'} R5-3 3D stage: primitive + pins · fixture GLB (clip, node pin) · fallback · R5-3b bundled model (mirror copy, origin untouched) · wheel/Ctrl-zoom · keys${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
   return problems.length ? 1 : 0
 }
 

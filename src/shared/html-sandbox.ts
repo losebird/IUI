@@ -4660,7 +4660,7 @@ function buildHtmlSandboxSrcdocInner(
     // G4: Lucide icons — streaming shells always carry them (markup still arriving); complete pages only when used.
     (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '') +
     // R5-3: host 3D stage — same rule as icons.
-    (pageWants3d(html + authorJs + fnSrc, deferJs) ? buildStage3dRuntimeScript() : '')
+    (pageWants3d(html + authorJs + fnSrc, deferJs) ? buildStage3dRuntimeScript({ assetBase: options.assetBase }) : '')
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()

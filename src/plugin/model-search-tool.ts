@@ -1,11 +1,12 @@
 /**
  * R5-3 find_3d_models — CC0 model search for the host 3D stage (Poly Haven + Khronos samples).
  * Returns stage-ready ids (`polyhaven:<id>` / `khronos:<Name>`), size, licence and source page.
+ * R5-3b: models shipped with the plugin are searched first and marked `bundled=yes` (they load offline).
  */
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { GenericCallView, GenericResultView, ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { rankHits, searchKhronos, searchPolyhaven, type ModelHit } from '../shared/model-catalog.ts'
+import { preferBundled, rankHits, searchBundled, searchKhronos, searchPolyhaven, type ModelHit } from '../shared/model-catalog.ts'
 import { isKnownUnreachable } from '../shared/network-probe.ts'
 
 const PARAMETERS: Record<string, unknown> = {
@@ -35,6 +36,7 @@ function formatHit(h: ModelHit, i: number): string {
     `source=${h.source}`,
     `license=${h.license}`,
     `author=${JSON.stringify(h.author)}`,
+    ...(h.bundled ? ['bundled=yes'] : []),
     ...(h.sizeMb !== undefined ? [`size_mb=${h.sizeMb}`] : []),
     ...(h.dimensionsM ? [`dimensions_m=${h.dimensionsM.join('x')}`] : []),
     ...(h.polycount !== undefined ? [`polycount=${h.polycount}`] : []),
@@ -57,7 +59,7 @@ export function createFind3dModelsTool(deps: { fetchJson?: typeof fetchJson } = 
       'Search free CC0 3D models (Poly Haven + Khronos glTF samples) for the host 3D stage. '
       + 'Pass what the object is in English keywords. Returns stage ids like polyhaven:ArmChair_01 / khronos:ToyCar with size and licence. '
       + 'Then emit ONE ```iui-html fence with <div data-iui-3d=\'{"model":"<id>"}\'></div> (the host does lights, shadow, framing, orbit). '
-      + 'Prefer the smallest good match (chat bubble). No match → use a primitive "shape" or ask the user for a GLB URL; never invent model ids or URLs.',
+      + 'Prefer bundled=yes (ships with the plugin, loads offline), then the smallest good match. No match → use a primitive "shape" or ask the user for a GLB URL; never invent model ids or URLs.',
     parameters: PARAMETERS,
     output: {
       schema: { type: 'string', description: 'Model search result for the model.' },
@@ -70,17 +72,17 @@ export function createFind3dModelsTool(deps: { fetchJson?: typeof fetchJson } = 
       if (!a) return ['[iui-3d-models]', 'status=invalid', 'error=need_query', 'hint=Pass query: "armchair" (English keywords)'].join('\n')
       const hits: ModelHit[] = []
       const notes: string[] = []
-      hits.push(...searchKhronos(a.query))
-      if (isKnownUnreachable(['models'])) notes.push('note=Poly Haven is unreachable from this network; only Khronos samples were searched.')
+      hits.push(...searchBundled(a.query), ...searchKhronos(a.query))
+      if (isKnownUnreachable(['models'])) notes.push('note=Poly Haven is unreachable from this network; only bundled models and Khronos samples were searched (bundled=yes loads offline).')
       else {
         try {
           const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(6000) : undefined
           hits.push(...await searchPolyhaven(a.query, get, { max: a.max + 2, ...(signal ? { signal } : {}) }))
         } catch (err) {
-          notes.push(`note=Poly Haven search failed (${err instanceof Error ? err.message : String(err)}); only Khronos samples were searched.`)
+          notes.push(`note=Poly Haven search failed (${err instanceof Error ? err.message : String(err)}); only bundled models and Khronos samples were searched.`)
         }
       }
-      const top = rankHits(hits, a.max)
+      const top = rankHits(preferBundled(hits), a.max)
       if (!top.length) {
         return [
           '[iui-3d-models]',

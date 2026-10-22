@@ -134,7 +134,8 @@ function bindingSessionOf(url: string | undefined): string {
 
 const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 // F1: `vendor/iui-esm/<pkg>@<version>[-helpers].mjs` = generated ESM wrappers over the UMD builds.
-const VENDOR_FILE_RE = /^vendor\/(?:(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+|iui-esm\/[a-z0-9.-]+@\d[\w.-]*)\.(js|mjs|css|png|svg|woff2?|ttf|json|wasm)$/i
+// R5-3b: `vendor/iui-models@<n>/<id>.glb` = CC0 models shipped with the plugin.
+const VENDOR_FILE_RE = /^vendor\/(?:(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+|iui-esm\/[a-z0-9.-]+@\d[\w.-]*)\.(js|mjs|css|png|svg|woff2?|ttf|json|wasm|glb)$/i
 const VENDOR_MIME: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',
   mjs: 'text/javascript; charset=utf-8',
@@ -146,6 +147,8 @@ const VENDOR_MIME: Record<string, string> = {
   ttf: 'font/ttf',
   json: 'application/json; charset=utf-8',
   wasm: 'application/wasm',
+  // R5-3b: bundled CC0 models (vendor/iui-models@N/<id>.glb)
+  glb: 'model/gltf-binary',
 }
 
 async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -165,7 +168,7 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
   }
   const file = rel.slice(1)
 
-  // G12: image-export resource proxy (public http(s) images / CSS only).
+  // G12: image-export resource proxy (public http(s) images / CSS only; R5-3b `kind=model` for 3D models).
   if (file === 'proxy') {
     await serveResourceProxy(req, res)
     return

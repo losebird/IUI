@@ -25,6 +25,14 @@ Copyright notices for third-party code incorporated under the MIT License.
    modification and distribution with or without fee, provided the above
    copyright notice and this permission notice appear in all copies.
 
+4) Bundled 3D models (CC0-1.0, public domain dedication — listed as a courtesy)
+   lib/assets/vendor/iui-models@1/*.glb, from Poly Haven (https://polyhaven.com,
+   authors: Kirill Sannikov, Rajil Jose Macatangay, Gabriel Radić, James Ray Cock,
+   Thomas Paul Mouilleron, Yann Kervran, Kuutti Siitonen, Oliver Harries, Plat251)
+   and KhronosGroup/glTF-Sample-Assets (ToyCar: Guido Odendahl, Eric Chadwick;
+   WaterBottle: Microsoft). Re-encoded with gltf-transform (MIT, build-time only,
+   not shipped). Details: assets/models/README.md.
+
 See LICENSE for the MIT terms that apply to this package and the above
 incorporated material. This NOTICE is attribution only; it is not product
 marketing for any upstream project.
