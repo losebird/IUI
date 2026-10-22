@@ -27,6 +27,7 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 - css 只写**本页特有**样式；颜色一律用 CSS 变量，禁止硬编码正文/背景色。
 - CDN 仅 HTTPS：cdn.jsdelivr.net / cdnjs.cloudflare.com / esm.sh / unpkg.com。
 - 交互本地完成；跟宿主通信用 `window.iuiSandbox.sendPrompt / openLink / action`。
+- 本文件 + 系统提示就是全部 API：**不要去读插件源码 / node_modules**（grep/read 宿主实现只会多跑几步、多花几万 token，用户在等）。
 
 ## 设计规则（宿主已注入对应样式）
 - **字号只用 12 / 14 / 16 / 20 / 28 / 40**（`--fs-xs` `--fs-sm` `--fs-md` `--fs-lg` `--fs-xl` `--fs-2xl`），任何文字不小于 12px；正文对比度 ≥ 4.5:1。
@@ -41,7 +42,7 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 ### 地图 / 多站（南京密度，不是冻成某一城的模版）
 2 站及以上（行程、探店、一日游、景点详解）必须同时有：
 1. 真 Leaflet（`.iui-map-wrap` 高 300px，默认彩色底图）+ Pause/Replay
-2. 编号针 `.iui-pin-dot`（按类别加 `data-cat="food|sight|hotel|shop|nature|culture|transport"` 着色，选中项加 `.active` 会放大置顶；宿主自动把挤在一起的针错开）+ `createTripAnimator`（`pinElements` 先丢掉 `getElement()` 的 null）
+2. 编号针 `.iui-pin-dot`（按类别加 `data-cat="food|sight|hotel|shop|nature|culture|transport"` 着色，选中项加 `.active` 会放大置顶；宿主自动把挤在一起的针错开）+ `createTripAnimator({stopCount, durationMs, pinElements, map, onFrame(f){f.pinIndex/f.pinProgress/f.activeStop}, onState(st){'playing'|'paused'|'complete'}})` → `{play, pause, replay}`（`pinElements` 先丢掉 `getElement()` 的 null）
 3. 横滑 `.iui-cards-strip` + `.iui-stop-card`（多卡在第一次圆角框里滚，不要撑破边框）
 4. **点针或卡 → 页内详解**：停留 / 票或预约 / 怎么去 / 避坑（加一句为何排这一站）
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。

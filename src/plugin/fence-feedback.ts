@@ -318,6 +318,8 @@ interface SessionFeedback {
   correctionsTurn: number | undefined
   /** 从 session event 中恢复的当前 turn。 */
   currentTurn: number | undefined
+  /** Turn whose first pre-step already ran (dsh 0.2 numbers steps from 1, older hosts from 0). */
+  firstPreStepTurn: number | undefined
   /** 已计入 correction budget 的 message ID。 */
   accountedCorrectionMessageIds: Set<string>
 }
@@ -758,6 +760,7 @@ export function installFenceFeedback(
         correctionsThisTurn: 0,
         correctionsTurn: undefined,
         currentTurn: undefined,
+        firstPreStepTurn: undefined,
         accountedCorrectionMessageIds: new Set(),
       }
       sessions.set(sessionId, state)
@@ -972,8 +975,11 @@ export function installFenceFeedback(
     const state = sessions.get(String(agent.session.id))
     if (state === undefined) return decision
     const extras: ReturnType<typeof createFeedbackMessage>[] = []
+    // First step of the turn, whatever the host's step base (0.1.x: 0, 0.2.x: 1).
+    const firstStep = state.firstPreStepTurn !== turn
+    state.firstPreStepTurn = turn
 
-    if (step === 0) {
+    if (firstStep) {
       const reminder = state.pendingNextTurnReminder
       const askNow = state.lastUserAsk.trim() !== ''
         ? state.lastUserAsk
