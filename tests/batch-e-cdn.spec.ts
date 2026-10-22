@@ -140,7 +140,7 @@ describe('C7 subresource integrity', () => {
   it('injected CDN tags carry integrity + crossorigin; local first candidate does not', () => {
     const js = 'var m=L.map("m");new Chart(c,{type:"bar"});'
     const cdnDoc = buildHtmlSandboxSrcdoc(page('<div id="m"></div><canvas id="c"></canvas>', js))
-    expect(cdnDoc).toMatch(/<script async data-iui-cdn data-iui-fallback="[^"]*" integrity="sha384-[^"]+" crossorigin="anonymous"[^>]*src="https:\/\/cdn\.jsdelivr\.net\/npm\/leaflet@1\.9\.4\/dist\/leaflet\.js"/)
+    expect(cdnDoc).toMatch(/<script async data-iui-cdn data-iui-fallback="[^"]*" integrity="sha384-[^"]+" crossorigin="anonymous"[^>]*src="https:\/\/registry\.npmmirror\.com\/leaflet\/1\.9\.4\/files\/dist\/leaflet\.js"/)
     expect(cdnDoc).toMatch(/<link rel="stylesheet" data-iui-fallback="[^"]*" integrity="sha384-[^"]+" crossorigin="anonymous" media="print"/)
     const localDoc = buildHtmlSandboxSrcdoc(page('<div id="m"></div>', js), { assetBase: BASE })
     const tag = /<script async data-iui-cdn[^>]*leaflet\.js"><\/script>/.exec(localDoc)![0]
@@ -240,14 +240,15 @@ describe('C10 connectivity probe', () => {
       },
     })
     expect(seen.every((s) => s.startsWith('HEAD https://'))).toBe(true)
-    expect(out.results.map((r) => `${r.id}:${r.ok}`)).toEqual(['jsdelivr:true', 'npmmirror:true', 'unpkg:false', 'wikipedia:true', 'wikimedia:false', 'tiles:true'])
+    expect(out.results.map((r) => `${r.id}:${r.ok}`)).toEqual(['jsdelivr:true', 'npmmirror:true', 'unpkg:false', 'zstatic:true', 'staticfile:true', 'wikipedia:true', 'wikimedia:false', 'tiles:true', 'amap:true'])
     expect(out.results.find((r) => r.id === 'wikipedia')?.status).toBe(405)
   })
 
   it('tile probe follows the default tile host; CDN probes come from the registry', () => {
     const t = networkProbeTargets()
     expect(new URL(t.find((x) => x.id === 'tiles')!.url).host).toBe(new URL(IUI_DEFAULT_MAP_TILE_URL.replace(/\{[xyz]\}/g, '0')).host)
-    expect(t.find((x) => x.id === 'jsdelivr')!.url).toBe(vendorUrls('leaflet', 'dist/leaflet.css')[0])
+    expect(t.find((x) => x.id === 'jsdelivr')!.url).toBe(withVendorSource({ preset: 'global' }, () => vendorUrls('leaflet', 'dist/leaflet.css')[0]))
+    expect(t.find((x) => x.id === 'npmmirror')!.url).toBe(vendorUrls('leaflet', 'dist/leaflet.css')[0])
   })
 
   it('caches for an hour, shares one in-flight run, force re-probes', async () => {
@@ -269,7 +270,9 @@ describe('C10 connectivity probe', () => {
   it('advice + known-unreachable only from a fresh probe', () => {
     expect(probeAdvice(snap(['jsdelivr', 'unpkg']), 'global')).toEqual(['switch-china'])
     expect(probeAdvice(snap(['npmmirror']), 'china')).toEqual(['switch-global'])
-    expect(probeAdvice(snap(['jsdelivr', 'npmmirror', 'unpkg', 'tiles']), 'local')).toEqual(['cdn-all-down', 'no-tiles'])
+    expect(probeAdvice(snap(['jsdelivr', 'npmmirror', 'unpkg', 'zstatic', 'staticfile', 'tiles', 'amap']), 'local')).toEqual(['cdn-all-down', 'no-tiles'])
+    // F2/F4: any reachable mirror or the AMap basemap means auto mode copes on its own
+    expect(probeAdvice(snap(['jsdelivr', 'npmmirror', 'unpkg', 'tiles']), 'auto')).toEqual([])
     expect(probeAdvice(snap(['wikipedia', 'wikimedia']), 'local')).toEqual(['no-wikimedia'])
     expect(probeAdvice(null, 'local')).toEqual([])
     expect(isKnownUnreachable(['wikipedia', 'wikimedia'], snap(['wikipedia', 'wikimedia']))).toBe(true)
@@ -290,7 +293,7 @@ describe('C10 connectivity probe', () => {
   it('settings card lists every host and the preset advice', () => {
     const html = renderToStaticMarkup(createElement(NetworkProbeCard, { t: (k: string) => k, preset: 'global', initial: snap(['jsdelivr', 'unpkg']) }))
     for (const { id } of networkProbeTargets()) expect(html).toContain(`data-iui-probe="${id}"`)
-    expect(html).toContain('data-iui-network-probe="4/6"')
+    expect(html).toContain('data-iui-network-probe="7/9"')
     expect(html).toContain('data-iui-probe-advice="switch-china"')
     expect(html).toContain('netProbeRecheck')
     const idle = renderToStaticMarkup(createElement(NetworkProbeCard, { t: (k: string) => k, preset: 'local', initial: null }))
@@ -307,7 +310,9 @@ describe('C10 connectivity probe', () => {
 describe('C11 preconnect', () => {
   it('warms the first CDN origin (with crossorigin for SRI fetches)', () => {
     const doc = buildHtmlSandboxSrcdoc(page('', 'L.map("m")'))
-    expect(doc).toContain('<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>')
+    expect(doc).toContain('<link rel="preconnect" href="https://registry.npmmirror.com" crossorigin/>')
+    const g = buildHtmlSandboxSrcdoc(page('', 'L.map("m")'), { cdnSource: { preset: 'global' } })
+    expect(g).toContain('<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>')
     const china = buildHtmlSandboxSrcdoc(page('', 'L.map("m")'), { cdnSource: { preset: 'china' } })
     expect(china).toContain('<link rel="preconnect" href="https://registry.npmmirror.com" crossorigin/>')
   })

@@ -71,15 +71,15 @@ describe('G3 chart / ECharts theming', () => {
   it('chart guard runs before the Chart.js vendor tag', () => {
     expect(doc).toContain('iuiChartPalette')
     expect(doc).toContain('__iuiRethemeCharts')
-    expect(doc.indexOf('iuiChartPalette')).toBeLessThan(doc.indexOf('src="https://cdn.jsdelivr.net/npm/chart.js'))
+    expect(doc.indexOf('iuiChartPalette')).toBeLessThan(doc.indexOf('src="https://registry.npmmirror.com/chart.js/'))
   })
   it('echarts guard registers the iui theme before the vendor tag', () => {
     expect(doc).toContain('__iuiRethemeEcharts')
-    expect(doc.indexOf('__iuiRethemeEcharts')).toBeLessThan(doc.indexOf('src="https://cdn.jsdelivr.net/npm/echarts'))
+    expect(doc.indexOf('__iuiRethemeEcharts')).toBeLessThan(doc.indexOf('src="https://registry.npmmirror.com/echarts/'))
   })
   it('leaflet guard (G8 cooperative gestures) runs before the Leaflet vendor tag', () => {
     expect(doc).toContain('addInitHook')
-    expect(doc.indexOf('addInitHook')).toBeLessThan(doc.indexOf('src="https://cdn.jsdelivr.net/npm/leaflet'))
+    expect(doc.indexOf('addInitHook')).toBeLessThan(doc.indexOf('src="https://registry.npmmirror.com/leaflet/'))
   })
 })
 

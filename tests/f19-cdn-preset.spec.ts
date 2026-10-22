@@ -41,7 +41,9 @@ describe('F19 vendor source presets', () => {
     expect(isValidCdnTemplate('http://a.cn/{file}')).toBe(false)
     expect(isValidCdnTemplate('https://a.cn/{file}"><script>')).toBe(false)
     expect(normalizeCdnPreset('china')).toBe('china')
-    expect(normalizeCdnPreset('mars')).toBe('local')
+    expect(normalizeCdnPreset('mars')).toBe('auto')
+    expect(normalizeCdnPreset('auto')).toBe('auto')
+    expect(normalizeCdnPreset('local')).toBe('local')
     expect(customCdnOrigin({ preset: 'custom', template: 'https://a.cn:8443/{file}' })).toBe('https://a.cn:8443')
     expect(customCdnOrigin({ preset: 'china' })).toBeNull()
   })
@@ -53,7 +55,11 @@ describe('F19 vendor source presets', () => {
     expect(map.gsap).toContain('registry.npmmirror.com/gsap/')
     const local = withVendorSource({ preset: 'local' }, () => buildVendorImportMap(BASE)).imports
     expect(local.three).toContain('dsh.example')
-    expect(local.gsap).toContain('cdn.jsdelivr.net/npm/gsap@')
+    expect(local.gsap).toBe(`${BASE}/vendor/gsap@3.12.5/index.js`)
+    expect(local.d3).toBe(`${BASE}/vendor/iui-esm/d3@7.9.0.mjs`)
+    expect(local['gsap/ScrollTrigger']).toBe(`${BASE}/vendor/gsap@3.12.5/ScrollTrigger.js`)
+    const global = withVendorSource({ preset: 'global' }, () => buildVendorImportMap()).imports
+    expect(global.gsap).toContain('cdn.jsdelivr.net/npm/gsap@3.12.5/')
   })
 
   it('srcdoc follows the source option and restores the default afterwards', () => {
@@ -63,7 +69,7 @@ describe('F19 vendor source presets', () => {
     const china = doc('L.map("m")', { cdnSource: { preset: 'china' } })
     expect(china).toContain('leafletJsList')
     expect(china).toContain('"preset":"china"')
-    expect(doc('L.map("m")')).toContain('"preset":"local"')
+    expect(doc('L.map("m")')).toContain('"preset":"auto"')
   })
 
   it('accepts the switchCdn strip action', () => {
@@ -87,9 +93,10 @@ describe('F19 config + override', () => {
   })
 
   it('resolves config defaults', () => {
-    expect(resolveLiveConfig({}).cdnPreset).toBe('local')
+    expect(resolveLiveConfig({}).cdnPreset).toBe('auto')
+    expect(resolveLiveConfig({}).mapTiles).toBe('auto')
     expect(resolveLiveConfig({ cdnPreset: 'china', cdnTemplate: '  https://a.cn/{file} ' })).toMatchObject({ cdnPreset: 'china', cdnTemplate: 'https://a.cn/{file}' })
-    expect(resolveLiveConfig({ cdnPreset: 'bogus' }).cdnPreset).toBe('local')
+    expect(resolveLiveConfig({ cdnPreset: 'bogus' }).cdnPreset).toBe('auto')
   })
 
   it('strip override applies until the configured preset changes', () => {

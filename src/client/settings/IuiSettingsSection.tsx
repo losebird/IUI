@@ -18,6 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SETTINGS_FIELDS, SETTINGS_FIELD_NAMES, type SettingsFieldKind, type SettingsFieldName } from '../../config/settings-fields.ts'
 import { isValidCdnTemplate as isRuntimeCdnTemplate, type CdnPreset } from '../../shared/vendor-registry.ts'
+import type { MapTilesSetting } from '../../shared/net-context.ts'
 import { DEFAULT_PAGE_APPEARANCE, isDefaultPageAppearance, type PageAppearance } from '../../shared/page-appearance.ts'
 import { AppearancePanel } from '../appearance-panel.tsx'
 import { assetUrl } from '../asset-loader.ts'
@@ -211,6 +212,7 @@ export function IuiSettingsSection(props: {
   const soMode = enumOf(state.structuredOutputsMode, 'structuredOutputsMode')
   const cdnPreset = enumOf(state.cdnPreset, 'cdnPreset')
   const cdnTemplate = state.cdnTemplate?.text ?? ''
+  const mapTiles = enumOf(state.mapTiles, 'mapTiles')
   const textInput = (name: SettingsFieldName, opts: { type?: string; placeholder?: string; disabled?: boolean } = {}) => (
     <input
       className={styles.textInput}
@@ -312,11 +314,16 @@ export function IuiSettingsSection(props: {
         <section className={styles.group} data-iui-settings-group="network">
           <h3 className={styles.groupTitle}>{t('groupNetwork')}</h3>
           <p className={styles.groupHint}>{t('cdnSourceHint')}</p>
+          <NetworkProbeCard t={t} preset={cdnPreset as CdnPreset} mapTiles={mapTiles as MapTilesSetting} />
+          {/* Batch F: everything is automatic; manual overrides live under「高级」. */}
+          <details className={styles.devDetails} data-iui-settings-advanced="network" open={cdnPreset !== 'auto' || mapTiles !== 'auto' ? true : undefined}>
+          <summary>{t('netAdvanced')}</summary>
           <label className={styles.overrideField}>
             <span className={styles.overrideLabel}>{t('cdnPreset')}</span>
             <select className={styles.select} disabled={ro} value={cdnPreset}
               onChange={(event) => props.edit('cdnPreset', event.currentTarget.value)}
             >
+              <option value="auto">{t('cdnPresetAuto')}</option>
               <option value="local">{t('cdnPresetLocal')}</option>
               <option value="china">{t('cdnPresetChina')}</option>
               <option value="global">{t('cdnPresetGlobal')}</option>
@@ -332,7 +339,18 @@ export function IuiSettingsSection(props: {
                 : <span className={styles.error} role="alert" data-iui-settings-invalid="cdnTemplate">{t('cdnTemplateInvalid')}</span>}
             </label>
           )}
-          <NetworkProbeCard t={t} preset={cdnPreset as CdnPreset} />
+          <label className={styles.overrideField}>
+            <span className={styles.overrideLabel}>{t('mapTiles')}</span>
+            <select className={styles.select} disabled={ro} value={mapTiles} data-iui-settings-field="mapTiles"
+              onChange={(event) => props.edit('mapTiles', event.currentTarget.value)}
+            >
+              <option value="auto">{t('mapTilesAuto')}</option>
+              <option value="amap">{t('mapTilesAmap')}</option>
+              <option value="global">{t('mapTilesGlobal')}</option>
+            </select>
+            <span className={styles.hint}>{t('mapTilesHint')}</span>
+          </label>
+          </details>
         </section>
 
         <section className={styles.group} data-iui-settings-group="privacy">

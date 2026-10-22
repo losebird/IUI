@@ -19,8 +19,10 @@ export interface IuiPluginConfig {
   strictImagePolicy?: boolean
   /** F16: deprecated ```iui / ```dsh-ui fence compatibility (default off; removed in 0.14). */
   legacyFences?: boolean
-  /** F19: sandbox library source (`local` default · `china` · `global` · `custom`). */
-  cdnPreset?: 'local' | 'china' | 'global' | 'custom'
+  /** F19/F2: sandbox library source (`auto` default · `local` · `china` · `global` · `custom`). */
+  cdnPreset?: 'auto' | 'local' | 'china' | 'global' | 'custom'
+  /** F4 (Batch F): map basemap — `auto` (AMap when the probe sees a mainland-China network) · `amap` · `global`. */
+  mapTiles?: 'auto' | 'amap' | 'global'
   /** F19: custom library URL template, e.g. `https://my.cdn/{name}@{version}/{file}`. */
   cdnTemplate?: string
   /** G7: how readily replies become pages (`balanced` default). */

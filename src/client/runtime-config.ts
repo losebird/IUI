@@ -7,6 +7,8 @@ import { setActiveThemeId, setCustomTokens } from './theme/apply-theme.ts'
 import { setActivePackId } from './theme/apply-pack.ts'
 import { isVisualPreviewLocked } from './theme/preview-lock.ts'
 import { normalizeCdnPreset, type CdnPreset, type VendorSource } from '../shared/vendor-registry.ts'
+import { cdnOrderFromProbe, decideNetContext, normalizeMapTilesSetting, type MapTilesSetting, type NetContext } from '../shared/net-context.ts'
+import type { NetworkProbeSnapshot } from '../shared/network-probe.ts'
 
 export type RuntimeConfigSnapshot = {
   themeId: string
@@ -20,6 +22,10 @@ export type RuntimeConfigSnapshot = {
   /** F19: library source preset + custom template. */
   cdnPreset?: CdnPreset
   cdnTemplate?: string
+  /** Batch F: basemap setting (auto · amap · global). */
+  mapTiles?: MapTilesSetting
+  /** C10/Batch F: last plugin connectivity probe (drives the `auto` choices). */
+  networkProbe?: NetworkProbeSnapshot | null
   /** G7: page eagerness (restrained · balanced · eager). */
   uiEagerness?: 'restrained' | 'balanced' | 'eager'
   customTokensJson: string
@@ -33,7 +39,32 @@ export type RuntimeConfigSnapshot = {
 }
 
 const listeners = new Set<() => void>()
+const PROBE_CACHE_KEY = 'iui:networkProbe'
+/** A cached probe keeps `auto` stable across reloads (no rebuild when the fresh one lands). */
+const PROBE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+function isProbeSnapshot(v: unknown): v is NetworkProbeSnapshot {
+  return !!v && typeof v === 'object' && typeof (v as NetworkProbeSnapshot).at === 'number' && Array.isArray((v as NetworkProbeSnapshot).results)
+}
+
+function readCachedProbe(): NetworkProbeSnapshot | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(PROBE_CACHE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as unknown
+    return isProbeSnapshot(v) && Date.now() - v.at < PROBE_CACHE_MAX_AGE_MS ? v : null
+  } catch { return null }
+}
+
+/** Same probe → same key → no iframe rebuild. */
+function probeSignature(snap: NetworkProbeSnapshot | null | undefined): string {
+  if (!snap) return ''
+  const ctx = decideNetContext(snap, 'auto')
+  return `${cdnOrderFromProbe(snap).join(',')}|${ctx.tiles}|${ctx.wiki}|${snap.results.find((r) => r.id === 'amap')?.ok === true}`
+}
+
 let snapshot: RuntimeConfigSnapshot = {
+  networkProbe: readCachedProbe(),
   themeId: DEFAULT_THEME_ID,
   packId: 'sandbox',
   fenceFeedback: true,
@@ -67,6 +98,23 @@ export function getRuntimeConfigSnapshot(): RuntimeConfigSnapshot {
   return snapshot
 }
 
+/**
+ * Batch F: store a probe (runtime-config, network-probe.json or the settings
+ * card's re-check). Listeners fire only when the derived choices change.
+ */
+export function setNetworkProbeSnapshot(snap: NetworkProbeSnapshot | null): void {
+  if (snap !== null && !isProbeSnapshot(snap)) return
+  const changed = probeSignature(snap) !== probeSignature(snapshot.networkProbe)
+  snapshot = { ...snapshot, networkProbe: snap }
+  try { if (snap) globalThis.localStorage?.setItem(PROBE_CACHE_KEY, JSON.stringify(snap)) } catch { /* private mode */ }
+  if (changed) for (const listener of listeners) listener()
+}
+
+/** Batch F: basemap + photo strategy for the next srcdoc build. */
+export function getNetContextForBuild(): NetContext {
+  return decideNetContext(snapshot.networkProbe, normalizeMapTilesSetting(snapshot.mapTiles))
+}
+
 /** F16: deprecated ```iui / ```dsh-ui fences render only with the compat switch on. */
 export function isLegacyFencesEnabled(): boolean {
   return snapshot.legacyFences === true
@@ -95,7 +143,8 @@ export function getCdnSource(): VendorSource {
   const configured = normalizeCdnPreset(snapshot.cdnPreset)
   const override = readCdnOverride()
   const preset = override && override.base === configured ? override.preset : configured
-  return { preset, ...(snapshot.cdnTemplate ? { template: snapshot.cdnTemplate } : {}) }
+  const order = preset === 'auto' ? cdnOrderFromProbe(snapshot.networkProbe) : []
+  return { preset, ...(snapshot.cdnTemplate ? { template: snapshot.cdnTemplate } : {}), ...(order.length ? { order } : {}) }
 }
 
 /** F19: remember a strip-chosen preset for this browser and notify frames. */
@@ -139,6 +188,8 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         legacyFences: data.legacyFences === true,
         cdnPreset: normalizeCdnPreset(data.cdnPreset),
         cdnTemplate: typeof data.cdnTemplate === 'string' ? data.cdnTemplate : '',
+        mapTiles: normalizeMapTilesSetting(data.mapTiles),
+        networkProbe: isProbeSnapshot(data.networkProbe) ? data.networkProbe : snapshot.networkProbe ?? null,
         uiEagerness: data.uiEagerness === 'restrained' || data.uiEagerness === 'eager' ? data.uiEagerness : 'balanced',
         customTokensJson: typeof data.customTokensJson === 'string' ? data.customTokensJson : '',
         pageStyleJson: typeof data.pageStyleJson === 'string' ? data.pageStyleJson : '',
@@ -148,6 +199,8 @@ export async function refreshRuntimeConfig(): Promise<RuntimeConfigSnapshot> {
         themes: Array.isArray(data.themes) ? data.themes : snapshot.themes,
         packs: [{ id: 'sandbox', label: 'Sandbox HTML' }],
       })
+      if (isProbeSnapshot(data.networkProbe)) setNetworkProbeSnapshot(data.networkProbe)
+      else void fetchProbeOnce()
     } catch {
       /* offline / old host */
     } finally {
@@ -181,4 +234,17 @@ export function startRuntimeConfigWatch(): () => void {
     window.removeEventListener('focus', onVis)
     window.clearInterval(timer)
   }
+}
+
+let probeFetched = false
+/** The plugin probes on first request (≤ 2 s); pick the result up once. */
+async function fetchProbeOnce(): Promise<void> {
+  if (probeFetched || typeof fetch === 'undefined') return
+  probeFetched = true
+  try {
+    const res = await fetch(assetUrl('network-probe.json'), { cache: 'no-store' })
+    if (!res.ok) return
+    const data = await res.json() as { networkProbe?: unknown }
+    if (isProbeSnapshot(data.networkProbe)) setNetworkProbeSnapshot(data.networkProbe)
+  } catch { /* old host / offline */ }
 }

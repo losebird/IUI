@@ -90,7 +90,8 @@ let runtimeConfig: RuntimeConfigPayload = buildRuntimeConfig({
   formatReferee: true,
   strictImagePolicy: false,
   legacyFences: false,
-  cdnPreset: 'local',
+  cdnPreset: 'auto',
+  mapTiles: 'auto',
   cdnTemplate: '',
   uiEagerness: 'balanced',
   customTokensJson: '',
@@ -131,7 +132,8 @@ function bindingSessionOf(url: string | undefined): string {
 }
 
 const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
-const VENDOR_FILE_RE = /^vendor\/(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+\.(js|mjs|css|png|svg|woff2?|ttf|json)$/i
+// F1: `vendor/iui-esm/<pkg>@<version>[-helpers].mjs` = generated ESM wrappers over the UMD builds.
+const VENDOR_FILE_RE = /^vendor\/(?:(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+|iui-esm\/[a-z0-9.-]+@\d[\w.-]*)\.(js|mjs|css|png|svg|woff2?|ttf|json)$/i
 const VENDOR_MIME: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',
   mjs: 'text/javascript; charset=utf-8',

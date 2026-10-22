@@ -5,6 +5,7 @@
  */
 
 import { VENDOR_LIBS, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs } from './vendor-registry.ts'
+import { AMAP_TILE, GCJ_CRS_JS, GCJ_JS, getNetContext } from './net-context.ts'
 
 export type MapLinkTemplate = {
   readonly id: string
@@ -128,6 +129,8 @@ export type LeafletMapSrcdocOptions = {
   accent?: string
   /** C2: plugin asset route base — Leaflet loads from it when set. */
   assetBase?: string
+  /** Batch F: basemap family (defaults to the active net context). */
+  tiles?: 'amap' | 'default'
 }
 
 /**
@@ -135,6 +138,8 @@ export type LeafletMapSrcdocOptions = {
  * With coords/markers: pin immediately. Without: Nominatim geocode `query`.
  */
 export function buildLeafletMapSrcdoc(opts: LeafletMapSrcdocOptions): string {
+  // Batch F: AMap basemap on mainland-China networks (GCJ-02 CRS shift).
+  const amap = (opts.tiles ?? getNetContext().tiles) === 'amap'
   const zoom = clampZoom(opts.zoom)
   const coords = finiteCoords(opts.lat, opts.lng)
   const markers = [...(opts.markers ?? [])]
@@ -184,7 +189,7 @@ export function buildLeafletMapSrcdoc(opts: LeafletMapSrcdocOptions): string {
   .leaflet-control-attribution{font-size:10px;background:rgba(255,255,255,.82)!important}
 </style></head><body>
 <div id="status"></div><div id="map" role="application" aria-label=${titleJson}></div>
-<script src="${leafletJs}"${vendorSriAttrs(leafletJs)}></script>
+<script src="${leafletJs}"${vendorSriAttrs(leafletJs)}></script>${amap ? `<script>${GCJ_JS}</script>` : ''}
 <script>
 (function(){
   var statusEl=document.getElementById('status');
@@ -195,10 +200,11 @@ export function buildLeafletMapSrcdoc(opts: LeafletMapSrcdocOptions): string {
   function notifyParent(payload){
     try{if(window.parent&&window.parent!==window)window.parent.postMessage(payload,'*');}catch(e){}
   }
-  var map=L.map('map',{zoomControl:true,attributionControl:true});
-  L.tileLayer(${JSON.stringify(OSM_TILE)},{
-    maxZoom:19,
-    attribution:'Tiles &copy; Esri'
+  ${amap ? GCJ_CRS_JS : ''}
+  var map=L.map('map',{zoomControl:true,attributionControl:true${amap ? ',crs:L.CRS.IuiGcj||L.CRS.EPSG3857' : ''}});
+  L.tileLayer(${JSON.stringify(amap ? AMAP_TILE.url : OSM_TILE)},{
+    maxZoom:19,${amap ? `maxNativeZoom:${AMAP_TILE.maxZoom},subdomains:'${AMAP_TILE.subdomains}',` : ''}
+    attribution:${JSON.stringify(amap ? AMAP_TILE.attribution : 'Tiles &copy; Esri')}
   }).addTo(map);
   var group=L.featureGroup().addTo(map);
   var routeLine=null;

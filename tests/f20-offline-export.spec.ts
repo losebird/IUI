@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildOfflineExport, type ExportFetcher } from '../src/client/offline-export.ts'
 import { buildHtmlSandboxSrcdoc, isIuiSandboxHostMessage, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
-import { vendorCssUrls, vendorJsUrls } from '../src/shared/vendor-registry.ts'
+import { vendorCssUrls, vendorJsUrls, vendorUrls } from '../src/shared/vendor-registry.ts'
 
 const BASE = 'http://127.0.0.1:3101/plugins/iui/assets'
 
@@ -39,8 +39,8 @@ describe('F20 offline export', () => {
 
   it('maps modules flat in the import map (relative imports → absolute → data:)', async () => {
     const doc = srcdoc('<div id="t"></div>', 'import("three").then(function(){})')
-    const root = 'https://cdn.jsdelivr.net/npm/three@0.180.0/'
-    const mod = `${root}build/three.module.js`
+    const mod = vendorUrls('three', 'build/three.module.js')[0]!
+    const root = mod.replace(/build\/three\.module\.js$/, '')
     const core = `${root}build/three.core.js`
     const orbit = `${root}examples/jsm/controls/OrbitControls.js`
     const out = await buildOfflineExport(doc, [{ url: mod, type: 'script' }, { url: orbit, type: 'script' }], {

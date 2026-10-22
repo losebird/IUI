@@ -14,6 +14,7 @@ import {
 } from '../themes/oiu-design-system.ts'
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
+import { AMAP_TILE, AMAP_TILE_ORIGINS, GCJ_CRS_JS, GCJ_JS, getNetContext, withNetContext, type NetContext } from './net-context.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
 import { VENDOR_CDN_HOSTS, buildSriLookupSource, customCdnOrigin, getVendorSource, normalizeDeclaredLibs, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
@@ -117,6 +118,8 @@ export type HtmlSandboxSpec = {
 export type HtmlSandboxBuildOptions = {
   /** F19: library source preset (Settings → IUI → 资源源); default `local`. */
   cdnSource?: VendorSource
+  /** Batch F: probe-derived basemap (AMap on mainland networks) + photo strategy. */
+  net?: Partial<NetContext>
   /**
    * F17: plugin UI language (`<html lang>`). The in-frame failure strip, code
    * tools and photo credits follow it instead of `navigator.language`.
@@ -2400,6 +2403,8 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (__iuiKbdTimer) return;
     __iuiKbdTimer = setTimeout(function () { __iuiKbdTimer = 0; __iuiKbdScan(); }, 300);
   }
+  // Late clickable marking (motion runtime) changes cursor without a layout change → rescan.
+  window.__iuiKbdSchedule = __iuiKbdSchedule;
   function __iuiKbdScan() {
     try {
       var root = document.getElementById('iui-preview-root') || document.body;
@@ -3325,6 +3330,7 @@ function mapConnectOrigins(): string {
     'https://server.arcgisonline.com',
     'https://services.arcgisonline.com',
     'https://basemap.nationalmap.gov',
+    ...AMAP_TILE_ORIGINS,
     // Trip photo runtime: Wikipedia REST + Commons API (generic place lookup)
     'https://en.wikipedia.org',
     'https://zh.wikipedia.org',
@@ -3350,6 +3356,7 @@ function mapImgOrigins(strict = false): string {
     'https://thumb.wikimedia.org',
     'https://commons.wikimedia.org',
     'https://basemap.nationalmap.gov',
+    ...AMAP_TILE_ORIGINS,
   ].join(' ')
 }
 
@@ -3357,6 +3364,9 @@ function mapImgOrigins(strict = false): string {
  * Also registers maps and refreshes tiles on Replay / moveend blank-outs.
  */
 function buildLeafletTileGuardScript(): string {
+  // F4 (Batch F): AMap first on mainland-China networks (GCJ-02 tiles; WGS-84 data is
+  // shifted by a custom CRS so markers/routes line up).
+  const amap = getNetContext().tiles === 'amap'
   const primaryUrl = JSON.stringify(IUI_DEFAULT_MAP_TILE_URL)
   const primaryAttr = JSON.stringify(IUI_DEFAULT_MAP_TILE_ATTR)
   const fallbacks = JSON.stringify(IUI_MAP_TILE_FALLBACKS)
@@ -3364,11 +3374,14 @@ function buildLeafletTileGuardScript(): string {
   // inside the template — in JS template strings those become control chars / literals
   // and break the iframe with "Invalid or unexpected token".
   return `<script>
+${amap ? GCJ_JS : ''}
 (function () {
   var PRIMARY_URL = ${primaryUrl};
   var PRIMARY_ATTR = ${primaryAttr};
   var FALLBACKS = ${fallbacks};
-  var chain = [{ url: PRIMARY_URL, attribution: PRIMARY_ATTR }].concat(FALLBACKS);
+  var AMAP = ${amap ? JSON.stringify(AMAP_TILE) : 'null'};
+  var chain = (AMAP ? [AMAP] : []).concat([{ url: PRIMARY_URL, attribution: PRIMARY_ATTR }], FALLBACKS);
+  window.__iuiMapTiles = AMAP ? 'amap' : 'default';
   var activeIndex = 0;
   var tileFails = 0;
   var swapped = false;
@@ -3379,12 +3392,30 @@ function buildLeafletTileGuardScript(): string {
     if (extra && typeof extra === 'object') {
       for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) o[k] = extra[k];
     }
+    // provider-owned: subdomains + native zoom (AMap stops at 18 → upscale beyond)
+    if (entry.subdomains) o.subdomains = entry.subdomains;
+    if (entry.maxZoom) o.maxNativeZoom = entry.maxZoom;
+    if (entry.gcj) o.attribution = entry.attribution;
     return o;
   }
   function isBlockedTileUrl(url) {
     if (typeof url !== 'string') return false;
+    if (AMAP && activeIndex === 0 && /arcgisonline|openstreetmap|cartocdn|nationalmap|stadiamaps|thunderforest/i.test(url)) return true;
     return url.indexOf('tile.openstreetmap.org') !== -1
       || url.indexOf('basemaps.cartocdn.com') !== -1;
+  }
+  function isGcj(idx) {
+    var e = chain[idx != null ? idx : activeIndex];
+    return !!(e && e.gcj);
+  }
+  function setCrs(map, gcj) {
+    try {
+      var want = gcj && L.CRS.IuiGcj ? L.CRS.IuiGcj : L.CRS.EPSG3857;
+      if (!map || map.options.crs === want) return;
+      var c = map._loaded ? map.getCenter() : null, z = map._loaded ? map.getZoom() : null;
+      map.options.crs = want;
+      if (c) map._resetView(c, z, true);
+    } catch (e) {}
   }
   function currentUrl() {
     return (chain[activeIndex] || chain[0]).url;
@@ -3419,7 +3450,7 @@ function buildLeafletTileGuardScript(): string {
         if (!layer) return;
         var isTile = (typeof L !== 'undefined' && L.TileLayer && layer instanceof L.TileLayer)
           || (layer && typeof layer.setUrl === 'function' && typeof layer._url === 'string')
-          || (layer && layer._url && /arcgisonline|openstreetmap|cartocdn|nationalmap/i.test(String(layer._url)));
+          || (layer && layer._url && /arcgisonline|openstreetmap|cartocdn|nationalmap|autonavi/i.test(String(layer._url)));
         if (!isTile) return;
         hasTile = true;
         try {
@@ -3454,6 +3485,7 @@ function buildLeafletTileGuardScript(): string {
   }
   function swapLayer(map, reason) {
     if (activeIndex >= chain.length - 1) return false;
+    var wasGcj = isGcj();
     activeIndex++;
     tileFails = 0;
     swapped = true;
@@ -3461,12 +3493,13 @@ function buildLeafletTileGuardScript(): string {
       map.eachLayer(function (layer) {
         if (layer && typeof layer.setUrl === 'function' && typeof layer._url === 'string') {
           try { map.removeLayer(layer); } catch (e) {}
-        } else if (layer && layer._url && /arcgisonline|openstreetmap|cartocdn|nationalmap/i.test(String(layer._url))) {
+        } else if (layer && layer._url && /arcgisonline|openstreetmap|cartocdn|nationalmap|autonavi/i.test(String(layer._url))) {
           try { map.removeLayer(layer); } catch (e) {}
         }
       });
     } catch (e) {}
     try {
+      if (wasGcj !== isGcj()) setCrs(map, isGcj());
       origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
       console.warn('[iui-html] map tile fallback →', currentUrl(), reason || '');
       setTimeout(function () { refreshOne(map, 'post-swap'); }, 40);
@@ -3509,6 +3542,15 @@ function buildLeafletTileGuardScript(): string {
       return origTile(url, options);
     };
     L.tileLayer.__iuiTileGuard = true;
+    // F4: WGS-84 in, GCJ-02 on screen — markers / routes / fitBounds line up with AMap tiles.
+    if (AMAP) ${GCJ_CRS_JS}
+    if (AMAP && L.Map && L.Map.addInitHook && !L.Map.__iuiGcjHook) {
+      L.Map.__iuiGcjHook = true;
+      L.Map.addInitHook(function () {
+        var map = this;
+        try { if (isGcj() && map.options.crs === L.CRS.EPSG3857) setCrs(map, true); } catch (e) {}
+      });
+    }
     L.iuiDefaultTileLayer = function (map) {
       return origTile(currentUrl(), opts(null, activeIndex)).addTo(map);
     };
@@ -3717,6 +3759,11 @@ function buildLeafletTileGuardScript(): string {
           if (swapped || activeIndex > 0) return;
           var c = map.getCenter && map.getCenter();
           if (!c) return;
+          if (AMAP) {
+            // AMap only draws mainland China well; elsewhere start on the regular chain.
+            if (window.__iuiInChina && !window.__iuiInChina(c.lat, c.lng)) jumpToIndex(map, 1, 'amap-outside-china');
+            return;
+          }
           if (isEastAsia(c.lat, c.lng)) {
             jumpToIndex(map, findOsmFrIndex(), 'east-asia');
           }
@@ -4534,7 +4581,7 @@ export function buildHtmlSandboxSrcdoc(
   spec: HtmlSandboxSpec,
   options: HtmlSandboxBuildOptions = {},
 ): string {
-  return withVendorSource(options.cdnSource, () => buildHtmlSandboxSrcdocInner(spec, options))
+  return withNetContext(options.net, () => withVendorSource(options.cdnSource, () => buildHtmlSandboxSrcdocInner(spec, options)))
 }
 
 function buildHtmlSandboxSrcdocInner(
@@ -4617,7 +4664,7 @@ function buildHtmlSandboxSrcdocInner(
 
   // P1-PREVIEW-PHOTO: always inject runtime fill (well-known map). Volume trade for
   // stability — itinerary markers may arrive only in late html chunks / author JS.
-  const photoFill = buildTripPhotoFillScript()
+  const photoFill = buildTripPhotoFillScript(getNetContext())
   // CDN UMD tags go in <head> so Leaflet/Chart start fetching before the bridge posts
   // `ready` (host may immediately runAuthorJs on the preview-shell path).
   const langAttr = typeof options.uiLang === 'string' && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u.test(options.uiLang) ? ` lang="${options.uiLang}"` : ''

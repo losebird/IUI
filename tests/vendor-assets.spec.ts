@@ -6,15 +6,15 @@ const BASE = 'http://127.0.0.1:5173/plugins/@losebird/iui/assets'
 const chartSpec = () => parseHtmlSandboxFence('{"html":"<canvas id=\\"chart\\"></canvas>","js":"new Chart(document.getElementById(\'chart\'),{type:\'bar\'})"}')!
 
 describe('C6 local vendor assets', () => {
-  it('candidate order is local → jsDelivr → npmmirror', () => {
+  it('candidate order (auto, no probe yet) is local → npmmirror → jsDelivr', () => {
     const urls = vendorJsUrls('chart', BASE)
     expect(urls[0]).toBe(`${BASE}/vendor/chart.js@4.4.1/dist/chart.umd.js`)
-    expect(urls[1]).toContain('cdn.jsdelivr.net/npm/chart.js@4.4.1/')
-    expect(urls[2]).toContain('registry.npmmirror.com/chart.js/4.4.1/files/')
+    expect(urls[1]).toContain('registry.npmmirror.com/chart.js/4.4.1/files/')
+    expect(urls[2]).toContain('cdn.jsdelivr.net/npm/chart.js@4.4.1/')
   })
   it('srcdoc loads libs from the asset route first and allows its origin in CSP', () => {
     const doc = buildHtmlSandboxSrcdoc(chartSpec(), { frameId: 't', assetBase: BASE })
-    expect(doc).toMatch(/<script async data-iui-cdn data-iui-fallback="https:\/\/cdn\.jsdelivr\.net[^"]*"[^>]+src="http:\/\/127\.0\.0\.1:5173\/plugins/)
+    expect(doc).toMatch(/<script async data-iui-cdn data-iui-fallback="https:\/\/registry\.npmmirror\.com[^"]*"[^>]+src="http:\/\/127\.0\.0\.1:5173\/plugins/)
     expect(doc).toMatch(/script-src [^;]*http:\/\/127\.0\.0\.1:5173/)
     expect(doc).toContain('window.__iuiVendor')
   })

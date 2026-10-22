@@ -38,7 +38,7 @@ export function buildMotionRuntimeScript(opts: { streaming: boolean }): string {
   }
   function classify(el) {
     if (el.hasAttribute('data-iui-clickable') || skipZone(el)) return true;
-    if (!(el instanceof HTMLElement)) { el.setAttribute('data-iui-clickable', '1'); return true; }
+    if (!(el instanceof HTMLElement)) { el.setAttribute('data-iui-clickable', '1'); try { if (window.__iuiKbdSchedule) window.__iuiKbdSchedule(); } catch (e) {} return true; }
     var r = el.getBoundingClientRect();
     if (!r.width || !r.height) return false;
     // Delegation containers / wrappers with real controls inside are not "a card".
@@ -47,6 +47,7 @@ export function buildMotionRuntimeScript(opts: { streaming: boolean }): string {
     var rr = root ? root.getBoundingClientRect() : { width: innerWidth, height: innerHeight };
     if (r.height > 360 || (r.width >= rr.width * 0.97 && r.height > 160)) return true;
     el.setAttribute('data-iui-clickable', r.width >= 72 && r.height >= 44 ? 'card' : '1');
+    try { if (window.__iuiKbdSchedule) window.__iuiKbdSchedule(); } catch (e) {}
     return true;
   }
   function classifyAll() {

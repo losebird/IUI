@@ -8,8 +8,9 @@
  */
 
 import { vendorProbeUrls, type CdnPreset } from './vendor-registry.ts'
+import { AMAP_PROBE_URL } from './net-context.ts'
 
-export type ProbeTargetId = 'jsdelivr' | 'npmmirror' | 'unpkg' | 'wikipedia' | 'wikimedia' | 'tiles'
+export type ProbeTargetId = 'jsdelivr' | 'npmmirror' | 'unpkg' | 'zstatic' | 'staticfile' | 'wikipedia' | 'wikimedia' | 'tiles' | 'amap'
 
 export interface ProbeResult {
   readonly id: ProbeTargetId
@@ -39,6 +40,7 @@ export function networkProbeTargets(): Array<{ id: ProbeTargetId; url: string }>
     { id: 'wikipedia', url: 'https://en.wikipedia.org/w/api.php' },
     { id: 'wikimedia', url: 'https://upload.wikimedia.org/' },
     { id: 'tiles', url: TILE_PROBE_URL },
+    { id: 'amap', url: AMAP_PROBE_URL },
   ]
 }
 
@@ -103,11 +105,12 @@ export function probeAdvice(snap: NetworkProbeSnapshot | null | undefined, prese
   if (!snap) return []
   const ok = (id: ProbeTargetId): boolean | undefined => snap.results.find((r) => r.id === id)?.ok
   const out: ProbeAdvice[] = []
-  const jsd = ok('jsdelivr'), npmm = ok('npmmirror'), unpkg = ok('unpkg')
-  if (jsd === false && npmm === false && unpkg === false) out.push('cdn-all-down')
+  const jsd = ok('jsdelivr'), npmm = ok('npmmirror')
+  const mirrors = snap.results.filter((r) => r.id === 'jsdelivr' || r.id === 'npmmirror' || r.id === 'unpkg' || r.id === 'zstatic' || r.id === 'staticfile')
+  if (mirrors.length > 0 && mirrors.every((r) => !r.ok)) out.push('cdn-all-down')
   else if (preset === 'global' && jsd === false && npmm === true) out.push('switch-china')
   else if (preset === 'china' && npmm === false && jsd === true) out.push('switch-global')
   if (ok('wikipedia') === false && ok('wikimedia') === false) out.push('no-wikimedia')
-  if (ok('tiles') === false) out.push('no-tiles')
+  if (ok('tiles') === false && ok('amap') !== true) out.push('no-tiles')
   return out
 }

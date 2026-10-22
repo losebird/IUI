@@ -7,6 +7,7 @@
  * 3. enrichItineraryHtml — static HTML rewrite before srcdoc
  * 4. buildTripPhotoFillScript — runtime fill after author JS creates cards
  */
+import { AMAP_TILE, GCJ_JS, getNetContext, type NetContext } from './net-context.ts'
 import { geoMeters, looksLikeFilename, photoCreditLabel, photoMatchesPlace, PHOTO_GEO_RADIUS_M, PHOTO_MATCH_JS, type GeoPoint } from './photo-match.ts'
 
 export type TripStopImage = {
@@ -649,8 +650,11 @@ export const PLACE_MEDIA_CARD_MARKERS = [
  * name / data-place matches WELL_KNOWN_STOPS. Safe on author HTML before srcdoc.
  * Covers itinerary stops AND hotel/product/place/cover cards (P1-OTHER-MEDIA).
  */
-export function enrichPlaceMediaHtml(html: string): string {
+export function enrichPlaceMediaHtml(html: string, net?: Partial<NetContext>): string {
   if (!html) return html
+  // F3: Wikimedia known-unreachable → no Commons src / credit that can only fail;
+  // the in-frame runtime draws place-name map cards instead.
+  if ((net ?? getNetContext()).wiki === false) return html
   let out = html
   for (const marker of PLACE_MEDIA_CARD_MARKERS) {
     if (new RegExp(marker, 'i').test(out)) out = enrichCardsWithMarker(out, marker)
@@ -770,7 +774,7 @@ function enrichDataPlaceNodes(html: string): string {
   )
 }
 
-export function buildTripPhotoFillScript(): string {
+export function buildTripPhotoFillScript(net: Partial<NetContext> = {}): string {
   const map: Record<string, { url: string; artist: string; license: string; credit: string }> = {}
   for (const [key, known] of Object.entries(WELL_KNOWN_STOPS)) {
     const file = known.file.includes('%') ? decodeURIComponent(known.file) : known.file
@@ -784,7 +788,10 @@ export function buildTripPhotoFillScript(): string {
   const json = JSON.stringify(map)
   // Runtime: strict well-known cache + confident Wikipedia/Commons lookup (F12).
   // Unconfident → designed placeholder, never another place's photo.
-  return '<script>\n(function () {\n  var MAP = ' + json + ';\n' + PHOTO_MATCH_JS + TRIP_PHOTO_RUNTIME_JS + '})();\n<\/script>'
+  // F3 (Batch F): Wikimedia unreachable → skip lookups; placeholders become a
+  // place-name map card drawn from the active basemap (AMap on mainland networks).
+  const netJson = JSON.stringify({ wiki: net.wiki !== false, tiles: net.tiles === 'amap' ? 'amap' : 'default', amap: AMAP_TILE.url })
+  return '<script>\n' + GCJ_JS + '\n(function () {\n  var MAP = ' + json + ';\n  var NET = ' + netJson + ';\n' + PHOTO_MATCH_JS + TRIP_PHOTO_RUNTIME_JS + '})();\n<\/script>'
 }
 
 /** In-page fill logic (ES5). Uses PHOTO_MATCH_JS helpers (iuiPhotoMatches, iuiGeoMeters…). */
@@ -1215,6 +1222,72 @@ const TRIP_PHOTO_RUNTIME_JS = String.raw`
     setState(photo, 'placeholder');
     photo.setAttribute('data-iui-photo-final', '1');
     try { img.removeAttribute('src'); img.removeAttribute('data-iui-photo-ok'); } catch (e) {}
+    try { addMapThumb(photo); } catch (eM) {}
+  }
+  /* F3: place-name map card — a few basemap tiles centred on the stop + pin + name. */
+  function tileUrl(x, y, z, inChina) {
+    if (NET.tiles === 'amap' && inChina) return NET.amap.replace('{s}', String(1 + ((x + y) % 4))).replace('{x}', x).replace('{y}', y).replace('{z}', z);
+    if (inChina) return 'https://' + 'abc'.charAt((x + y) % 3) + '.tile.openstreetmap.fr/hot/' + z + '/' + x + '/' + y + '.png';
+    return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + z + '/' + y + '/' + x;
+  }
+  function addMapThumb(photo) {
+    if (!photo || photo.querySelector('.iui-photo-map')) return;
+    var card = (photo.closest && photo.closest(CARD_SEL + ', [data-iui-place]')) || photo.parentElement;
+    var c = card ? cardCoords(card) : null;
+    var ph = null;
+    for (var k = photo.firstElementChild; k; k = k.nextElementSibling) {
+      if (k.classList && k.classList.contains('iui-photo-ph')) { ph = k; break; }
+    }
+    if (!ph) ph = ensurePlaceholder(photo, card || photo);
+    var name = card ? String(placeCandidates(card)[0] || '') : '';
+    var box = document.createElement('div');
+    box.className = 'iui-photo-map';
+    box.setAttribute('aria-hidden', 'true');
+    if (c) {
+      var inChina = !!(window.__iuiInChina && window.__iuiInChina(c.lat, c.lon));
+      var lat = c.lat, lng = c.lon;
+      if (NET.tiles === 'amap' && inChina && window.__iuiWgs2Gcj) { var g = window.__iuiWgs2Gcj(lat, lng); lat = g[0]; lng = g[1]; }
+      var z = 15, n = Math.pow(2, z), rad = lat * Math.PI / 180;
+      var px = (lng + 180) / 360 * n * 256;
+      var py = (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n * 256;
+      var tx = Math.floor(px / 256), ty = Math.floor(py / 256);
+      var x0 = tx - 1, y0 = (py - ty * 256) < 128 ? ty - 1 : ty;
+      var grid = document.createElement('div');
+      grid.className = 'iui-photo-map-grid';
+      grid.style.left = 'calc(50% - ' + Math.round(px - x0 * 256) + 'px)';
+      grid.style.top = 'calc(50% - ' + Math.round(py - y0 * 256) + 'px)';
+      for (var j = 0; j < 2; j++) {
+        for (var i = 0; i < 3; i++) {
+          var t = document.createElement('img');
+          t.alt = '';
+          t.decoding = 'async';
+          t.loading = 'lazy';
+          t.referrerPolicy = 'no-referrer';
+          t.style.left = (i * 256) + 'px';
+          t.style.top = (j * 256) + 'px';
+          t.onerror = function () { this.style.visibility = 'hidden'; };
+          t.src = tileUrl(((x0 + i) % n + n) % n, y0 + j, z, inChina);
+          grid.appendChild(t);
+        }
+      }
+      box.appendChild(grid);
+      box.setAttribute('data-iui-map-tiles', NET.tiles === 'amap' && inChina ? 'amap' : inChina ? 'osm' : 'esri');
+      var attr = document.createElement('span');
+      attr.className = 'iui-photo-map-attr';
+      attr.textContent = NET.tiles === 'amap' && inChina ? '© 高德地图' : inChina ? '© OpenStreetMap' : '© Esri';
+      box.appendChild(attr);
+    }
+    var label = document.createElement('div');
+    label.className = 'iui-photo-map-label';
+    label.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS.pin + '</svg>';
+    if (name) {
+      var nm = document.createElement('span');
+      nm.textContent = name.slice(0, 40);
+      label.appendChild(nm);
+    }
+    box.appendChild(label);
+    ph.appendChild(box);
+    ph.setAttribute('data-iui-photo-map', c ? '1' : '0');
   }
   function wireImage(img, photo, card, info, placeLabel, coords, allowNetworkFallback) {
     if (!img || !info || !info.url) return;
@@ -1299,16 +1372,24 @@ const TRIP_PHOTO_RUNTIME_JS = String.raw`
       photo.className = 'photo';
       card.insertBefore(photo, card.firstChild);
     }
-    var img = photo.querySelector('img');
+    // F3: skip the map-card tiles drawn inside the placeholder.
+    var img = null;
+    var imgs = photo.getElementsByTagName('img');
+    for (var q = 0; q < imgs.length; q++) {
+      if (!(imgs[q].closest && imgs[q].closest('.iui-photo-ph'))) { img = imgs[q]; break; }
+    }
     if (!img) {
       img = document.createElement('img');
       photo.appendChild(img);
     }
     // Author already pointed this img at a URL (gallery next/prev, explicit Wikimedia).
     // Never overwrite from data-iui-place — that is what made next look dead.
-    if (srcLooksAuthorOwned(img)) {
+    // F3: Wikimedia known-unreachable → an author-pointed Wikimedia URL can only fail.
+    var deadWiki = NET.wiki === false && /(^|[\/.])(wikimedia|wikipedia)\.org\//i.test(String(img.getAttribute('src') || ''));
+    if (deadWiki) { try { img.removeAttribute('src'); } catch (eW) {} }
+    if (!deadWiki && srcLooksAuthorOwned(img)) {
       if (img.complete && img.naturalWidth > 0) img.setAttribute('data-iui-photo-ok', '1');
-      if (photo.hasAttribute('data-iui-photo-state')) setState(photo, 'photo');
+      if (photo.hasAttribute('data-iui-photo-state') && !(photo.getAttribute('data-iui-photo-final') === '1' && !(img.naturalWidth > 0))) setState(photo, 'photo');
       return true;
     }
     ensurePlaceholder(photo, card);
@@ -1322,6 +1403,7 @@ const TRIP_PHOTO_RUNTIME_JS = String.raw`
       card.removeAttribute('data-iui-photo-net');
     }
     if (img.getAttribute('data-iui-photo-host') === '1' && img.naturalWidth > 0 && img.complete) return true;
+    if (NET.wiki === false) { giveUp(photo, img); return true; }
     var coords = cardCoords(card);
     for (var i = 0; i < candidates.length; i++) {
       var known = lookupKnown(candidates[i]);
@@ -1388,6 +1470,16 @@ const TRIP_PHOTO_RUNTIME_JS = String.raw`
       + '[data-iui-photo-state]>img{position:relative;z-index:1}'
       + '[data-iui-photo-state]>img:not([data-iui-photo-ok]){opacity:0}'
       + '[data-iui-photo-state="photo"]>.iui-photo-ph{display:none}'
+      + '.iui-photo-ph[data-iui-photo-map]>svg{display:none}'
+      + '.iui-photo-map{position:absolute;inset:0;overflow:hidden}'
+      + '.iui-photo-map-grid{position:absolute;width:768px;height:512px}'
+      + '.iui-photo-map-grid img{position:absolute!important;width:256px!important;height:256px!important;max-width:none!important;max-height:none!important;min-width:0!important;object-fit:fill!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;transform:none!important;display:block!important;filter:saturate(.75) contrast(.95);opacity:.9}'
+      + '.iui-photo-map::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,color-mix(in srgb,var(--color-background-primary,#fff) 70%,transparent))}'
+      + '.iui-photo-map-label{position:absolute;left:50%;top:50%;z-index:1;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--accent,var(--color-text-info,#2563eb))}'
+      + '.iui-photo-map-label svg{width:30px;height:30px;fill:var(--color-background-primary,#fff);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}'
+      + '.iui-photo-map-label span{position:absolute;top:100%;margin-top:4px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;font:600 12px/1.3 system-ui,sans-serif;color:var(--color-text-primary,#111);background:color-mix(in srgb,var(--color-background-primary,#fff) 88%,transparent);padding:2px 8px;border-radius:999px;box-shadow:0 1px 3px rgba(0,0,0,.18)}'
+      + '.iui-photo-map-attr{position:absolute;right:4px;bottom:2px;z-index:1;font:10px/1.2 system-ui,sans-serif;color:var(--color-text-secondary,#555);opacity:.85}'
+      + '[data-iui-scheme="dark"] .iui-photo-map-grid img{filter:brightness(.6) saturate(.6) contrast(1.1)}'
       + '@media (prefers-reduced-motion:reduce){.iui-photo-ph svg{animation:none!important}}';
     (document.head || document.documentElement).appendChild(st);
   }

@@ -6,6 +6,9 @@
 import { useEffect, useState } from 'react'
 import { probeAdvice, type NetworkProbeSnapshot, type ProbeTargetId } from '../../shared/network-probe.ts'
 import type { CdnPreset } from '../../shared/vendor-registry.ts'
+import { DEFAULT_AUTO_CDN_ORDER } from '../../shared/vendor-registry.ts'
+import { cdnOrderFromProbe, decideNetContext, type MapTilesSetting } from '../../shared/net-context.ts'
+import { setNetworkProbeSnapshot } from '../runtime-config.ts'
 import { assetUrl } from '../asset-loader.ts'
 import { getRuntimeConfigSnapshot } from '../runtime-config.ts'
 import styles from './IuiSettingsSection.module.css'
@@ -16,6 +19,9 @@ const LABEL_KEY: Record<ProbeTargetId, string> = {
   jsdelivr: 'netProbe.jsdelivr',
   npmmirror: 'netProbe.npmmirror',
   unpkg: 'netProbe.unpkg',
+  zstatic: 'netProbe.zstatic',
+  staticfile: 'netProbe.staticfile',
+  amap: 'netProbe.amap',
   wikipedia: 'netProbe.wikipedia',
   wikimedia: 'netProbe.wikimedia',
   tiles: 'netProbe.tiles',
@@ -34,7 +40,7 @@ async function fetchProbe(refresh: boolean): Promise<NetworkProbeSnapshot | null
   return isSnapshot(data.networkProbe) ? data.networkProbe : null
 }
 
-export function NetworkProbeCard({ t, preset, initial }: { t: LocaleT; preset: CdnPreset; initial?: NetworkProbeSnapshot | null }) {
+export function NetworkProbeCard({ t, preset, mapTiles = 'auto', initial }: { t: LocaleT; preset: CdnPreset; mapTiles?: MapTilesSetting; initial?: NetworkProbeSnapshot | null }) {
   const [snap, setSnap] = useState<NetworkProbeSnapshot | null>(() => {
     if (initial !== undefined) return initial
     const fromConfig = (getRuntimeConfigSnapshot() as { networkProbe?: unknown }).networkProbe
@@ -48,7 +54,7 @@ export function NetworkProbeCard({ t, preset, initial }: { t: LocaleT; preset: C
     setBusy(true)
     setFailed(false)
     void fetchProbe(refresh)
-      .then((s) => { if (s) setSnap(s); else setFailed(true) })
+      .then((s) => { if (s) { setSnap(s); setNetworkProbeSnapshot(s) } else setFailed(true) })
       .catch(() => setFailed(true))
       .finally(() => setBusy(false))
   }
@@ -56,6 +62,10 @@ export function NetworkProbeCard({ t, preset, initial }: { t: LocaleT; preset: C
   useEffect(() => { if (initial === undefined && snap === null) run(false) }, [])
 
   const advice = probeAdvice(snap, preset)
+  // Batch F: what「自动」resolves to on this network.
+  const ctx = decideNetContext(snap, mapTiles)
+  const ranked = cdnOrderFromProbe(snap)
+  const order = (snap ? ranked : [...DEFAULT_AUTO_CDN_ORDER]).map((id) => t(LABEL_KEY[id])).join(' → ') || t('netProbeDown')
   const when = snap ? new Date(snap.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
   return (
     <div className={styles.switchCard} data-iui-network-probe={snap ? snap.results.filter((r) => r.ok).length + '/' + snap.results.length : busy ? 'busy' : 'none'}>
@@ -75,14 +85,21 @@ export function NetworkProbeCard({ t, preset, initial }: { t: LocaleT; preset: C
             ))}
           </div>
         )}
+        {snap && (
+          <ul className={styles.switchHint} data-iui-net-auto={`${ctx.tiles}|${ctx.wiki ? 'wiki' : 'map'}|${ranked.join(',')}`} style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {preset === 'auto' && <li>{t('netAutoLibs').replace('{order}', order)}</li>}
+            <li>{t('netAutoTiles').replace('{tiles}', t(ctx.tiles === 'amap' ? 'netAutoTilesAmap' : 'netAutoTilesDefault'))}</li>
+            <li>{t('netAutoPhotos').replace('{photos}', t(ctx.wiki ? 'netAutoPhotosWiki' : 'netAutoPhotosMap'))}</li>
+          </ul>
+        )}
         {advice.map((a) => (
           <p key={a} className={a === 'switch-china' || a === 'switch-global' || a === 'cdn-all-down' ? styles.warn : styles.switchHint} data-iui-probe-advice={a}>
             {t(`netProbeAdvice.${a}`)}
           </p>
         ))}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button type="button" className={styles.secondaryBtn} data-iui-probe-recheck="1" disabled={busy} onClick={() => run(true)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <button type="button" className={styles.secondaryBtn} style={{ whiteSpace: 'nowrap' }} data-iui-probe-recheck="1" disabled={busy} onClick={() => run(true)}>
           {t('netProbeRecheck')}
         </button>
       </div>

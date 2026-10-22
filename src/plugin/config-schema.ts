@@ -1,6 +1,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { DEFAULT_THEME_ID } from '../config/defaults.ts'
 import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
+import { normalizeMapTilesSetting } from '../shared/net-context.ts'
 import { normalizeUiEagerness, type UiEagerness } from '../config/referee-rules.ts'
 
 function themeIdField() {
@@ -14,7 +15,8 @@ export const Config = Schema.object({
   formatReferee: Schema.boolean().default(true).volatile(),
   strictImagePolicy: Schema.boolean().default(false).volatile(),
   legacyFences: Schema.boolean().default(false).volatile(),
-  cdnPreset: Schema.union(['local', 'china', 'global', 'custom'] as const).default('local').volatile(),
+  cdnPreset: Schema.union(['auto', 'local', 'china', 'global', 'custom'] as const).default('auto').volatile(),
+  mapTiles: Schema.union(['auto', 'amap', 'global'] as const).default('auto').volatile(),
   cdnTemplate: Schema.string().default('').volatile(),
   uiEagerness: Schema.union(['restrained', 'balanced', 'eager'] as const).default('balanced').volatile(),
   customTokensJson: Schema.string().default('').volatile(),
@@ -38,7 +40,9 @@ export type IuiConfigResolved = {
   /** F16: render deprecated ```iui / ```dsh-ui fences (removed in 0.14). */
   legacyFences: boolean
   /** F19: sandbox library source preset. */
-  cdnPreset: 'local' | 'china' | 'global' | 'custom'
+  cdnPreset: 'auto' | 'local' | 'china' | 'global' | 'custom'
+  /** Batch F: map basemap (auto · amap · global). */
+  mapTiles: 'auto' | 'amap' | 'global'
   /** F19: custom source template `https://host/{name}@{version}/{file}`. */
   cdnTemplate: string
   /** G7: restrained = pages only on explicit asks; balanced = explain/compare answers in text + host offer; eager = visualise when it helps. */
@@ -74,7 +78,8 @@ export function resolveLiveConfig(config: unknown): IuiConfigResolved {
     formatReferee: Boolean(readConfigValue(row.formatReferee, true)),
     strictImagePolicy: Boolean(readConfigValue(row.strictImagePolicy, false)),
     legacyFences: Boolean(readConfigValue(row.legacyFences, false)),
-    cdnPreset: normalizeCdnPreset(readConfigValue(row.cdnPreset, 'local')),
+    cdnPreset: normalizeCdnPreset(readConfigValue(row.cdnPreset, 'auto')),
+    mapTiles: normalizeMapTilesSetting(readConfigValue(row.mapTiles, 'auto')),
     cdnTemplate: String(readConfigValue(row.cdnTemplate, '')).trim(),
     uiEagerness: normalizeUiEagerness(readConfigValue(row.uiEagerness, 'balanced')),
     customTokensJson: String(readConfigValue(row.customTokensJson, '')),

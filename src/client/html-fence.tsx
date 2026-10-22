@@ -56,8 +56,9 @@ import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
 import { SandboxSkeleton, SandboxStreamingPill, sandboxStreamProgress, streamedLineCount } from './sandbox-skeleton.tsx'
 import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
-import { getCdnSource, getRuntimeConfigSnapshot, setCdnPresetOverride, subscribeRuntimeConfig } from './runtime-config.ts'
-import { normalizeCdnPreset } from '../shared/vendor-registry.ts'
+import { getCdnSource, getNetContextForBuild, getRuntimeConfigSnapshot, setCdnPresetOverride, subscribeRuntimeConfig } from './runtime-config.ts'
+import { normalizeCdnOrder, normalizeCdnPreset, type VendorSource } from '../shared/vendor-registry.ts'
+import type { NetContext } from '../shared/net-context.ts'
 import { insertIntoComposer } from './composer-bridge.ts'
 import { loadPageState, pageStateKey, PAGE_STATE_QUOTA_BYTES, peekPageState, sanitizeStorageItems, updatePageState, type PageStateRecord } from './page-storage.ts'
 import { capActionPayload, createFrameActionGate, type ActionVerdict, type FrameActionGate } from './action-gate.ts'
@@ -97,7 +98,20 @@ export function usesHostData(raw: string): boolean {
 
 const readStrictImages = (): boolean => getRuntimeConfigSnapshot().strictImagePolicy === true
 /** F19: `preset|template` (stable string for useSyncExternalStore). */
-const readCdnKey = (): string => { const s = getCdnSource(); return `${s.preset}|${s.template ?? ''}` }
+// Batch F: preset | template | probe-ranked mirrors | basemap | wiki photos — one string so
+// useSyncExternalStore only rebuilds frames when an effective choice changes.
+const readCdnKey = (): string => {
+  const s = getCdnSource()
+  const net = getNetContextForBuild()
+  return `${s.preset}|${s.template ?? ''}|${(s.order ?? []).join(',')}|${net.tiles}|${net.wiki ? 1 : 0}`
+}
+function parseCdnKey(key: string): { cdnSource: VendorSource; net: NetContext } {
+  const [preset, template, order, tiles, wiki] = key.split('|')
+  return {
+    cdnSource: { preset: normalizeCdnPreset(preset), ...(template ? { template } : {}), ...(order ? { order: normalizeCdnOrder(order) } : {}) },
+    net: { tiles: tiles === 'amap' ? 'amap' : 'default', wiki: wiki !== '0' },
+  }
+}
 
 /** F6: silence longer than this marks the frame「无响应」. */
 const SANDBOX_HUNG_MS = 5000
@@ -508,7 +522,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
-  const cdnKey = useSyncExternalStore(subscribeRuntimeConfig, readCdnKey, () => 'local|')
+  const cdnKey = useSyncExternalStore(subscribeRuntimeConfig, readCdnKey, () => 'auto||||1')
   // F17: unguessable per-mount id (React useId is predictable across frames).
   const [frameId] = useState(newSandboxFrameId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -707,7 +721,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       // F4: opt-in strict image policy (Settings → IUI).
       strictImages,
       // F19: library source preset (Settings → IUI, or a strip's switch-and-retry).
-      cdnSource: (() => { const [preset, template] = cdnKey.split('|'); return { preset: normalizeCdnPreset(preset), ...(template ? { template } : {}) } })(),
+      // Batch F: + probe-ranked mirrors, basemap (AMap on mainland networks) and photo strategy.
+      ...parseCdnKey(cdnKey),
       ...(seedRef.current?.items ? { storageSeed: seedRef.current.items } : {}),
       // G10: bake the current appearance (later tweaks are posted live).
       ...appearanceBuildOptions(appearanceRef.current),
@@ -761,7 +776,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     if (authorJsRanRef.current) return
     const win = iframeRef.current?.contentWindow
     if (!win) return
-    let html = sanitizeSandboxMarkup(enrichPlaceMediaHtml(parsed.html))
+    let html = sanitizeSandboxMarkup(enrichPlaceMediaHtml(parsed.html, parseCdnKey(cdnKey).net))
     if (html.length > HTML_SANDBOX_MAX_HTML_BYTES) {
       html = `${html.slice(0, HTML_SANDBOX_MAX_HTML_BYTES)}\n<!-- html truncated -->`
     }
@@ -770,7 +785,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       win.postMessage({ source: 'iui-html-host', type: 'previewCss', frameId, css }, '*')
       win.postMessage({ source: 'iui-html-host', type: 'previewHtml', frameId, html }, '*')
     } catch { /* ignore */ }
-  }, [ready, parsed, frameId, srcdocRebuildKey])
+  }, [ready, parsed, frameId, srcdocRebuildKey, cdnKey])
 
   // P1-STATE: when js completes on a live preview shell, inject author JS in-place.
   useEffect(() => {
@@ -789,7 +804,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     authorJsRanRef.current = true
     try {
       // Last enriched html patch before JS mutates the DOM.
-      let html = sanitizeSandboxMarkup(enrichPlaceMediaHtml(parsed.html))
+      let html = sanitizeSandboxMarkup(enrichPlaceMediaHtml(parsed.html, parseCdnKey(cdnKey).net))
       if (html.length > HTML_SANDBOX_MAX_HTML_BYTES) {
         html = `${html.slice(0, HTML_SANDBOX_MAX_HTML_BYTES)}\n<!-- html truncated -->`
       }
@@ -808,7 +823,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       authorJsRanRef.current = false
       setForceFinalSrcdoc(true)
     }
-  }, [ready, parsed, cssComplete, jsComplete, frameId, forceFinalSrcdoc, starterOverride, srcdocRebuildKey])
+  }, [ready, parsed, cssComplete, jsComplete, frameId, forceFinalSrcdoc, starterOverride, srcdocRebuildKey, cdnKey])
 
   // Keep sandbox in sync when host bindings / appData change.
   // F4: only frames whose source actually reads host data get it.
