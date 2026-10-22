@@ -4,6 +4,8 @@
  * Leaflet geocodes the free-text query via Nominatim at render time.
  */
 
+import { VENDOR_LIBS, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs } from './vendor-registry.ts'
+
 export type MapLinkTemplate = {
   readonly id: string
   readonly label: string
@@ -100,8 +102,13 @@ export function buildDefaultMapLinks(query: string): Array<{ label: string; href
   return MAP_LINK_TEMPLATES.map((t) => ({ label: t.label, href: t.href(q) }))
 }
 
-const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+// C2: Leaflet URLs come from the vendor registry (active preset order).
+function leafletCssUrl(assetBase?: string): string {
+  return vendorCssUrls('leaflet', assetBase)[0]![0]!
+}
+function leafletJsUrl(assetBase?: string): string {
+  return vendorJsUrls('leaflet', assetBase)[0]!
+}
 const OSM_TILE = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 
@@ -119,6 +126,8 @@ export type LeafletMapSrcdocOptions = {
   route?: boolean
   /** Accent for status chrome (CSS color). */
   accent?: string
+  /** C2: plugin asset route base — Leaflet loads from it when set. */
+  assetBase?: string
 }
 
 /**
@@ -156,10 +165,12 @@ export function buildLeafletMapSrcdoc(opts: LeafletMapSrcdocOptions): string {
   )
   const qJson = JSON.stringify(query)
   const titleJson = JSON.stringify(title)
+  const leafletCss = leafletCssUrl(opts.assetBase)
+  const leafletJs = leafletJsUrl(opts.assetBase)
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="${LEAFLET_CSS}"/>
+<link rel="stylesheet" href="${leafletCss}"${vendorSriAttrs(leafletCss)}/>
 <style>
   html,body,#map{margin:0;height:100%;width:100%;background:#f4f4f5}
   #status{position:absolute;z-index:500;left:12px;right:12px;top:12px;padding:9px 12px;
@@ -173,7 +184,7 @@ export function buildLeafletMapSrcdoc(opts: LeafletMapSrcdocOptions): string {
   .leaflet-control-attribution{font-size:10px;background:rgba(255,255,255,.82)!important}
 </style></head><body>
 <div id="status"></div><div id="map" role="application" aria-label=${titleJson}></div>
-<script src="${LEAFLET_JS}"></script>
+<script src="${leafletJs}"${vendorSriAttrs(leafletJs)}></script>
 <script>
 (function(){
   var statusEl=document.getElementById('status');
@@ -278,7 +289,7 @@ export function buildLeafletSandboxFenceBody(opts: LeafletMapSrcdocOptions): str
       title,
       height: clampMapHeight(undefined, 320),
       css: '#map{height:280px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb}#hint{font-size:12px;color:#6b7280;margin-top:8px}',
-      html: `<link rel="stylesheet" href="${LEAFLET_CSS}"/><div id="map"></div><p id="hint" class="iui-sandbox-muted">Leaflet · OSM</p>`,
+      html: `<link rel="stylesheet" href="${vendorCdnUrl('leaflet', VENDOR_LIBS.leaflet.css[0])}"/><div id="map"></div><p id="hint" class="iui-sandbox-muted">Leaflet · OSM</p>`,
       js: `var map=L.map('map');L.tileLayer('${OSM_TILE}',{maxZoom:19,attribution:'Tiles © Esri'}).addTo(map);var lat=${latExpr},lng=${lngExpr},q=${qLit};function pin(a,b,label){map.setView([a,b],${zoom});L.marker([a,b]).addTo(map).bindPopup(label||q).openPopup();}if(lat!=null&&lng!=null){pin(lat,lng,q);}else if(q){fetch('${NOMINATIM}?format=json&limit=1&q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(rows){if(rows[0])pin(parseFloat(rows[0].lat),parseFloat(rows[0].lon),rows[0].display_name);else{map.setView([20,0],2);document.getElementById('hint').textContent='未能定位';}}).catch(function(){map.setView([20,0],2);});}else{map.setView([20,0],2);}`,
     },
     null,

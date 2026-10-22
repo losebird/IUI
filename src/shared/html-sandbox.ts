@@ -15,7 +15,7 @@ import {
 import { OIU_PATTERN_STARTERS } from './oiu-pattern-starters.ts'
 import { buildTripPhotoFillScript, enrichPlaceMediaHtml } from './trip-images.ts'
 import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './author-js-runtime.ts'
-import { VENDOR_CDN_HOSTS, customCdnOrigin, getVendorSource, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCssUrls, vendorJsUrls, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
+import { VENDOR_CDN_HOSTS, buildSriLookupSource, customCdnOrigin, getVendorSource, normalizeDeclaredLibs, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
 import { buildIconRuntimeScript, pageWantsIcons } from './icon-runtime.ts'
 import { buildMotionRuntimeScript } from './motion-runtime.ts'
@@ -97,6 +97,11 @@ export type HtmlSandboxSpec = {
   jsFunctions?: string
   /** Optional expression list — run one-by-one after js/jsFunctions (fail-soft). */
   jsExpressions?: readonly string[]
+  /**
+   * C9: libraries the fence declares (`libs: leaflet, chart` header or JSON
+   * `libs`). Declared libs always load; undeclared ones only on real API calls.
+   */
+  libs?: readonly VendorId[]
   /** Which sections were detected (for streaming chrome). */
   stages: ReadonlyArray<'css' | 'html' | 'js' | 'placeholder'>
   /** True when JSON/sections look unfinished (streaming). */
@@ -1282,15 +1287,15 @@ export function sanitizeSandboxMarkup(html: string): string {
     })
 }
 
-const SECTION_META = /^(title|height|placeholder|id|page|accent)\s*[:：]\s*(.+)$/iu
+const SECTION_META = /^(title|height|placeholder|id|page|accent|libs)\s*[:：]\s*(.+)$/iu
 
 function parseSections(raw: string): {
   sections: Record<'css' | 'html' | 'js', string>
   stages: Array<'css' | 'html' | 'js'>
   sawHeader: boolean
-  meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string }
+  meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string; libs?: VendorId[] }
 } {
-  const meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string } = {}
+  const meta: { title?: string; height?: number; placeholder?: string; id?: string; accent?: string; libs?: VendorId[] } = {}
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
   const sections: Record<'css' | 'html' | 'js', string> = { css: '', html: '', js: '' }
   const stages: Array<'css' | 'html' | 'js'> = []
@@ -1323,6 +1328,7 @@ function parseSections(raw: string): {
       } else if (key === 'title') meta.title = value
       else if (key === 'id' || key === 'page') meta.id = value.slice(0, 80)
       else if (key === 'accent') { const a = normalizeAccent(value); if (a) meta.accent = a }
+      else if (key === 'libs') { const l = normalizeDeclaredLibs(value); if (l.length) meta.libs = l }
       else meta.placeholder = value
     }
   }
@@ -1506,6 +1512,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
         ...(typeof parsed.title === 'string' ? { title: parsed.title } : {}),
         ...(typeof parsed.id === 'string' && parsed.id.trim() ? { id: parsed.id.trim().slice(0, 80) } : {}),
         ...(normalizeAccent(parsed.accent) ? { accent: normalizeAccent(parsed.accent)! } : {}),
+        ...(normalizeDeclaredLibs(parsed.libs).length ? { libs: normalizeDeclaredLibs(parsed.libs) } : {}),
         ...(height !== undefined ? { height } : {}),
       }
     } catch {
@@ -1530,6 +1537,7 @@ export function parseHtmlSandboxFence(raw: string): HtmlSandboxSpec | null {
       ...(meta.title ? { title: meta.title } : {}),
       ...(meta.id ? { id: meta.id } : {}),
       ...(meta.accent ? { accent: meta.accent } : {}),
+      ...(meta.libs ? { libs: meta.libs } : {}),
       ...(meta.height !== undefined ? { height: meta.height } : {}),
     }
   }
@@ -4326,25 +4334,26 @@ function buildMermaidGuardScript(): string {
  */
 export function makeCdnTagsNonBlocking(tags: string): string {
   return tags
-    .replace(/<script src=("[^"]+")((?: data-iui-fallback="[^"]*")?)><\/script>/g, (_m, src: string, fb: string) =>
+    .replace(/<script src=("[^"]+")((?: [a-z-]+="[^"]*")*)><\/script>/g, (_m, src: string, fb: string) =>
       `<script async data-iui-cdn${fb} onload="this.setAttribute('data-iui-done','1')" onerror="window.__iuiCdnNext?__iuiCdnNext(this):this.setAttribute('data-iui-done','0')" src=${src}><\/script>`)
-    .replace(/<link rel="stylesheet" href=("[^"]+")((?: data-iui-fallback="[^"]*")?)\/>/g, (_m, href: string, fb: string) =>
+    .replace(/<link rel="stylesheet" href=("[^"]+")((?: [a-z-]+="[^"]*")*)\/>/g, (_m, href: string, fb: string) =>
       `<link rel="stylesheet"${fb} media="print" onload="this.media='all';this.setAttribute('data-iui-done','1')" onerror="window.__iuiCdnNext&&__iuiCdnNext(this)" href=${href}/>`)
 }
 
+// C7: CDN candidates carry SRI (the fallback swapper re-applies it per URL).
 function vendorScriptTag(id: VendorId, base?: string): string {
   const [first, ...rest] = vendorJsUrls(id, base)
-  return `<script src="${first}" data-iui-fallback="${rest.join(' ')}"><\/script>`
+  return `<script src="${first}" data-iui-fallback="${rest.join(' ')}"${vendorSriAttrs(first!)}><\/script>`
 }
 function vendorCssTags(id: VendorId, base?: string): string {
-  return vendorCssUrls(id, base).map(([first, ...rest]) => `<link rel="stylesheet" href="${first}" data-iui-fallback="${rest.join(' ')}"/>`).join('')
+  return vendorCssUrls(id, base).map(([first, ...rest]) => `<link rel="stylesheet" href="${first}" data-iui-fallback="${rest.join(' ')}"${vendorSriAttrs(first!)}/>`).join('')
 }
 
 /**
  * C5: fallback loader + C6 vendor map for the runtime. Emitted before CDN tags;
  * `__iuiCdnNext(el)` swaps a failed/slow <script>/<link> to its next candidate.
  */
-function buildVendorBootScript(base?: string): string {
+function buildVendorBootScript(base?: string, libs: readonly VendorId[] = []): string {
   const map: Record<string, string> = {
     leafletJs: vendorJsUrls('leaflet', base)[0]!,
     leafletCss: vendorCssUrls('leaflet', base)[0]![0]!,
@@ -4363,7 +4372,8 @@ function buildVendorBootScript(base?: string): string {
     mermaidJsList: vendorJsUrls('mermaid', base),
   }
   return `<script>
-window.__iuiVendor = ${JSON.stringify({ ...map, ...lists, preset: getVendorSource().preset })};
+window.__iuiVendor = ${JSON.stringify({ ...map, ...lists, preset: getVendorSource().preset, ...(libs.length ? { libs } : {}) })};
+${buildSriLookupSource()}
 window.__iuiCdnNext = function (el) {
   if (!el || el.getAttribute('data-iui-done') === '1') return;
   var rest = String(el.getAttribute('data-iui-fallback') || '').split(' ').filter(Boolean);
@@ -4373,6 +4383,8 @@ window.__iuiCdnNext = function (el) {
   var n = document.createElement(isLink ? 'link' : 'script');
   n.setAttribute('data-iui-fallback', rest.slice(1).join(' '));
   n.setAttribute('data-iui-t0', String(Date.now()));
+  var sri = window.__iuiSriFor ? window.__iuiSriFor(rest[0]) : '';
+  if (sri) { n.integrity = sri; n.crossOrigin = 'anonymous'; }
   if (isLink) {
     n.rel = 'stylesheet';
     n.onload = function () { n.setAttribute('data-iui-done', '1'); };
@@ -4392,70 +4404,129 @@ window.__iuiCdnNext = function (el) {
 
 /** C8: rewrite model-authored CDN <script src>/<link href> for registry libs. */
 export function rewriteAuthorCdnTags(html: string, base?: string): string {
-  return html.replace(/<(script|link)\b[^>]*>/gi, (tag) =>
-    tag.replace(/\b(src|href)=(["'])(https:\/\/[^"']+)\2/i, (_m, attr: string, q: string, url: string) =>
-      `${attr}=${q}${rewriteKnownCdnUrl(url, base)}${q}`))
+  return html.replace(/<(script|link)\b[^>]*>/gi, (tag) => {
+    let changed: string | null = null
+    let out = tag.replace(/\b(src|href)=(["'])(https:\/\/[^"']+)\2/i, (m, attr: string, q: string, url: string) => {
+      const next = rewriteKnownCdnUrl(url, base)
+      if (next === url) return m
+      changed = next
+      return `${attr}=${q}${next}${q}`
+    })
+    // C7: the author's integrity hash belonged to the old URL / version —
+    // drop it (and its crossorigin) and attach the registry's own for CDN copies.
+    if (changed !== null) {
+      out = out.replace(/\s+(?:integrity|crossorigin)(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/gi, '')
+      out = out.replace(/\s*(\/?)>$/, (_m, slash: string) => `${vendorSriAttrs(changed!)}${slash ? '/' : ''}>`)
+    }
+    return out
+  })
 }
 
-function autoCdnTags(html: string, js: string, base?: string): string {
+/**
+ * C9: which registry libraries a page needs. Declared `libs` always win;
+ * otherwise only real API usage counts (`L.map(`, `new Chart(`,
+ * `echarts.init(`, `agGrid.createGrid(`, `mermaid.run(`, host components) —
+ * no more `id="map"` / "Chart + the word line" guesses that pulled 200 KB
+ * of Chart.js into a canvas game. `markupHints` (streaming shell: the JS has
+ * not arrived yet) still preloads for `<div id="map">` / `<canvas id="…Chart">`.
+ */
+export function detectSandboxLibs(html: string, js: string, libs: readonly VendorId[] = [], opts: { markupHints?: boolean } = {}): Set<VendorId> {
   const all = html + '\n' + js
-  const tags: string[] = []
-  const need = (use: RegExp, present: RegExp): boolean => use.test(all) && !present.test(html)
-  // Prefer UMD Chart.js (global Chart) — esm.sh importmap is flaky in null-origin srcdoc (blank weather canvases).
-  const hasChartUmdScript = /<script[^>]+src=["'][^"']*chart(?:\.umd|\.min)?\.js/i.test(html)
-  const wantsChart =
+  const out = new Set<VendorId>(libs)
+  if (opts.markupHints) {
+    if (/\bid\s*=\s*["']map["']/i.test(html)) out.add('leaflet')
+    if (/<canvas\b[^>]*(?:id|class)\s*=\s*["'][^"']*[Cc]hart/i.test(html)) out.add('chart')
+  }
+  if (
     /\bnew\s+Chart\s*\(/.test(all) ||
+    /\bChart\s*\.\s*(?:register|defaults|getChart)\b/.test(all) ||
     /import\s*\(\s*['"]chart\.js/.test(all) ||
-    /iui-weather-chart|wxChart|__iuiChartMod|iuiCreateChart/.test(all) ||
-    (/\bChart\b/.test(all) && /(?:line|bar|doughnut|pie|radar|polarArea)/i.test(all)) ||
-    /<canvas\b[^>]*(?:id|class)\s*=\s*["'][^"']*[Cc]hart/i.test(html) ||
-    (/<canvas\b/i.test(html) && /(?:doughnut|pie|radar|polarArea|chart\.js)/i.test(all))
+    /iui-weather-chart|wxChart|__iuiChartMod|iuiCreateChart/.test(all)
+  ) out.add('chart')
+  if (/\becharts\s*\.\s*init\s*\(/.test(all)) out.add('echarts')
+  if (
+    /\bL\s*\.\s*(?:map|tileLayer|marker|polyline|polygon|divIcon|circleMarker|circle|geoJSON|latLngBounds|latLng)\s*\(/.test(all) ||
+    /iui-map-wrap|createTripAnimator|openstreetmap\.org\/\{z\}/i.test(all) ||
+    /\bimport\s*(?:\*|\{?\s*L\s*\}?)\s*from\s*['"]leaflet['"]/.test(all)
+  ) out.add('leaflet')
+  if (/\bd3\s*\.\s*(?:select|selectAll|scale\w*|line|arc|pie|geo\w*|forceSimulation)\s*\(/.test(all)) out.add('d3')
+  if (
+    /\bagGrid\s*\.\s*(?:createGrid|Grid)\s*\(/.test(all) ||
+    /ag-theme-(?:quartz|alpine|balham|iui)/.test(all)
+  ) out.add('agGrid')
+  if (
+    /\bmermaid\s*\.\s*(?:run|initialize|render)\s*\(/.test(all) ||
+    /class\s*=\s*["'][^"']*\bmermaid\b/.test(all) ||
+    /iui-mindmap/.test(all)
+  ) out.add('mermaid')
+  return out
+}
+
+function autoCdnTags(html: string, js: string, base?: string, libs: readonly VendorId[] = [], markupHints = false): string {
+  const want = detectSandboxLibs(html, js, libs, { markupHints })
+  const tags: string[] = []
+  const firstUrls: string[] = []
+  const inject = (id: VendorId): void => {
+    for (const css of vendorCssUrls(id, base)) if (css[0]) firstUrls.push(css[0])
+    const first = vendorJsUrls(id, base)[0]
+    if (first) firstUrls.push(first)
+  }
+  const scriptOf = (re: RegExp): boolean => new RegExp(`<script[^>]+src=["'][^"']*${re.source}`, 'i').test(html)
+  // Prefer UMD Chart.js (global Chart) — esm.sh importmap is flaky in null-origin srcdoc (blank weather canvases).
+  const hasChartUmdScript = scriptOf(/chart(?:\.umd|\.min)?\.js/)
+  const wantsChart = want.has('chart')
   // Guard first: it traps the window.Chart assignment so theming + wrapping never race author JS.
   if (wantsChart || hasChartUmdScript) {
     tags.push(buildChartGuardScript())
   }
   if (wantsChart && !hasChartUmdScript) {
-    tags.push(vendorScriptTag('chart', base))
+    tags.push(vendorScriptTag('chart', base)); inject('chart')
   }
-  if (need(/\becharts\s*\.\s*init\s*\(/, /echarts/i)) tags.push(vendorScriptTag('echarts', base))
-  if (/\becharts\s*\.\s*init\s*\(/.test(all)) tags.unshift(buildEchartsGuardScript())
+  if (want.has('echarts') && !scriptOf(/echarts/)) { tags.push(vendorScriptTag('echarts', base)); inject('echarts') }
+  if (want.has('echarts')) tags.unshift(buildEchartsGuardScript())
   // Prefer UMD Leaflet (global L) over ESM importmap — srcdoc + import("leaflet") often yields empty maps.
-  // Inject whenever map APIs / itinerary chrome appear, unless a real leaflet.js <script src> is already present.
-  const hasLeafletUmdScript = /<script[^>]+src=["'][^"']*leaflet(?:\.js|\.min\.js)/i.test(html)
-  const wantsLeaflet =
-    /\bL\s*\.\s*(?:map|tileLayer|marker|polyline|divIcon|circleMarker|latLngBounds|latLng)\s*\(/.test(all) ||
-    /iui-map-wrap|createTripAnimator|openstreetmap\.org\/\{z\}/i.test(all) ||
-    /\bid\s*=\s*["']map["']/i.test(all) ||
-    /\bimport\s*(?:\*|\{?\s*L\s*\}?)\s*from\s*['"]leaflet['"]/.test(all) ||
-    (/leaflet/i.test(all) && /(?:map|tile|marker|lat|lng)/i.test(all))
+  const hasLeafletUmdScript = scriptOf(/leaflet(?:\.js|\.min\.js)/)
+  const wantsLeaflet = want.has('leaflet')
   if (wantsLeaflet || hasLeafletUmdScript) {
     tags.push(buildLeafletTileGuardScript())
   }
   if (wantsLeaflet && !hasLeafletUmdScript) {
-    tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base))
+    tags.push(vendorCssTags('leaflet', base) + vendorScriptTag('leaflet', base)); inject('leaflet')
   }
-  if (need(/\bd3\s*\.\s*(?:select|scale|line|arc)/, /d3(?:@|\.min|\.v)/i)) tags.push(vendorScriptTag('d3', base))
-  const hasAgGridScript = /<script[^>]+src=["'][^"']*ag-grid/i.test(html)
-  const wantsAgGrid =
-    /\bagGrid\s*\.\s*(?:createGrid|Grid)\s*\(/.test(all) ||
-    /ag-grid-community/.test(all) ||
-    /ag-theme-(?:quartz|alpine|balham|iui)/.test(all) ||
-    /class\s*=\s*["'][^"']*ag-theme/.test(all)
+  if (want.has('d3') && !scriptOf(/d3(?:@|\.min|\.v)/)) { tags.push(vendorScriptTag('d3', base)); inject('d3') }
+  const hasAgGridScript = scriptOf(/ag-grid/)
+  const wantsAgGrid = want.has('agGrid')
   if (wantsAgGrid && !hasAgGridScript) {
     tags.push(vendorCssTags('agGrid', base))
-    tags.push(vendorScriptTag('agGrid', base))
+    tags.push(vendorScriptTag('agGrid', base)); inject('agGrid')
   }
   if (wantsAgGrid || hasAgGridScript) tags.push(buildAgGridGuardScript())
-  const hasMermaidScript = /<script[^>]+src=["'][^"']*mermaid/i.test(html)
-  const wantsMermaid =
-    /\bmermaid\s*\.\s*(?:run|initialize|render)\s*\(/.test(all) ||
-    /class\s*=\s*["'][^"']*\bmermaid\b/.test(all) ||
-    /iui-mindmap/.test(all)
+  const hasMermaidScript = scriptOf(/mermaid/)
+  const wantsMermaid = want.has('mermaid')
   if (wantsMermaid && !hasMermaidScript) {
-    tags.push(vendorScriptTag('mermaid', base))
+    tags.push(vendorScriptTag('mermaid', base)); inject('mermaid')
   }
   if (wantsMermaid || hasMermaidScript) tags.push(buildMermaidGuardScript())
-  return buildVendorBootScript(base) + tags.join('')
+  return buildCdnPreconnect(firstUrls, base) + buildVendorBootScript(base, [...want]) + tags.join('')
+}
+
+/**
+ * C11: warm the TLS connection to the CDN the first injected library comes
+ * from (skipped when it is the plugin's own asset route). `crossorigin` so
+ * the SRI (CORS) fetch reuses the socket.
+ */
+function buildCdnPreconnect(urls: readonly string[], base?: string): string {
+  const local = vendorBaseOrigin(base)
+  const seen = new Set<string>()
+  let out = ''
+  for (const u of urls) {
+    let origin: string
+    try { origin = new URL(u).origin } catch { continue }
+    if (origin === local || seen.has(origin) || seen.size >= 2) continue
+    seen.add(origin)
+    out += `<link rel="preconnect" href="${origin}"${vendorSriAttrs(u) ? ' crossorigin' : ''}/>`
+  }
+  return out
 }
 
 /** Build iframe srcdoc (sandbox: allow-scripts; no allow-same-origin). */
@@ -4536,7 +4607,7 @@ function buildHtmlSandboxSrcdocInner(
   if (document.readyState !== 'loading') go(); else document.addEventListener('DOMContentLoaded', go);
 })();
 <\/script>`
-  const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase))
+  const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase, spec.libs, deferJs))
   const bridge = buildSandboxBridgeScript(frameId) + buildMotionRuntimeScript({ streaming: deferJs }) +
     // G4: Lucide icons — streaming shells always carry them (markup still arriving); complete pages only when used.
     (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '')
@@ -4691,7 +4762,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
       title: '地图',
       height: 340,
       css: '#map{height:280px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb}#hint{font-size:12px;color:#6b7280;margin-top:8px}',
-      html: '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><div id="map"></div><p id="hint" class="iui-sandbox-muted">Leaflet · OpenStreetMap</p>',
+      html: `<link rel="stylesheet" href="${vendorCdnUrl('leaflet', 'dist/leaflet.css')}"/><script src="${vendorCdnUrl('leaflet', 'dist/leaflet.js')}"><\/script>` + '<div id="map"></div><p id="hint" class="iui-sandbox-muted">Leaflet · OpenStreetMap</p>',
       js: 'var map=L.map("map");L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles © Esri"}).addTo(map);var q=(window.iuiSandbox&&window.iuiSandbox.bindings&&window.iuiSandbox.bindings.place)||"city park";document.getElementById("hint").textContent="定位中…";fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(rows){if(!rows[0]){map.setView([20,0],2);document.getElementById("hint").textContent="未能定位，请改 bindings.place";return;}var lat=parseFloat(rows[0].lat),lng=parseFloat(rows[0].lon);map.setView([lat,lng],15);L.marker([lat,lng]).addTo(map).bindPopup(rows[0].display_name||q).openPopup();document.getElementById("hint").textContent=rows[0].display_name||q;}).catch(function(){map.setView([20,0],2);document.getElementById("hint").textContent="定位服务暂不可用";});',
       stages: ['css', 'html', 'js'],
       partial: false,
@@ -4748,7 +4819,7 @@ const HTML_SANDBOX_STARTERS_CORE: HtmlSandboxStarter[] = [
       title: 'ECharts 迷你',
       height: 320,
       css: '#chart{height:240px;width:100%}',
-      html: '<div class="iui-sandbox-card"><div class="iui-sandbox-toolbar"><strong>趋势</strong><span class="iui-sandbox-muted" data-iui-bind="label">示例</span></div><div id="chart"></div></div><script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"><\/script>',
+      html: '<div class="iui-sandbox-card"><div class="iui-sandbox-toolbar"><strong>趋势</strong><span class="iui-sandbox-muted" data-iui-bind="label">示例</span></div><div id="chart"></div></div>' + `<script src="${vendorCdnUrl('echarts', 'dist/echarts.min.js')}"><\/script>`,
       js: 'var el=document.getElementById("chart");if(!window.echarts||!el){document.body.insertAdjacentHTML("beforeend","<pre data-iui-error=1>echarts 未加载</pre>");}else{var chart=echarts.init(el);chart.setOption({animationDuration:400,grid:{left:28,right:12,top:24,bottom:28},xAxis:{type:"category",data:["10","12","14","16","18"],axisLabel:{fontSize:11}},yAxis:{type:"value",splitLine:{lineStyle:{type:"dashed"}},axisLabel:{fontSize:11}},series:[{type:"line",smooth:true,areaStyle:{opacity:0.12},data:[18,21,23,22,19],lineStyle:{width:2}}]});window.addEventListener("resize",function(){chart.resize()});window.iuiSandbox.resize()}',
       stages: ['css', 'html', 'js'],
       partial: false,

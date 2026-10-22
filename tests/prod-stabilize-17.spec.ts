@@ -45,7 +45,7 @@ describe('0.13.0-iui.17 production stabilize', () => {
     })
     const spec = parseHtmlSandboxFence(fence)!
     const doc = buildHtmlSandboxSrcdoc(spec, { frameId: 'wx-17' })
-    expect(doc).toContain('chart.umd.min.js')
+    expect(doc).toContain('chart.umd.js')
     expect(doc).toContain('iuiCreateChart')
     expect(doc).toContain('__iuiChartMod')
     expect(doc).toContain('__iuiChartOrig')

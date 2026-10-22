@@ -19,7 +19,7 @@ describe('0.13.0-iui.21 chart ready + safe handlers', () => {
   it('runAuthorJs bridge waits for Chart and replays DOMContentLoaded', () => {
     const bridge = buildSandboxBridgeScript('t21')
     expect(bridge).toContain('wantsChart')
-    expect(bridge).toContain('chart.umd.min.js')
+    expect(bridge).toContain('chart.umd.js')
     expect(bridge).toContain('DOMContentLoaded')
     expect(bridge).toContain('data-iui-on-click')
     expect(bridge).toContain('invokeDataHandler')
@@ -38,7 +38,7 @@ describe('0.13.0-iui.21 chart ready + safe handlers', () => {
       htmlComplete: true,
       jsComplete: false,
     }, { deferAuthorJs: true, frameId: 't21' })
-    expect(doc).toContain('chart.umd.min.js')
+    expect(doc).toContain('chart.umd.js')
   })
 
   it('final path still replays DOMContentLoaded for author JS', () => {
@@ -58,7 +58,7 @@ describe('0.13.0-iui.21 chart ready + safe handlers', () => {
       htmlComplete: true,
       jsComplete: true,
     }, { deferAuthorJs: false, frameId: 't21f' })
-    expect(doc).toContain('chart.umd.min.js')
+    expect(doc).toContain('chart.umd.js')
     expect(doc).toContain('DOMContentLoaded')
   })
 })

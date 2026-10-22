@@ -28,7 +28,7 @@ const LINES: readonly string[] = [
   "document.getElementById('b').onclick = function () { /* 本地交互 */ };",
   "```",
   "",
-  "Markers alone on their own line, in that order; never ``` inside the block. Optional header `accent: #E4572E` (one topic colour → --accent / --accent-fill / --accent-soft).",
+  "Markers alone on their own line, in that order; never ``` inside the block. Optional headers `accent: #E4572E` (one topic colour → --accent / --accent-fill / --accent-soft), `libs: leaflet,chart`.",
   "",
   "**When:** visual / interactive asks (图表、看板、表单、地图、计算器、对比、小工具、游戏…) → 1 short sentence → the fence → optional 1 sentence. Facts, greetings, coding / how-to → plain text. Never Markdown tables or ```json as UI; never build the page with files or tools.",
   "",

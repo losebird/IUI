@@ -7,6 +7,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { GenericCallView, GenericResultView, ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { resolveTripStopImages, type TripStopImage } from '../shared/trip-images.ts'
 import type { GeoPoint } from '../shared/photo-match.ts'
+import { isKnownUnreachable } from '../shared/network-probe.ts'
 
 const PARAMETERS: Record<string, unknown> = {
   type: 'object',
@@ -113,6 +114,16 @@ export function createGetTripStopImagesTool(): ToolDefinition {
           'status=invalid',
           'error=need_wikipedia_titles',
           'hint=Pass wikipedia_titles: string[1..8]',
+        ].join('\n')
+      }
+      // C10: a fresh connectivity probe saw Wikipedia + Wikimedia both fail →
+      // answer at once instead of burning the 8 s budget.
+      if (isKnownUnreachable(['wikipedia', 'wikimedia'])) {
+        return [
+          '[iui-trip-images]',
+          'status=unavailable',
+          'reason=wikimedia_unreachable',
+          'hint=Wikipedia/Wikimedia are unreachable from this network. Keep empty .photo bands (host placeholder) and add data-lat/data-lng on each .iui-stop-card; do not call this tool again this turn.',
         ].join('\n')
       }
       try {

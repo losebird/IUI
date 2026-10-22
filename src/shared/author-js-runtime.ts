@@ -4,6 +4,8 @@
  * version so preview-shell and final srcdoc share one readiness path.
  */
 
+import { VENDOR_LIBS, vendorCdnUrl } from './vendor-registry.ts'
+
 /**
  * Split author JS into top-level statement chunks (brace/string/comment aware).
  * One SyntaxError or throw in a later chunk must not prevent earlier bindings.
@@ -313,13 +315,24 @@ export function buildAuthorJsRuntimeSource(): string {
 window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
   // C6: host-provided vendor map (local asset route first); CDN defaults otherwise.
   var VND = window.__iuiVendor || {};
-  var LEAFLET_JS = VND.leafletJs || 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-  var LEAFLET_CSS = VND.leafletCss || 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
-  var CHART_JS = VND.chartJs || 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-  var AGGRID_JS = VND.agGridJs || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js';
-  var AGGRID_CSS = VND.agGridCss || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css';
-  var AGGRID_THEME = VND.agGridTheme || 'https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css';
-  var MERMAID_JS = VND.mermaidJs || 'https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js';
+  // C2: defaults come from the vendor registry (jsDelivr copy of each file).
+  var LEAFLET_JS = VND.leafletJs || ${JSON.stringify(vendorCdnUrl('leaflet', VENDOR_LIBS.leaflet.js))};
+  var LEAFLET_CSS = VND.leafletCss || ${JSON.stringify(vendorCdnUrl('leaflet', VENDOR_LIBS.leaflet.css[0]))};
+  var CHART_JS = VND.chartJs || ${JSON.stringify(vendorCdnUrl('chart', VENDOR_LIBS.chart.js))};
+  var AGGRID_JS = VND.agGridJs || ${JSON.stringify(vendorCdnUrl('agGrid', VENDOR_LIBS.agGrid.js))};
+  var AGGRID_CSS = VND.agGridCss || ${JSON.stringify(vendorCdnUrl('agGrid', VENDOR_LIBS.agGrid.css[0]))};
+  var AGGRID_THEME = VND.agGridTheme || ${JSON.stringify(vendorCdnUrl('agGrid', VENDOR_LIBS.agGrid.css[1]))};
+  var MERMAID_JS = VND.mermaidJs || ${JSON.stringify(vendorCdnUrl('mermaid', VENDOR_LIBS.mermaid.js))};
+  // C9: libraries the fence declared (plus what the host detected).
+  var DECLARED = Array.isArray(VND.libs) ? VND.libs : [];
+  function declared(id) { return DECLARED.indexOf(id) !== -1; }
+  // C7: SRI for CDN copies (boot script defines __iuiSriFor).
+  function applySri(el, url) {
+    try {
+      var h = typeof window.__iuiSriFor === 'function' ? window.__iuiSriFor(url) : '';
+      if (h) { el.integrity = h; el.crossOrigin = 'anonymous'; }
+    } catch (e) {}
+  }
   // F19: every candidate for a library (active preset order); the loader tries
   // them in turn with a per-source timeout.
   function libList(list, first) {
@@ -536,9 +549,11 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
     return out;
   }
 
+  // C9: real API usage only (no '#map' / 'Chart + line' guesses).
   function wantsLeaflet(src) {
     src = String(src || '');
-    return src.indexOf('L.map') !== -1
+    return declared('leaflet')
+      || src.indexOf('L.map') !== -1
       || src.indexOf('L.tileLayer') !== -1
       || src.indexOf('L.marker') !== -1
       || src.indexOf('L.polyline') !== -1
@@ -546,19 +561,21 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       || src.indexOf('L.circleMarker') !== -1
       || src.indexOf('createTripAnimator') !== -1
       || src.indexOf('iui-map-wrap') !== -1
-      || !!(hq('.iui-map-wrap, #map, [id="map"]'));
+      || !!(hq('.iui-map-wrap'));
   }
 
   function wantsAgGrid(src) {
     src = String(src || '');
-    return src.indexOf('agGrid') !== -1
+    return declared('agGrid')
+      || src.indexOf('agGrid.') !== -1
       || src.indexOf('ag-grid-community') !== -1
       || src.indexOf('ag-theme-') !== -1
       || !!(hq('[class*="ag-theme"]'));
   }
   function wantsMermaid(src) {
     src = String(src || '');
-    return src.indexOf('mermaid.run') !== -1
+    return declared('mermaid')
+      || src.indexOf('mermaid.run') !== -1
       || src.indexOf('mermaid.initialize') !== -1
       || src.indexOf('iui-mindmap') !== -1
       || !!(hq('.mermaid, .iui-mindmap'));
@@ -566,22 +583,24 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
 
   function wantsChart(src) {
     src = String(src || '');
-    var hasCanvas = !!(hq('canvas'));
-    return src.indexOf('new Chart') !== -1
+    return declared('chart')
+      || src.indexOf('new Chart') !== -1
       || src.indexOf('iuiCreateChart') !== -1
       || src.indexOf('iui-weather-chart') !== -1
       || src.indexOf('wxChart') !== -1
       || src.indexOf('__iuiChartMod') !== -1
       || src.indexOf('Chart.getChart') !== -1
-      || src.indexOf('chart.js') !== -1
-      || (src.indexOf('Chart') !== -1 && /line|bar|doughnut|pie|radar|polarArea/i.test(src))
-      || (hasCanvas && /Chart|chart\\.js|doughnut|pie|radar|bar|line/i.test(src));
+      || src.indexOf('Chart.register') !== -1
+      || src.indexOf('Chart.defaults') !== -1
+      || src.indexOf("'chart.js'") !== -1
+      || src.indexOf('"chart.js"') !== -1;
   }
 
   function ensureCss(href) {
     if (hq('link[href="' + href + '"]')) return;
     var link = document.createElement('link');
     link.rel = 'stylesheet';
+    applySri(link, href);
     link.href = href;
     (document.head || document.documentElement).appendChild(link);
   }
@@ -628,6 +647,7 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       return;
     }
     var s = document.createElement('script');
+    applySri(s, src);
     s.src = src;
     s.async = false;
     s.onload = function () { s.setAttribute('data-iui-loaded', '1'); done(true); };

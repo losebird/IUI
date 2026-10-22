@@ -6,6 +6,7 @@
  * falls back to the linked version.
  */
 import {
+  VENDOR_CDN_PREFIX,
   VENDOR_LIBS,
   vendorCssUrls,
   vendorJsUrls,
@@ -128,7 +129,7 @@ export async function buildOfflineExport(
   const base = options.assetBase?.replace(/\/+$/, '')
   const localVendor = base ? `${base}/vendor/` : null
   const portable = (u: string): string =>
-    localVendor && u.startsWith(localVendor) ? `https://cdn.jsdelivr.net/npm/${u.slice(localVendor.length)}` : u
+    localVendor && u.startsWith(localVendor) ? `${VENDOR_CDN_PREFIX.jsdelivr}${u.slice(localVendor.length)}` : u
   const used = new Set(resources.map((r) => r.url))
   const inlined: string[] = []
   const failed: string[] = []
@@ -329,7 +330,7 @@ export async function buildOfflineExport(
     }
     return a + next + c
   })
-  if (localVendor) html = html.split(localVendor).join('https://cdn.jsdelivr.net/npm/')
+  if (localVendor) html = html.split(localVendor).join(VENDOR_CDN_PREFIX.jsdelivr)
 
   const bytes = utf8(html).byteLength
   return { html, bytes, tooLarge: bytes > maxBytes, inlined, failed: [...new Set(failed)] }

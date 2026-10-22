@@ -17,7 +17,7 @@ import {
   type SettingsFieldState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SETTINGS_FIELDS, SETTINGS_FIELD_NAMES, type SettingsFieldKind, type SettingsFieldName } from '../../config/settings-fields.ts'
-import { isValidCdnTemplate as isRuntimeCdnTemplate } from '../../shared/vendor-registry.ts'
+import { isValidCdnTemplate as isRuntimeCdnTemplate, type CdnPreset } from '../../shared/vendor-registry.ts'
 import { DEFAULT_PAGE_APPEARANCE, isDefaultPageAppearance, type PageAppearance } from '../../shared/page-appearance.ts'
 import { AppearancePanel } from '../appearance-panel.tsx'
 import { assetUrl } from '../asset-loader.ts'
@@ -32,6 +32,7 @@ import { deleteUserTemplate, getUserTemplates, replaceUserTemplates, subscribeUs
 import { writeIuiConfigField } from './config-bridge.ts'
 import { checkCustomTokensJson, TOKEN_EXAMPLES } from './custom-tokens.ts'
 import { FeedbackStatsCard } from './FeedbackStatsCard.tsx'
+import { NetworkProbeCard } from './NetworkProbeCard.tsx'
 import { SettingsPreview } from './SettingsPreview.tsx'
 import { mergeUserTemplates, parseUserTemplatesJson, serializeUserTemplates, userTemplatePrompt } from './user-templates.ts'
 import styles from './IuiSettingsSection.module.css'
@@ -331,6 +332,7 @@ export function IuiSettingsSection(props: {
                 : <span className={styles.error} role="alert" data-iui-settings-invalid="cdnTemplate">{t('cdnTemplateInvalid')}</span>}
             </label>
           )}
+          <NetworkProbeCard t={t} preset={cdnPreset as CdnPreset} />
         </section>
 
         <section className={styles.group} data-iui-settings-group="privacy">

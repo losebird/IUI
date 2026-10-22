@@ -32,6 +32,7 @@ import {
 import { getFenceOpsSnapshot } from '../shared/fence-ops.ts'
 import { createGetTripStopImagesTool, createGetPlaceImagesTool } from './trip-images-tool.ts'
 import { serveResourceProxy } from './resource-proxy.ts'
+import { ensureNetworkProbe, getNetworkProbe } from '../shared/network-probe.ts'
 export { GENUI_SECTION_TEXT } from './section-text.ts'
 export { Config }
 
@@ -225,8 +226,26 @@ async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promi
     return
   }
 
+  // C10: connectivity probe (cached 1 h). runtime-config carries the last
+  // result and kicks a background refresh; network-probe.json?refresh=1 waits
+  // for a fresh one (Settings →「重新检测」).
+  if (file === 'network-probe.json') {
+    let refresh = false
+    try { refresh = new URL(req.url ?? '/', 'http://x').searchParams.get('refresh') === '1' } catch { /* ignore */ }
+    const snap = await ensureNetworkProbe({ force: refresh }).catch(() => getNetworkProbe())
+    const body = Buffer.from(JSON.stringify({ networkProbe: snap }), 'utf8')
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    })
+    if (req.method !== 'HEAD') res.end(body)
+    else res.end()
+    return
+  }
+
   if (file === 'runtime-config.json') {
-    const body = Buffer.from(JSON.stringify(runtimeConfig), 'utf8')
+    if (!(typeof process !== 'undefined' && process.env.VITEST)) void ensureNetworkProbe().catch(() => { /* soft */ })
+    const body = Buffer.from(JSON.stringify({ ...runtimeConfig, networkProbe: getNetworkProbe() }), 'utf8')
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-cache',

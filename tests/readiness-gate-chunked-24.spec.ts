@@ -70,7 +70,7 @@ new Chart(document.getElementById('pieChart'), { type: 'doughnut', data: { label
       htmlComplete: true,
       jsComplete: true,
     }, { deferAuthorJs: false, frameId: 't24f' })
-    expect(doc).toContain('chart.umd.min.js')
+    expect(doc).toContain('chart.umd.js')
     expect(doc).toContain('ensureLibsThenRun')
     expect(doc).toContain('jsChunks')
     expect(doc).toContain('__iuiAuthorPipeline')
@@ -103,7 +103,7 @@ new Chart(document.getElementById('pieChart'), { type: 'doughnut', data: { label
       htmlComplete: true,
       jsComplete: false,
     }, { deferAuthorJs: true, frameId: 't24c' })
-    expect(chartDoc).toContain('chart.umd.min.js')
+    expect(chartDoc).toContain('chart.umd.js')
   })
 
   it('chunk isolation: prepare + split keeps button handlers compiling when Chart braces are excess', () => {
