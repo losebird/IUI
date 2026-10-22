@@ -10,7 +10,7 @@
 import { vendorProbeUrls, type CdnPreset } from './vendor-registry.ts'
 import { AMAP_PROBE_URL } from './net-context.ts'
 
-export type ProbeTargetId = 'jsdelivr' | 'npmmirror' | 'unpkg' | 'zstatic' | 'staticfile' | 'wikipedia' | 'wikimedia' | 'tiles' | 'amap'
+export type ProbeTargetId = 'jsdelivr' | 'npmmirror' | 'unpkg' | 'zstatic' | 'staticfile' | 'wikipedia' | 'wikimedia' | 'tiles' | 'amap' | 'models'
 
 export interface ProbeResult {
   readonly id: ProbeTargetId
@@ -41,6 +41,8 @@ export function networkProbeTargets(): Array<{ id: ProbeTargetId; url: string }>
     { id: 'wikimedia', url: 'https://upload.wikimedia.org/' },
     { id: 'tiles', url: TILE_PROBE_URL },
     { id: 'amap', url: AMAP_PROBE_URL },
+    // R5-3: CC0 3D models (Poly Haven files; Khronos samples ride on jsDelivr / GitHub).
+    { id: 'models', url: 'https://dl.polyhaven.org/' },
   ]
 }
 

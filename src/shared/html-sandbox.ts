@@ -19,6 +19,7 @@ import { buildAuthorJsRuntimeSource, splitAuthorJsChunks, jsonEmbed } from './au
 import { VENDOR_CDN_HOSTS, buildSriLookupSource, customCdnOrigin, getVendorSource, normalizeDeclaredLibs, rewriteKnownCdnUrl, vendorBaseOrigin, vendorCdnUrl, vendorCssUrls, vendorJsUrls, vendorSriAttrs, withVendorSource, type VendorId, type VendorSource } from './vendor-registry.ts'
 import { normalizeAccent, pageAccentCss } from './page-accent.ts'
 import { buildIconRuntimeScript, pageWantsIcons } from './icon-runtime.ts'
+import { buildStage3dRuntimeScript, MODEL_CONNECT_ORIGINS, pageWants3d } from './stage3d-runtime.ts'
 import { buildMotionRuntimeScript } from './motion-runtime.ts'
 export { splitAuthorJsChunks } from './author-js-runtime.ts'
 
@@ -4657,7 +4658,9 @@ function buildHtmlSandboxSrcdocInner(
   const cdnTags = makeCdnTagsNonBlocking(autoCdnTags(html, authorJs + fnSrc, options.assetBase, spec.libs, deferJs))
   const bridge = buildSandboxBridgeScript(frameId) + buildMotionRuntimeScript({ streaming: deferJs }) +
     // G4: Lucide icons — streaming shells always carry them (markup still arriving); complete pages only when used.
-    (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '')
+    (pageWantsIcons(html + authorJs + fnSrc, deferJs) ? buildIconRuntimeScript() : '') +
+    // R5-3: host 3D stage — same rule as icons.
+    (pageWants3d(html + authorJs + fnSrc, deferJs) ? buildStage3dRuntimeScript() : '')
   const oiuCss = buildOiuDesignSystemCss()
   const importMapTag = buildOiuImportmapScriptTag(options.assetBase)
   const tripScript = buildTripAnimatorScriptTag()
@@ -4670,7 +4673,7 @@ function buildHtmlSandboxSrcdocInner(
   const langAttr = typeof options.uiLang === 'string' && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u.test(options.uiLang) ? ` lang="${options.uiLang}"` : ''
   const schemeAttr = options.appearanceScheme === 'light' || options.appearanceScheme === 'dark' ? ` data-iui-scheme="${options.appearanceScheme}"` : ''
   const appearanceCss = typeof options.appearanceCss === 'string' ? options.appearanceCss.replace(/<\/style/gi, '<\\/style').slice(0, 20_000) : ''
-  let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()}; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
+  let doc = `<!DOCTYPE html><html${langAttr}${schemeAttr}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${mapImgOrigins(options.strictImages === true)}${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; style-src 'unsafe-inline' ${cdnCspOrigins(options.assetBase)}; script-src 'unsafe-inline' 'unsafe-eval' ${cdnCspOrigins(options.assetBase)}; font-src ${options.strictImages === true ? cdnCspOrigins(options.assetBase) : 'https:'} data:${vendorBaseOrigin(options.assetBase) ? ' ' + vendorBaseOrigin(options.assetBase) : ''}; connect-src ${cdnCspOrigins(options.assetBase)} ${mapConnectOrigins()} ${MODEL_CONNECT_ORIGINS.join(' ')} blob: data:; worker-src blob:; base-uri 'none'; form-action 'none';"/><title>${title}</title>${importMapTag}${tripScript}${cdnTags}<style>
 ${tokenCss}${baseCss}
 ${oiuCss}
 ${pageAccentCss(spec.accent)}

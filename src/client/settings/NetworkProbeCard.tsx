@@ -25,6 +25,7 @@ const LABEL_KEY: Record<ProbeTargetId, string> = {
   wikipedia: 'netProbe.wikipedia',
   wikimedia: 'netProbe.wikimedia',
   tiles: 'netProbe.tiles',
+  models: 'netProbe.models',
 }
 
 function isSnapshot(v: unknown): v is NetworkProbeSnapshot {

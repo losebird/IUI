@@ -1122,9 +1122,12 @@ Stats: <div class="iui-stat"><div class="iui-stat-value">128<span class="unit">m
 (.iui-stats grid for several; .iui-stat.lg / .sm; optional .iui-stat-delta[.down]). Number on top, caption below — never "128 次访问" in one line.
 Cards side by side: .iui-card-grid (equal height); .iui-card-title clamps to 2 lines, .iui-card-summary to 3; .iui-card-foot sticks to the bottom; .iui-clamp-1/2/3 helpers.
 Host auto-adds: edge fades + indicator on horizontal scrollers; 换行/复制 tools on <pre> (opt out: data-iui-no-tools).
-3D: canvas inside .iui-3d-wrap with a .iui-3d-loading placeholder; set data-iui-3d-ready on the wrap when the first frame renders.
-Three-point light (key casts soft shadow + fill + rim) + ShadowMaterial ground; fit the camera by projecting the mesh vertices (Box3 / bounding sphere are too loose) so the object fills ≥ 40% of the frame;
-OrbitControls from 'three/addons/controls/OrbitControls.js' with enableDamping.
+3D: use the host stage — <div data-iui-3d='{"model":"polyhaven:ArmChair_01","hotspots":[{"id":"seat","label":"坐垫","at":[0,0.1,0.6],"text":"…"}]}'></div>
+("model": "polyhaven:ID" | "khronos:Name" | an https .glb on jsDelivr or GitHub raw, from find_3d_models — never invent IDs; or "shape": torusKnot|sphere|box|icosahedron|torus|cone|cylinder|capsule).
+The host does lights + soft shadow, auto-fit, damped OrbitControls, keyboard, Ctrl+wheel zoom, pins with camera fly, loading % and fallback.
+Options: ground plinth|shadow|none, view [az,el], autoRotate, cursor "look", animation true|"Clip", color. Text layers: child with data-iui-3d-layer="back|front".
+Events iui3d:ready / iui3d:hotspot (detail.id, label, spec); API window.iuiStage3d(el).then(s => s.focus('seat') / s.reset() / s.play()).
+Hand-write three.js only for custom scenes: canvas inside .iui-3d-wrap + .iui-3d-loading, set data-iui-3d-ready on first frame, fit by projecting vertices.
 
 SVG diagrams: use .c-purple .c-teal .c-coral .c-pink .c-gray .c-blue .c-green .c-amber .c-red plus .box .node .arr .leader and text .t .ts .th.
 

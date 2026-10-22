@@ -118,7 +118,7 @@ describe('F2 mirrors + auto preset', () => {
   })
 
   it('probe covers every mirror + AMap; cdn-all-down needs every mirror down', () => {
-    expect(networkProbeTargets().map((t) => t.id)).toEqual(['jsdelivr', 'npmmirror', 'unpkg', 'zstatic', 'staticfile', 'wikipedia', 'wikimedia', 'tiles', 'amap'])
+    expect(networkProbeTargets().map((t) => t.id)).toEqual(['jsdelivr', 'npmmirror', 'unpkg', 'zstatic', 'staticfile', 'wikipedia', 'wikimedia', 'tiles', 'amap', 'models'])
     expect(probeAdvice(CHINA, 'auto')).toEqual(['no-wikimedia'])
   })
 })

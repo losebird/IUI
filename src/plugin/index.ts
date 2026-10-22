@@ -31,6 +31,7 @@ import {
 } from '../shared/structured-outputs.ts'
 import { getFenceOpsSnapshot } from '../shared/fence-ops.ts'
 import { createGetTripStopImagesTool, createGetPlaceImagesTool } from './trip-images-tool.ts'
+import { createFind3dModelsTool } from './model-search-tool.ts'
 import { serveResourceProxy } from './resource-proxy.ts'
 import { ensureNetworkProbe, getNetworkProbe } from '../shared/network-probe.ts'
 export { GENUI_SECTION_TEXT } from './section-text.ts'
@@ -133,7 +134,7 @@ function bindingSessionOf(url: string | undefined): string {
 
 const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 // F1: `vendor/iui-esm/<pkg>@<version>[-helpers].mjs` = generated ESM wrappers over the UMD builds.
-const VENDOR_FILE_RE = /^vendor\/(?:(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+|iui-esm\/[a-z0-9.-]+@\d[\w.-]*)\.(js|mjs|css|png|svg|woff2?|ttf|json)$/i
+const VENDOR_FILE_RE = /^vendor\/(?:(?:@[a-z0-9-]+\/)?[a-z0-9.-]+@\d[\w.-]*\/[A-Za-z0-9._/-]+|iui-esm\/[a-z0-9.-]+@\d[\w.-]*)\.(js|mjs|css|png|svg|woff2?|ttf|json|wasm)$/i
 const VENDOR_MIME: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',
   mjs: 'text/javascript; charset=utf-8',
@@ -144,6 +145,7 @@ const VENDOR_MIME: Record<string, string> = {
   woff2: 'font/woff2',
   ttf: 'font/ttf',
   json: 'application/json; charset=utf-8',
+  wasm: 'application/wasm',
 }
 
 async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -504,6 +506,7 @@ export function apply(ctx: Context, config?: IuiPluginConfig): void {
       const tools = (toolsCtx as Context & { tools: { register(tool: unknown): unknown } }).tools
       tools.register(createGetTripStopImagesTool())
       tools.register(createGetPlaceImagesTool())
+      tools.register(createFind3dModelsTool())
     } catch (err) {
       toolsCtx.logger?.warn?.(
         `iui: trip/place image tools register failed: ${err instanceof Error ? err.message : String(err)}`,

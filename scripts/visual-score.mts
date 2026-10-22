@@ -232,6 +232,8 @@ const clamp = (v: number): number => Math.max(0, Math.min(100, Math.round(v)))
 
 async function waitSettled(page: any): Promise<void> {
   await page.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+  // R5-3: host 3D stages load three + loaders asynchronously — score the rendered frame, not the spinner.
+  await page.waitForFunction(() => !document.querySelector('[data-iui-3d]:not([data-iui-3d-ready])'), null, { timeout: 20000 }).catch(() => {})
   await page.waitForTimeout(600)
 }
 

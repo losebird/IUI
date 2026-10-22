@@ -13,6 +13,7 @@ import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildHtmlSandboxSrcdoc, HTML_SANDBOX_STARTERS, type HtmlSandboxSpec } from '../src/shared/html-sandbox.ts'
 import { visualScoreCase } from './visual-score.mts'
+import { buildTestGlb } from './test-glb.mts'
 
 const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
 
@@ -138,6 +139,7 @@ async function main(): Promise<void> {
     failures += await visualScoreCase(browser)
     failures += await themingGesturesCase(browser)
     failures += await batchCCase(browser)
+    failures += await stage3dCase(browser)
   } finally {
     await browser.close()
   }
@@ -190,6 +192,7 @@ addEventListener('message', function (e) { var d = e.data; if (!d || d.source !=
     await clean.goto('about:blank')
     await clean.setContent(buildHtmlSandboxSrcdoc(starter.spec, { frameId: `gc-${starter.id}`, uiLang: 'zh' }), { waitUntil: 'load' })
     await clean.waitForFunction(() => ['authorSettled', 'live', 'failed'].includes((window as any).__iuiAuthorPipeline?.phase), null, { timeout: 15000 }).catch(() => {})
+    await clean.waitForFunction(() => !document.querySelector('[data-iui-3d]:not([data-iui-3d-ready])'), null, { timeout: 20000 }).catch(() => {})
     await clean.waitForTimeout(300)
     const issues: any[] = await clean.evaluate(() => (window as any).__iuiSelfCheck())
     const bad = issues.filter((x) => x.serious)
@@ -197,6 +200,77 @@ addEventListener('message', function (e) { var d = e.data; if (!d || d.source !=
   }
   await clean.close()
   console.log(`${problems.length ? '✗' : '✓'} batch C: summary fill · save as image · self-check (${HTML_SANDBOX_STARTERS.length} starters clean)${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
+  return problems.length ? 1 : 0
+}
+
+/**
+ * R5-3: host 3D stage in real Chromium — primitive + plinth + pins, fixture GLB (node pin, clip list),
+ * failing URL → fallback; plain wheel scrolls (no zoom), Ctrl+wheel zooms, pin click flies + fires
+ * iui3d:hotspot, arrow keys orbit. GLBs are served by page.route (no network for models).
+ */
+export async function stage3dCase(browser: any): Promise<number> {
+  const problems: string[] = []
+  const glb = Buffer.from(buildTestGlb())
+  const spec = (html: string, js = ''): HtmlSandboxSpec => ({ title: '3d', css: '', html, js, stages: ['html', 'js'], partial: false, cssComplete: true, htmlComplete: true, jsComplete: true }) as HtmlSandboxSpec
+  const cases = [
+    { name: 'shape', html: `<div data-iui-3d='{"shape":"torusKnot","ground":"plinth","hotspots":[{"id":"a","label":"A","at":[0.6,0.6,0.6]},{"id":"b","label":"B","at":[0,-0.9,0.9]}]}'><h2 data-iui-3d-layer="back">BACK</h2></div><div style="height:1200px"></div>`, js: "window.hs=[];document.addEventListener('iui3d:hotspot',function(e){hs.push(e.detail.id)})" },
+    { name: 'glb', html: `<div data-iui-3d='{"model":"https://raw.githubusercontent.com/iui-test/box.glb","animation":true,"hotspots":[{"id":"lid","label":"Lid","node":"Lid"}]}'></div>` },
+    { name: 'bad', html: `<div data-iui-3d='{"model":"https://raw.githubusercontent.com/iui-test/missing.glb"}'></div>` },
+  ]
+  const stage = (pg: any) => pg.evaluate(async () => {
+    const el = document.querySelector('[data-iui-3d]') as any
+    const st = el.__iui3d ? await el.__iui3d : null
+    const cv = el.querySelector('canvas') as HTMLCanvasElement | null
+    let lit = 0
+    if (cv) { const c = document.createElement('canvas'); c.width = 64; c.height = 48; const x = c.getContext('2d')!; x.drawImage(cv, 0, 0, 64, 48); const d = x.getImageData(0, 0, 64, 48).data; for (let i = 3; i < d.length; i += 4) if (d[i]! > 10) lit++ }
+    return { ready: el.hasAttribute('data-iui-3d-ready'), error: el.hasAttribute('data-iui-3d-error'), clips: st?.clips ?? null, lit: lit / (64 * 48), pins: el.querySelectorAll('.iui-3d-pin').length, dist: st ? st.camera.position.distanceTo(st.controls.target) : 0, cam: st ? st.camera.position.toArray().map((v: number) => v.toFixed(3)).join(',') : '', layer: !!el.querySelector('[data-iui-3d-layer]') }
+  })
+  for (const c of cases) {
+    const page = await browser.newPage({ viewport: { width: 720, height: 700 }, reducedMotion: 'reduce' })
+    const errors: string[] = []
+    page.on('pageerror', (e: any) => errors.push(String(e).slice(0, 160)))
+    await page.route('https://raw.githubusercontent.com/iui-test/**', (r: any) => r.request().url().endsWith('box.glb')
+      ? r.fulfill({ status: 200, body: glb, headers: { 'content-type': 'model/gltf-binary', 'access-control-allow-origin': '*' } })
+      : r.fulfill({ status: 404, body: 'no', headers: { 'access-control-allow-origin': '*' } }))
+    await page.setContent(buildHtmlSandboxSrcdoc(spec(c.html, c.js ?? ''), { frameId: `r53-${c.name}`, uiLang: 'zh' }), { waitUntil: 'load' })
+    await page.waitForSelector('[data-iui-3d-ready]', { timeout: 45000 }).catch(() => {})
+    await page.waitForTimeout(400)
+    const s0 = await stage(page)
+    if (!s0.ready) problems.push(`${c.name}: not ready`)
+    if (s0.lit < 0.08) problems.push(`${c.name}: canvas looks blank (${(s0.lit * 100).toFixed(0)}% lit)`)
+    if (c.name === 'bad' ? !s0.error : s0.error) problems.push(`${c.name}: error flag ${s0.error}`)
+    if (errors.length) problems.push(`${c.name}: page errors ${errors.join(' | ')}`)
+    if (c.name === 'glb') {
+      if (JSON.stringify(s0.clips) !== '["Spin"]') problems.push(`glb: clips ${JSON.stringify(s0.clips)}`)
+      if (s0.pins !== 1) problems.push(`glb: node pin missing (${s0.pins})`)
+    }
+    if (c.name === 'shape') {
+      if (s0.pins !== 2 || !s0.layer) problems.push(`shape: pins ${s0.pins} layer ${s0.layer}`)
+      const box = await page.locator('canvas.iui-3d-canvas').boundingBox()
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await page.mouse.wheel(0, 240); await page.waitForTimeout(300)
+      const s1 = await stage(page)
+      const scrolled = await page.evaluate(() => scrollY)
+      if (Math.abs(s1.dist - s0.dist) > 1e-3) problems.push(`shape: plain wheel zoomed (${s0.dist.toFixed(2)} → ${s1.dist.toFixed(2)})`)
+      if (scrolled < 50) problems.push(`shape: plain wheel did not scroll the page (${scrolled})`)
+      await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(100)
+      const box2 = await page.locator('canvas.iui-3d-canvas').boundingBox()
+      await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2)
+      await page.keyboard.down('Control'); await page.mouse.wheel(0, -240); await page.keyboard.up('Control'); await page.waitForTimeout(400)
+      const s2 = await stage(page)
+      if (!(s2.dist < s0.dist - 0.05)) problems.push(`shape: ctrl+wheel did not zoom (${s0.dist.toFixed(2)} → ${s2.dist.toFixed(2)})`)
+      await page.click('.iui-3d-pin'); await page.waitForTimeout(1200)
+      const hs = await page.evaluate(() => (window as any).hs)
+      const pressed = await page.locator('.iui-3d-pin').first().getAttribute('aria-pressed')
+      if (JSON.stringify(hs) !== '["a"]' || pressed !== 'true') problems.push(`shape: pin click event ${JSON.stringify(hs)} pressed=${pressed}`)
+      await page.focus('canvas.iui-3d-canvas')
+      const k0 = (await stage(page)).cam
+      await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(150)
+      if ((await stage(page)).cam === k0) problems.push('shape: ArrowLeft did not orbit')
+    }
+    await page.close()
+  }
+  console.log(`${problems.length ? '✗' : '✓'} R5-3 3D stage: primitive + pins · fixture GLB (clip, node pin) · fallback · wheel/Ctrl-zoom · keys${problems.length ? '\n    ' + problems.join('\n    ') : ''}`)
   return problems.length ? 1 : 0
 }
 

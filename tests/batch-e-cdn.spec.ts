@@ -240,7 +240,7 @@ describe('C10 connectivity probe', () => {
       },
     })
     expect(seen.every((s) => s.startsWith('HEAD https://'))).toBe(true)
-    expect(out.results.map((r) => `${r.id}:${r.ok}`)).toEqual(['jsdelivr:true', 'npmmirror:true', 'unpkg:false', 'zstatic:true', 'staticfile:true', 'wikipedia:true', 'wikimedia:false', 'tiles:true', 'amap:true'])
+    expect(out.results.map((r) => `${r.id}:${r.ok}`)).toEqual(['jsdelivr:true', 'npmmirror:true', 'unpkg:false', 'zstatic:true', 'staticfile:true', 'wikipedia:true', 'wikimedia:false', 'tiles:true', 'amap:true', 'models:true'])
     expect(out.results.find((r) => r.id === 'wikipedia')?.status).toBe(405)
   })
 
@@ -293,7 +293,7 @@ describe('C10 connectivity probe', () => {
   it('settings card lists every host and the preset advice', () => {
     const html = renderToStaticMarkup(createElement(NetworkProbeCard, { t: (k: string) => k, preset: 'global', initial: snap(['jsdelivr', 'unpkg']) }))
     for (const { id } of networkProbeTargets()) expect(html).toContain(`data-iui-probe="${id}"`)
-    expect(html).toContain('data-iui-network-probe="7/9"')
+    expect(html).toContain('data-iui-network-probe="8/10"')
     expect(html).toContain('data-iui-probe-advice="switch-china"')
     expect(html).toContain('netProbeRecheck')
     const idle = renderToStaticMarkup(createElement(NetworkProbeCard, { t: (k: string) => k, preset: 'local', initial: null }))

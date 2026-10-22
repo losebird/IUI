@@ -608,7 +608,7 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'scene-3d',
     patterns: ['3d', '三维', '立体', 'three(\\.js)?', 'webgl'],
-    text: "3D: inside a function `Promise.all([import('three'), import('three/addons/controls/OrbitControls.js')])`; key + fill + rim light, ShadowMaterial ground; fit the camera by projecting the mesh vertices (Box3/bounding sphere are too loose) so the object fills ≥40% of the frame; OrbitControls with damping; autoRotate only when not reducedMotion; renderer sized to the wrapper, pixelRatio ≤2.",
+    text: "3D: host stage `<div data-iui-3d='{\"model\":\"polyhaven:ID\",\"hotspots\":[{\"id\":\"a\",\"label\":\"…\",\"at\":[x,y,z],\"text\":\"…\"}]}'></div>` — get real models from find_3d_models first (never invent IDs); no model → \"shape\":\"torusKnot\"|sphere|box…. at = point in the model box, each axis -1..1. Host does lights, shadow, fit, orbit, keys, pins, fallback; listen for iui3d:hotspot. Do not hand-write a renderer unless the scene is custom.",
   },
   {
     id: 'dashboard',

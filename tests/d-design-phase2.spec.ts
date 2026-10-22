@@ -166,8 +166,10 @@ describe('D补充 starters + 3D fit', () => {
     const room = OIU_PATTERN_STARTERS.find((s) => s.id === 'meeting-rooms')!
     expect(room.spec.js + room.spec.html).toContain('iui-stat')
     const s3 = OIU_PATTERN_STARTERS.find((s) => s.id === 'scene-3d')!
-    expect(s3.spec.js).toContain('OrbitControls')
-    expect(s3.spec.js).toContain('data-iui-3d-ready')
+    expect(s3.spec.html).toContain("data-iui-3d='")
+    expect(JSON.parse(/data-iui-3d='([^']+)'/.exec(s3.spec.html)![1]!).hotspots.length).toBeGreaterThanOrEqual(3)
+    expect(s3.spec.js).toContain('iui3d:hotspot')
+    expect(s3.spec.js).not.toContain('WebGLRenderer')
   })
   it('fitSceneBounds encloses the meshes', () => {
     const fit = fitSceneBounds({ meshes: [{ shape: 'box', size: [2, 2, 2], position: [4, 1, 0] }, { shape: 'sphere', size: 1, position: [-4, 1, 0] }] } as never)

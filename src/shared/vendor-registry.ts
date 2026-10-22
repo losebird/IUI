@@ -32,7 +32,7 @@ export const VENDOR_LIBS = {
   agGrid: { pkg: 'ag-grid-community', version: '32.3.3', js: 'dist/ag-grid-community.min.js', css: ['styles/ag-grid.css', 'styles/ag-theme-quartz.css'] },
   mermaid: { pkg: 'mermaid', version: '11.16.0', js: 'dist/mermaid.min.js' },
   // ESM only (importmap). three.module.js imports ./three.core.js; addons import bare 'three'.
-  three: { pkg: 'three', version: '0.180.0', extra: ['build/three.module.js', 'build/three.core.js', 'examples/jsm/controls', 'examples/jsm/geometries', 'examples/jsm/utils', 'examples/jsm/math'] },
+  three: { pkg: 'three', version: '0.180.0', extra: ['build/three.module.js', 'build/three.core.js', 'examples/jsm/controls', 'examples/jsm/geometries', 'examples/jsm/utils', 'examples/jsm/math', 'examples/jsm/environments', 'examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/loaders/DRACOLoader.js', 'examples/jsm/libs/meshopt_decoder.module.js', 'examples/jsm/libs/draco/gltf/draco_decoder.wasm', 'examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js'] },
   // F1: ESM only (importmap `gsap` / `gsap/…`) — the package root files are the ES modules.
   gsap: { pkg: 'gsap', version: '3.12.5', extra: ['index.js', 'all.js', 'gsap-core.js', 'CSSPlugin.js', 'CSSRulePlugin.js', 'CustomEase.js', 'Draggable.js', 'EasePack.js', 'EaselPlugin.js', 'Flip.js', 'MotionPathPlugin.js', 'Observer.js', 'PixiPlugin.js', 'ScrollToPlugin.js', 'ScrollTrigger.js', 'TextPlugin.js', 'utils'] },
 } as const satisfies Record<string, VendorLib>
@@ -71,6 +71,9 @@ export const VENDOR_CDN_PREFIX = {
 } as const
 
 /** CDN hosts used as fallbacks (also added to the sandbox CSP). */
+/** R5-3: Khronos glTF-Sample-Assets over jsDelivr's GitHub mirror (the 3D stage appends `<commit>/Models/…`). */
+export const KHRONOS_ASSETS_CDN = 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@'
+
 export const VENDOR_CDN_HOSTS = ['cdn.jsdelivr.net', 'registry.npmmirror.com', 'unpkg.com', 's4.zstatic.net', 'cdn.staticfile.net'] as const
 
 /** F2: public library mirrors the `auto` preset can rank (probe ids). */

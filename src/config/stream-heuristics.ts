@@ -70,7 +70,7 @@ export const STREAM_HEURISTICS: StreamHeuristics = {
     'read_file',
     'grep',
   ],
-  toolsAllowedBeforeFence: ['get_trip_stop_images', 'get_place_images'],
+  toolsAllowedBeforeFence: ['get_trip_stop_images', 'get_place_images', 'find_3d_models'],
   firstTokenDecideAfter: 3,
   midNudgeAfterSteps: 1,
   maxSameTurnSteers: 2,

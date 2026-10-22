@@ -45,6 +45,9 @@ const required = [
   // F1: offline ESM (gsap + generated d3 / Chart.js wrappers) for the sandbox importmap.
   'lib/assets/vendor/gsap@3.12.5/index.js', 'lib/assets/vendor/iui-esm/d3@7.9.0.mjs',
   'lib/assets/vendor/iui-esm/chart.js@4.4.1.mjs', 'lib/assets/vendor/iui-esm/chart.js@4.4.1-helpers.mjs',
+  // R5-3: host 3D stage loaders (GLB + Draco / Meshopt) and the room environment.
+  'lib/assets/vendor/three@0.180.0/examples/jsm/loaders/GLTFLoader.js', 'lib/assets/vendor/three@0.180.0/examples/jsm/environments/RoomEnvironment.js',
+  'lib/assets/vendor/three@0.180.0/examples/jsm/libs/draco/gltf/draco_decoder.wasm',
   // plugin_check 发布规范（issue #15）：tarball 必须携带可复现构建所需的
   // 源码入口与构建配置，prepack 已在打包前重建 lib。
   'src/index.ts', 'tsconfig.json', 'tsdown.config.ts',

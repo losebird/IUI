@@ -34,7 +34,7 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 - **数字**：`.iui-stat` > `.iui-stat-value`（大号数字，单位放 `<span class="unit">`）+ `.iui-stat-label`（小号说明在下面）；多个放 `.iui-stats`。数字和说明不要写在同一行。
 - **卡片**：并列卡片用 `.iui-card-grid`（自动等高），标题 `.iui-card-title` 最多 2 行，摘要 `.iui-card-summary` 最多 3 行，底部按钮加 `.iui-card-foot`。
 - 横向滚动区域、代码块（`<pre>`）宿主会自动加渐隐提示和「换行 / 复制」按钮，不用自己做。
-- **3D**：画布放 `.iui-3d-wrap`（内放 `.iui-3d-loading` 占位，就绪后给 wrap 设 `data-iui-3d-ready`）；三点光源 + 阴影，相机按物体包围球自动取景（物体占画面 ≥ 40%），`three/addons/controls/OrbitControls.js` 开阻尼。
+- **3D**：用宿主舞台 `<div data-iui-3d='{"model":"polyhaven:ArmChair_01","hotspots":[{"id":"seat","label":"坐垫","at":[0,0.1,0.6],"text":"…"}]}'></div>`。模型先用 `find_3d_models` 搜（返回 `polyhaven:ID` / `khronos:Name`，CC0，带体积与来源），不要编 ID；没有合适模型就用 `"shape":"torusKnot|sphere|box|…"`。宿主负责灯光阴影、自动取景、阻尼旋转、键盘、Ctrl+滚轮缩放、热点飞镜头、加载进度与失败兜底；子元素加 `data-iui-3d-layer="back|front"` 做大字背景/前景；监听 `iui3d:hotspot`。只有自定义场景才手写 three.js（`.iui-3d-wrap` + `data-iui-3d-ready`）。
 
 ## 关键模式
 

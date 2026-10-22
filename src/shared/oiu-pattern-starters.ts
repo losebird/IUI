@@ -79,90 +79,19 @@ strip.onclick=function(e){
 setTimeout(function(){ tour.play(); }, 400);
 `.trim()
 
-/** D7: 3D starter — three-point light, soft shadows, auto-fit camera (object ≥ 40% of frame), damped orbit. */
+/**
+ * R5-3: 3D starter — the host stage (`data-iui-3d`) owns renderer, lights, soft shadow, auto-fit (silhouette ≈ 80% of
+ * frame), damped orbit, keyboard, Ctrl+wheel zoom, pins and loading/fallback. The page only reacts to hotspot picks.
+ * Swap `shape` for `"model":"polyhaven:ID"` / `"khronos:Name"` / an https .glb found via find_3d_models.
+ */
 const SCENE_3D_JS = `
-(async function(){
-  var wrap=document.getElementById('stage');
-  var note=wrap.querySelector('.iui-3d-loading');
-  try{
-    var THREE=await import('three');
-    var OC=(await import('three/addons/controls/OrbitControls.js')).OrbitControls;
-    var w=wrap.clientWidth||480,h=wrap.clientHeight||320;
-    var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-    renderer.setSize(w,h);
-    renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.outputColorSpace=THREE.SRGBColorSpace;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    wrap.appendChild(renderer.domElement);
-    var scene=new THREE.Scene();
-    var camera=new THREE.PerspectiveCamera(40,w/h,0.05,200);
-    // Three-point lighting + soft sky fill.
-    scene.add(new THREE.HemisphereLight(0xffffff,0x8a8070,0.55));
-    var key=new THREE.DirectionalLight(0xffffff,2.2);
-    key.position.set(4,6,3);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.radius=4;key.shadow.bias=-0.0005;
-    var fill=new THREE.DirectionalLight(0xdbe8ff,0.7);fill.position.set(-5,2.5,2);
-    var rim=new THREE.DirectionalLight(0xffffff,1.2);rim.position.set(-2,4,-5);
-    scene.add(key,fill,rim);
-    var obj=new THREE.Mesh(new THREE.TorusKnotGeometry(0.8,0.28,220,32),new THREE.MeshStandardMaterial({color:0x185FA5,roughness:0.32,metalness:0.2}));
-    obj.castShadow=true;obj.position.y=1.35;
-    var plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.6,0.24,64),new THREE.MeshStandardMaterial({color:0xd9d4ca,roughness:0.85}));
-    plinth.position.y=0.12;plinth.receiveShadow=true;plinth.castShadow=true;
-    var subject=new THREE.Group();subject.add(obj,plinth);scene.add(subject);
-    var ground=new THREE.Mesh(new THREE.CircleGeometry(4,64),new THREE.ShadowMaterial({opacity:0.22}));
-    ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
-    var controls=new OC(camera,renderer.domElement);
-    controls.enableDamping=true;controls.dampingFactor=0.08;
-    var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-    controls.autoRotate=!still;controls.autoRotateSpeed=1.2;
-    // Auto-fit: the subject (object + plinth) is framed to ~93% of the frame by projecting its vertices, so the subject
-    // (object + shadow) covers ≥ 40% of the canvas at any orbit angle (F25 template gate).
-    function fit(){
-      var box=new THREE.Box3().setFromObject(subject),c=box.getCenter(new THREE.Vector3());
-      var sphere=box.getBoundingSphere(new THREE.Sphere());
-      var dir=new THREE.Vector3(0.9,0.45,1.3).normalize(),d=sphere.radius*3,p=new THREE.Vector3();
-      // Project the subject's actual vertices (a box is too loose) and pull the camera in until the
-      // silhouette spans ~93% of the frame.
-      var pts=[];
-      subject.updateMatrixWorld(true);
-      subject.traverse(function(m){
-        if(!m.isMesh)return;var a=m.geometry.attributes.position,step=Math.max(1,Math.floor(a.count/1500));
-        for(var i=0;i<a.count;i+=step)pts.push(new THREE.Vector3().fromBufferAttribute(a,i).applyMatrix4(m.matrixWorld));
-      });
-      for(var k=0;k<4;k++){
-        camera.position.copy(c).addScaledVector(dir,d);camera.lookAt(c);
-        camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();camera.updateMatrixWorld();
-        var ext=0;
-        for(var n=0;n<pts.length;n++){p.copy(pts[n]).project(camera);ext=Math.max(ext,Math.abs(p.x),Math.abs(p.y));}
-        d*=ext/0.93;
-      }
-      camera.position.copy(c).addScaledVector(dir,d);
-      camera.near=d/100;camera.far=d*20;camera.updateProjectionMatrix();
-      controls.target.copy(c);controls.minDistance=d*0.5;controls.maxDistance=d*3;controls.update();
-    }
-    fit();
-    controls.addEventListener('start',function(){controls.autoRotate=false;sync();});
-    var running=false;
-    function loop(){controls.update();renderer.render(scene,camera);}
-    function run(on){if(on===running)return;running=on;renderer.setAnimationLoop(on?loop:null);}
-    run(true);
-    document.addEventListener('visibilitychange',function(){run(!document.hidden);});
-    if(window.ResizeObserver)new ResizeObserver(function(){
-      var W=wrap.clientWidth,H=wrap.clientHeight;if(!W||!H)return;
-      renderer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();
-    }).observe(wrap);
-    var spin=document.getElementById('spin');
-    function sync(){spin.setAttribute('aria-pressed',controls.autoRotate?'true':'false');spin.textContent=controls.autoRotate?'暂停旋转':'自动旋转';}
-    spin.onclick=function(){controls.autoRotate=!controls.autoRotate;sync();};
-    document.getElementById('reset').onclick=function(){fit();};
-    sync();
-    wrap.setAttribute('data-iui-3d-ready','1');
-  }catch(e){
-    wrap.setAttribute('data-iui-3d-error','1');
-    note.textContent='3D 场景加载失败：'+(e&&e.message?e.message:e);
-  }
-})();
+var stage=document.getElementById('stage');
+var info=document.getElementById('info');
+stage.addEventListener('iui3d:hotspot',function(e){
+  info.innerHTML='<b>'+e.detail.label+'</b> · '+(e.detail.spec.text||'');
+});
+// Stage API (focus / reset / play / stop / setAutoRotate): window.iuiStage3d(stage).then(function(s){ … })
+stage.addEventListener('iui3d:ready',function(){ info.textContent='点模型上的圆点查看部件说明'; });
 `.trim()
 
 /** D-补充: meeting-room board (data personality, two-layer stats, equal-height cards). */
@@ -330,12 +259,13 @@ export const OIU_PATTERN_STARTERS: readonly HtmlSandboxStarter[] = [
   {
     id: 'scene-3d',
     title: '3D 展示台',
-    summary: '三点光源 + 阴影 + 自动取景 + OrbitControls 阻尼 + 加载占位',
+    summary: '宿主 3D 舞台：data-iui-3d 声明式（形状 / GLB / CC0 模型）+ 热点镜头 + 背景字层 + 加载与失败兜底',
     spec: {
       title: '3D 展示台',
       height: 500,
       css: '',
-      html: "<div class=\"iui-sandbox-stack\"><div><h2 style=\"margin:0\">3D 展示台</h2><div class=\"iui-sandbox-muted\">三点光源 + 柔和阴影，物体按轮廓自动取景、占满画面约 90%</div></div><div class=\"iui-3d-wrap\" id=\"stage\" style=\"height:380px\"><div class=\"iui-3d-loading\">正在加载 3D 场景…</div></div><div class=\"iui-sandbox-row\"><button type=\"button\" id=\"reset\" class=\"secondary\">重置视角</button><button type=\"button\" id=\"spin\" class=\"secondary\" aria-pressed=\"true\">暂停旋转</button><span class=\"iui-sandbox-muted\">拖动旋转 · 滚轮或双指缩放</span></div></div>",
+      html: `<div class="iui-sandbox-stack"><div><h2 style="margin:0">3D 展示台</h2><div class="iui-sandbox-muted">拖动或方向键旋转 · Ctrl + 滚轮缩放 · 点圆点飞到部件</div></div><div id="stage" data-iui-3d='{"shape":"torusKnot","ground":"plinth","label":"环面纽结示意模型","hotspots":[{"id":"top","label":"顶部弧线","at":[0,0.9,0.2],"text":"曲率最大处，高光最集中"},{"id":"side","label":"侧向缠绕","at":[0.75,0.1,0.55],"text":"三圈缠绕形成的交叉结构"},{"id":"base","label":"展台","at":[0,-0.95,0.6],"text":"柔和接触阴影让物体落地"}]}'><h2 data-iui-3d-layer="back" style="justify-content:flex-start;padding-top:18px;font-size:132px;font-weight:800;letter-spacing:-.04em;opacity:.09">KNOT</h2></div><div class="iui-sandbox-row"><span class="iui-sandbox-muted" id="info" role="status">3D 舞台加载中…</span></div></div>`,
+
       js: SCENE_3D_JS,
       stages: ['html', 'js'],
       partial: false,
