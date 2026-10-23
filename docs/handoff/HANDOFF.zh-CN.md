@@ -1,12 +1,12 @@
 # IUI 视觉重做 · 交接文档
 
-> 交接时间：2026-10（第 6 步完成、待用户确认时更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
+> 交接时间：2026-10（第 7 步完成、待用户确认时更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
 > 本目录：`docs/handoff/`（只在 `hotfix/0.13.0-iui.27` 分支上，`main` 没有；先 `git fetch origin && git checkout hotfix/0.13.0-iui.27`）
 
 ## 1. 现在在哪一步
 
 - 3 轮视觉方案**全部已确认**（第 1、2 轮按「推荐」；第 3 轮 ⑪ ⑫ 和 999px 修复也已确认要做）。
-- 第 6 节第 1–6 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
+- 第 6 节第 1–7 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
 
   | 步骤 | 提交 | 内容 | 对比图 |
   |---|---|---|---|
@@ -16,8 +16,18 @@
   | 4 插件界面 ⑪⑫ + 999px | `3bba461` | 工具栏图标 + ⋯ 菜单分组；外观弹层；修改失败卡改黄色提示；骨架屏「已接收 X KB」；ToastCard（撤销）；模板中心（缩略图、「我的」）；删成就 / 目录死入口；设置页行列表 / 单预览 / 连通性小表 / 保存条；容器圆角改 `--radius-box` | `progress/step4/` |
   | 5 设计检查 | `c0b24e7` | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
   | 6 视觉回归 | `37ee29c` `96e18dd` `86c13ad` `53c606d` `c6c4708` `e06af30` `4739e23`；第 2 轮 `35446e0` `c423bd9` `37d487d` `d74bab1` `3d42941` `a46fcca` `38928c9` `257bc3c` 及基线提交 | CI 修绿；**真实 dsh 视觉回归** `pnpm run test:dsh-visual`（`scripts/dsh-visual.mts`，现 26 项 × 浅 688 / 深 688 / 390 = 78 张，像素差 + `scoreSrcdoc` 打分，CI 任务 `dsh-visual` 带 `--gate`，基线 `scripts/golden/dsh-visual/` 由 CI 生成）；真实 dsh 里发现并修了 7 处 + 第 2 轮 4 处（见下）；门禁已生效 | `progress/step6/`（第 2 轮：`*-fix.png`） |
+  | 7 上线前核对 | 见 git log（`visual(⑦ …)`） | 抽 20 个改版前会话（b24b35b 时的 20 个 starter 页面 + 旧 iui-patch + 旧 `iui` GenUI 围栏）在真实 dsh 里分别用改版前插件和当前插件回放，浅 688 / 深 688 / 390 各一张（`--suite legacy [--plugin <dir>]`）；更新说明（CHANGELOG、`docs/UPGRADE.md`：旧会话自动换主题，已下载的离线 HTML / 图片不变） | `progress/step7/` |
 
-- 第 1–5 步用户都已确认；第 6 步**待用户确认**。之后是第 7 步（抽 20 个旧会话核对、更新说明）。
+- 第 1–6 步用户都已确认；第 7 步**待用户确认**。
+
+### 第 7 步核对结果（接手必读）
+
+- 素材：真实用户会话不在仓库里，改用改版前（`b24b35b`）提示词教给模型的 20 个 starter 页面作为「旧会话」（`scripts/dsh-visual/legacy-pages.json`，`legacy-sessions.mts`），每个会话一问一答；会话 1 追加旧 `iui-patch`，会话 2 追加旧 `iui` GenUI 围栏，共 22 项 × 3 张。改版前插件用 `git worktree add <dir> b24b35b` 后直接跑 `node scripts/clean.mjs && npx tsc -p tsconfig.json && npx tsdown && node scripts/vendor-assets.mjs`（`pnpm run build` 会触发 pnpm install 检查），`--plugin <dir>` 指过去。本地真实 dsh 0.2.1-rc.2 截图（非 CI），只出报告不设门禁。
+- 结论：22 项全部正常渲染，没有新增报错（3D 页两边都有一条 `Blocked script execution in 'about:srcdoc'`，改版前就有），浅 / 深 / 390 都跟随新主题；没有因改版变坏的页面。
+- 变好的：旧 Mermaid 脑图在改版前插件里是霓虹细线、节点挤成小块，现在灰阶正常；深色下旧 GenUI 提示条改版前对比度低，现在正常。
+- 预期变化：3D 模型蓝 → 陶土色（clay 默认）；Leaflet 默认蓝色标记 → 墨色圆点；主按钮蓝 / 紫 → 墨色；折线 / 柱子蓝 → 墨色。
+- 旧页面作者自己的问题（改版前同样存在，未改）：方案对比深色下「推荐」徽标写死 `#f4f4f5` 底色看不清、会议室看板 390 下时间轴刻度挤在一起——现在第 5 步的自检会给出「一键优化」提示；390 下 Leaflet 弹窗被裁、行程页「继续 / 重播」一字一行。
+- 小问题：旧行程页 390 下，地图有尺寸后重新取景（`c423bd9`）放大后第 3 站贴近底部控件。
 
 ### 第 6 步实现要点（接手必读）
 

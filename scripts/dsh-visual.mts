@@ -5,6 +5,7 @@
  *   pnpm run test:dsh-visual -- --gate             fail on diff > tolerance / missing baseline / score drop
  *   pnpm run test:dsh-visual -- --update-baseline  copy this run's shots into scripts/golden/dsh-visual/
  *   options: --out <dir> (default .e2e-artifacts/dsh-visual) · --only id,id · --keep · --port N
+ *            --suite legacy (20 pre-redesign sessions, report-only) · --plugin <dir> (link another build)
  *   env: DSH_BIN (else `dsh` on PATH) · PLAYWRIGHT_PATH · CHROMIUM_PATH
  *
  * The plugin is linked into a throw-away DSH_HOME; fixed conversations
@@ -22,7 +23,7 @@ import { copyFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, readF
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { ITEMS, SESSIONS, type Item } from './dsh-visual/fixtures.mts'
+import { type Item } from './dsh-visual/fixtures.mts'
 import { seedSessions } from './dsh-visual/seed.mts'
 import { PAGE_FLOOR, RULE_DROP, RULES, scoreSrcdoc, type VisualScore } from './visual-score.mts'
 
@@ -35,7 +36,14 @@ const KEEP = argv.includes('--keep')
 const PORT = Number(arg('--port') ?? 3197)
 const OUT = resolve(arg('--out') ?? join(REPO, '.e2e-artifacts/dsh-visual'))
 const ONLY = arg('--only') ? new Set(arg('--only')!.split(',')) : null
-const GOLDEN = join(REPO, 'scripts/golden/dsh-visual')
+// --suite legacy: the 20 pre-redesign conversations (dsh-visual/legacy-sessions.mts), report-only.
+const SUITE = arg('--suite') ?? 'main'
+const { ITEMS, SESSIONS } = (SUITE === 'legacy'
+  ? await import('./dsh-visual/legacy-sessions.mts')
+  : await import('./dsh-visual/fixtures.mts')) as { ITEMS: readonly Item[]; SESSIONS: Record<string, import('./dsh-visual/seed.mts').SeedSession> }
+// --plugin <dir>: link another checkout (e.g. a pre-redesign build) instead of this repo.
+const PLUGIN = resolve(arg('--plugin') ?? REPO)
+const GOLDEN = join(REPO, SUITE === 'legacy' ? 'scripts/golden/dsh-legacy' : 'scripts/golden/dsh-visual')
 const SCORE_BASELINE = join(REPO, 'scripts/golden/visual-baseline.json')
 const DEFAULT_TOLERANCE = 0.005
 /** Host chrome that floats over tall messages (composer seat, jump-to-bottom) — not under test. */
@@ -110,9 +118,12 @@ async function openSession(page: any, id: string): Promise<void> {
     if (await open.count()) { await open.first().click(); await page.waitForTimeout(600) }
   }
   // The sidebar folds a workspace after five sessions.
-  if (!(await row.isVisible().catch(() => false))) {
+  // (the legacy suite has 20 — expanding can take more than one click / a moment to settle).
+  for (let i = 0; i < 4 && !(await row.isVisible().catch(() => false)); i++) {
+    await row.scrollIntoViewIfNeeded({ timeout: 1000 }).catch(() => {})
+    if (await row.isVisible().catch(() => false)) break
     const more = page.getByText(/^展开其余/)
-    if (await more.count()) { await more.first().click(); await page.waitForTimeout(500) }
+    if (await more.count()) { await more.first().click().catch(() => {}); await page.waitForTimeout(800) } else await page.waitForTimeout(500)
   }
   await row.click({ timeout: 20000 }).catch(async (e: Error) => { await page.screenshot({ path: join(OUT, `row-missing-${id}.png`) }).catch(() => {}); throw e })
   await page.waitForTimeout(800)
@@ -226,8 +237,8 @@ async function main(): Promise<number> {
   const rows: Row[] = []
   const scores: Array<{ item: string; mode: string; starter: string; score: VisualScore; problems: string[] }> = []
   try {
-    log(`dsh ${spawnSync(bin, ['--version'], { encoding: 'utf8' }).stdout.trim()} · plugin link:${REPO}`)
-    const add = spawnSync(bin, ['plugin', '--profile', 'web', 'add', `link:${REPO}`], { env, encoding: 'utf8' })
+    log(`dsh ${spawnSync(bin, ['--version'], { encoding: 'utf8' }).stdout.trim()} · plugin link:${PLUGIN} · suite ${SUITE}`)
+    const add = spawnSync(bin, ['plugin', '--profile', 'web', 'add', `link:${PLUGIN}`], { env, encoding: 'utf8' })
     if (add.status !== 0) throw new Error(`plugin add failed:\n${add.stdout}\n${add.stderr}`)
     // No model is configured in CI: switch off the first-run credential dialog and the preview notice
     // through the profile patch layer (a fresh profile only holds `[]` there).
