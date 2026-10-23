@@ -135,6 +135,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       '.iui-3d-pins{position:absolute;inset:0;z-index:3;pointer-events:none}',
       '.iui-3d-pin{position:absolute;left:0;top:0;pointer-events:auto;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 12px 4px 4px;border:0;border-radius:999px;background:color-mix(in srgb,var(--color-background-primary) 88%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.18);color:var(--color-text-primary);font:inherit;font-size:var(--fs-xs,12px);line-height:1.2;white-space:nowrap;cursor:pointer;transition:opacity .2s ease;will-change:transform}',
       '.iui-3d-pin>b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--accent-fill,#185FA5);color:var(--on-accent,#fff);font-weight:600;font-size:12px}',
+      '.iui-3d-pin.is-compact{padding:4px;gap:0}.iui-3d-pin.is-compact>.iui-3d-pin-label{display:none}',
       '.iui-3d-pin.is-hidden-side{opacity:.4}.iui-3d-pin[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent-fill,#185FA5),0 2px 10px rgba(0,0,0,.18)}.iui-3d-pin[hidden]{display:none}',
       '.iui-3d-tools{position:absolute;right:10px;bottom:10px;z-index:4;display:flex;gap:6px}',
       '.iui-3d-tools>button{width:32px;height:32px;min-height:32px;min-width:32px;padding:0;border-radius:999px;display:grid;place-items:center;border:0.5px solid var(--color-border-tertiary);background:color-mix(in srgb,var(--color-background-primary) 88%,transparent);color:var(--color-text-primary);cursor:pointer}',
@@ -575,8 +576,14 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         var num = document.createElement('b');
         num.textContent = String(i + 1);
         b.appendChild(num);
-        if (spec.label) b.appendChild(document.createTextNode(String(spec.label)));
-        else b.setAttribute('aria-label', id);
+        if (spec.label) {
+          var lb = document.createElement('span');
+          lb.className = 'iui-3d-pin-label';
+          lb.textContent = String(spec.label);
+          b.appendChild(lb);
+          b.setAttribute('aria-label', String(spec.label));
+          b.title = String(spec.label);
+        } else b.setAttribute('aria-label', id);
         b.addEventListener('click', function () { focus(id); });
         pinsBox.appendChild(b);
         var loc = hotspotLocal(spec);
@@ -737,6 +744,31 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     var ray = new THREE.Raycaster(), meshes = [];
     subject.traverse(function (m) { if (m.isMesh) meshes.push(m); });
     var tmp = new THREE.Vector3();
+    // Narrow stages (390) / close hotspots: labels that would overlap an earlier pin or run past
+    // the stage edge collapse to the number only (label stays in aria-label / title / caption).
+    var pinFull = null;
+    function declutterPins(W) {
+      var list = stage.hotspots;
+      if (!pinFull) {
+        pinFull = [];
+        for (var k = 0; k < list.length; k++) pinFull.push(list[k].el.offsetWidth || 0);
+        if (pinFull.every(function (v) { return !v; })) pinFull = null;
+        if (!pinFull) return;
+      }
+      var placed = [];
+      for (var i2 = 0; i2 < list.length; i2++) {
+        var h = list[i2];
+        if (h.el.hidden || h.px == null) continue;
+        var x0 = h.px - 16, y0 = h.py - 16, w = pinFull[i2] || 32;
+        var compact = x0 + w > W - 4;
+        for (var p = 0; p < placed.length && !compact; p++) {
+          var o = placed[p];
+          if (x0 < o.x1 + 4 && x0 + w > o.x0 - 4 && y0 < o.y1 + 2 && y0 + 32 > o.y0 - 2) compact = true;
+        }
+        if (h.el.classList.contains('is-compact') !== compact) h.el.classList.toggle('is-compact', compact);
+        placed.push({ x0: x0, y0: y0, x1: x0 + (compact ? 32 : w), y1: y0 + 32 });
+      }
+    }
     function placePins() {
       if (!stage.hotspots.length) return;
       var W = cv.clientWidth, H = cv.clientHeight;
@@ -750,6 +782,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         x.el.hidden = false;
         var px = (tmp.x * 0.5 + 0.5) * W, py = (-tmp.y * 0.5 + 0.5) * H;
         x.el.style.transform = 'translate(' + Math.round(px - 16) + 'px,' + Math.round(py - 16) + 'px)';
+        x.px = px; x.py = py;
         if (occl && meshes.length) {
           var dir = x.world.clone().sub(camera.position), dist = dir.length();
           ray.set(camera.position, dir.normalize());
@@ -763,6 +796,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
           x.el.classList.toggle('is-hidden-side', !!hit && hit.distance < dist - 0.04);
         }
       }
+      declutterPins(W);
     }
     function loop() {
       if (!el.isConnected) { dispose(); return; }
