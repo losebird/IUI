@@ -4550,6 +4550,12 @@ function buildEchartsGuardScript(): string {
       if (sr[far] == null) sr[far] = Math.min(leafW + 18, 200);
       if (sr.top == null) sr.top = 16;
       if (sr.bottom == null) sr.bottom = 16;
+      // Narrow frames (390): below this width branch / leaf labels collide and get cut, so the
+      // chart keeps it and the .iui-mindmap box scrolls sideways (see wrapInstance).
+      var depth = 0;
+      (function deep(nodes, d) { (nodes || []).forEach(function (n) { if (!n || typeof n !== 'object') return; if (d > depth) depth = d; deep(n.children, d + 1); }); })(root.children, 1);
+      var nl = typeof sr[near] === 'number' ? sr[near] : 0, fr = typeof sr[far] === 'number' ? sr[far] : 0;
+      treeMinW = Math.max(treeMinW, nl + fr + depth * 64);
     }
     var hues = [pal[2], pal[3], pal[4], pal[7], pal[5], pal[6]];
     var text = tok('--color-base-content', '#0a0a0a'), bg = tok('--color-base-100', '#ffffff');
@@ -4573,13 +4579,33 @@ function buildEchartsGuardScript(): string {
       })(ch.children);
     });
   }
+  var treeMinW = 0;
   function wrapInstance(inst) {
     if (!inst || inst.__iuiWrapped || typeof inst.setOption !== 'function') return inst;
-    var so = inst.setOption;
+    var so = inst.setOption, rs = inst.resize;
+    function fitMin() {
+      var dom = inst.getDom && inst.getDom(), minW = inst.__iuiMinW || 0;
+      if (!dom || !minW || typeof rs !== 'function') return false;
+      var cw = dom.clientWidth - (parseFloat(getComputedStyle(dom).paddingLeft) || 0) - (parseFloat(getComputedStyle(dom).paddingRight) || 0);
+      if (cw >= minW) return false;
+      try { rs.call(inst, { width: minW }); } catch (eR) { return false; }
+      return true;
+    }
     inst.setOption = function (opt) {
+      treeMinW = 0;
       try { decorate(opt); } catch (eD) {}
-      return so.apply(this, arguments);
+      if (treeMinW) inst.__iuiMinW = treeMinW;
+      var out = so.apply(this, arguments);
+      if (treeMinW) fitMin();
+      return out;
     };
+    if (typeof rs === 'function') {
+      inst.resize = function (o) {
+        if (o && o.width != null) return rs.apply(inst, arguments);
+        if (fitMin()) return;
+        return rs.apply(inst, arguments);
+      };
+    }
     inst.__iuiWrapped = true;
     return inst;
   }
@@ -4835,17 +4861,49 @@ function buildMermaidGuardScript(): string {
         return init.call(m, out);
       };
       init.call(m, mermaidConfig());
+      var run0 = m.run;
+      if (typeof run0 === 'function') {
+        m.run = function () {
+          var pr = run0.apply(m, arguments);
+          try { if (pr && pr.then) pr.then(fitNarrow, fitNarrow); else setTimeout(fitNarrow, 0); } catch (eF) {}
+          return pr;
+        };
+      }
       m.__iuiBooted = true;
     } catch (e) {}
   }
+  function __iuiIsMermaidSource(el) {
+    if (!el || el.getAttribute('data-processed') || el.hasAttribute('_echarts_instance_')) return false;
+    if (el.children && el.children.length) return false;
+    return /\S/.test(el.textContent || '');
+  }
+  window.__iuiIsMermaidSource = __iuiIsMermaidSource;
   function runAll() {
     var m = window.mermaid;
     if (!m || typeof m.run !== 'function') return;
     boot(m);
-    document.querySelectorAll('.mermaid, .iui-mindmap, pre.mermaid').forEach(function (el) {
+    // ④: .iui-mindmap is also the ECharts-tree container — only hand Mermaid elements that hold
+    // diagram source text (no child elements, not an ECharts instance), never a chart host.
+    var nodes = [];
+    document.querySelectorAll('.mermaid, .iui-mindmap').forEach(function (el) {
+      if (!__iuiIsMermaidSource(el)) return;
       if (!el.classList.contains('iui-mindmap')) el.classList.add('iui-mindmap');
+      nodes.push(el);
     });
-    try { m.run({ querySelector: '.mermaid, .iui-mindmap' }); } catch (e) {}
+    if (nodes.length) { try { var pr = m.run({ nodes: nodes }); if (pr && pr.then) pr.then(fitNarrow, fitNarrow); } catch (e) {} }
+    fitNarrow();
+  }
+  // Narrow frames (390): a wide flowchart scaled to fit gets ~4px text — keep ≥70% of natural
+  // size and let the box scroll sideways instead.
+  function fitNarrow() {
+    document.querySelectorAll('.iui-mindmap > svg, .mermaid > svg').forEach(function (svg) {
+      try {
+        var vb = svg.viewBox && svg.viewBox.baseVal, box = svg.parentElement;
+        if (!vb || !vb.width || !box) return;
+        var avail = box.clientWidth - 32, min = Math.round(vb.width * 0.7);
+        if (avail > 0 && min > avail) { svg.style.maxWidth = 'none'; svg.style.width = min + 'px'; svg.style.marginInline = '0'; }
+      } catch (e) {}
+    });
   }
   function wait(cb) {
     if (window.mermaid) { cb(window.mermaid); return; }
@@ -4994,7 +5052,8 @@ export function detectSandboxLibs(html: string, js: string, libs: readonly Vendo
   if (
     /\bmermaid\s*\.\s*(?:run|initialize|render)\s*\(/.test(all) ||
     /class\s*=\s*["'][^"']*\bmermaid\b/.test(all) ||
-    /iui-mindmap/.test(all)
+    // .iui-mindmap only when it wraps Mermaid source text (ECharts trees use an empty container).
+    /\biui-mindmap\b[^"'>]*["'][^>]*>\s*[^\s<]/.test(all)
   ) out.add('mermaid')
   return out
 }

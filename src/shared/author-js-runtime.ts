@@ -572,13 +572,22 @@ window.__iuiAuthorPipeline = window.__iuiAuthorPipeline || (function () {
       || src.indexOf('ag-theme-') !== -1
       || !!(hq('[class*="ag-theme"]'));
   }
+  // ④: an ECharts tree also lives in .iui-mindmap — only text-only containers are Mermaid source.
+  function mindmapSource() {
+    try {
+      var all = document.querySelectorAll('.iui-mindmap');
+      for (var i = 0; i < all.length; i++) if (!all[i].children.length && /\S/.test(all[i].textContent || '')) return true;
+    } catch (e) {}
+    return false;
+  }
   function wantsMermaid(src) {
     src = String(src || '');
     return declared('mermaid')
       || src.indexOf('mermaid.run') !== -1
       || src.indexOf('mermaid.initialize') !== -1
-      || src.indexOf('iui-mindmap') !== -1
-      || !!(hq('.mermaid, .iui-mindmap'));
+      || /\biui-mindmap\b[^"'>]*["'][^>]*>\s*[^\s<]/.test(src)
+      || !!hq('.mermaid')
+      || mindmapSource();
   }
 
   function wantsChart(src) {

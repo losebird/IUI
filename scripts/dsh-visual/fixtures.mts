@@ -51,6 +51,13 @@ const LEDGER = page({
 })
 const PATCH_OK = fence('iui-patch', 'page: 记账本\n---find\n每月预算 3,000 元\n---with\n本月预算 3,500 元\n---replace #summary\n<div id="summary" class="sum">已用 1,240 元 · 剩余 2,260 元</div>')
 const PATCH_BAD = fence('iui-patch', 'page: 记账本\n---find\nL.tileLayer(\'https://tile.example/{z}/{x}/{y}.png\')\n---with\nL.tileLayer(\'https://tiles.example/{z}/{x}/{y}.png\')')
+// Old sessions: Mermaid `mindmap` pages from before ④ (ECharts tree) must still render.
+const MERMAID_MINDMAP_OLD = page({
+  title: '结构脑图（旧）',
+  height: 420,
+  html: '<div class="iui-sandbox-card" style="display:grid;gap:10px"><h3>产品结构</h3><pre class="mermaid iui-mindmap">mindmap\n  root((IUI))\n    地图\n    天气\n    表格\n    脑图</pre></div>',
+  js: "if(window.mermaid&&mermaid.run)mermaid.run({querySelector:'.mermaid'});",
+})
 const SVG = fence('svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120"><rect x="8" y="8" width="96" height="40" rx="8" fill="none" stroke="currentColor"/><text x="56" y="33" text-anchor="middle" font-size="13" fill="currentColor">需求</text><path d="M104 28h48" stroke="currentColor" marker-end="url(#a)"/><rect x="152" y="8" width="96" height="40" rx="8" fill="currentColor" opacity=".9"/><text x="200" y="33" text-anchor="middle" font-size="13" fill="#fff">设计</text><defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0l8 4-8 4z" fill="currentColor"/></marker></defs><circle cx="290" cy="90" r="20" fill="none" stroke="currentColor" stroke-dasharray="4 3"/></svg>')
 
 export const SESSIONS: Record<string, SeedSession> = {
@@ -67,6 +74,7 @@ export const SESSIONS: Record<string, SeedSession> = {
     title: '宿主 Markdown', user: '公式和代码块',
     markdown: ['公式（宿主 KaTeX）：$E = mc^2$，以及', '$$\\int_0^1 x^2\\,dx = \\tfrac13$$', '```mermaid\nflowchart LR\n  A --> B\n```'].join('\n\n'),
   },
+  diagrams: { title: '流程图', user: 'Mermaid 流程图 / 时序 / 旧脑图', markdown: [starter('mermaid-flow'), '旧会话里的 Mermaid 脑图：', MERMAID_MINDMAP_OLD].join('\n\n') },
   legacy: { title: '旧 GenUI', user: '组件画廊', markdown: fence('dsh-ui', JSON.stringify(gallerySpec)) },
 }
 
@@ -81,6 +89,8 @@ export const ITEMS: readonly Item[] = [
   { id: 'lib-echarts', session: 'libs', pick: { fence: 0 }, score: 'echarts-mini' },
   { id: 'lib-aggrid', session: 'libs', pick: { fence: 1 }, score: 'ag-grid-sheet' },
   { id: 'lib-mindmap', session: 'libs', pick: { fence: 2 }, score: 'mermaid-mindmap' },
+  { id: 'lib-mermaid', session: 'diagrams', pick: { fence: 0 } },
+  { id: 'lib-mindmap-old', session: 'diagrams', pick: { fence: 1 } },
   { id: 'lib-3d', session: 'libs', pick: { fence: 3 }, score: 'scene-3d', tolerance: 0.04 },
   { id: 'md-katex', session: 'markdown', pick: { message: true } },
   { id: 'states', session: 'fences', pick: { fence: 0 } },

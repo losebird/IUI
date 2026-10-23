@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHtmlSandboxSrcdoc, getHtmlSandboxStarter, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
+import { buildHtmlSandboxSrcdoc, detectSandboxLibs, getHtmlSandboxStarter, parseHtmlSandboxFence } from '../src/shared/html-sandbox.ts'
 import { buildHostKitCss } from '../src/themes/host-kit.ts'
 import { buildPatternNote, classifyIntentAsk, getIntentRule } from '../src/config/referee-rules.ts'
 import { buildGenuiSectionText } from '../src/plugin/section-text.ts'
@@ -60,12 +60,24 @@ describe('AG Grid / Mermaid CDN + token skin (narrow)', () => {
   it('starters exist and trigger CDN in srcdoc', () => {
     const grid = getHtmlSandboxStarter('ag-grid-sheet')
     const mind = getHtmlSandboxStarter('mermaid-mindmap')
+    const flow = getHtmlSandboxStarter('mermaid-flow')
     expect(grid?.spec.js).toContain('agGrid.createGrid')
     expect(mind?.spec.html).toContain('iui-mindmap')
+    expect(mind?.spec.js).toContain("type:'tree'")
     const gDoc = buildHtmlSandboxSrcdoc(grid!.spec, { frameId: 'g' })
     const mDoc = buildHtmlSandboxSrcdoc(mind!.spec, { frameId: 'm' })
+    const fDoc = buildHtmlSandboxSrcdoc(flow!.spec, { frameId: 'f' })
     expect(gDoc).toContain('ag-grid-community')
-    expect(mDoc).toContain('mermaid@11')
+    expect(fDoc).toContain('mermaid@11')
+    // ④ ECharts tree in .iui-mindmap must not pull in Mermaid (it rendered "Syntax error in text").
+    expect(mDoc).toContain('echarts')
+    expect([...detectSandboxLibs(mind!.spec.html, mind!.spec.js)]).not.toContain('mermaid')
+    expect([...detectSandboxLibs(flow!.spec.html, flow!.spec.js)]).toContain('mermaid')
+  })
+
+  it('old Mermaid mindmap pages (text inside .iui-mindmap) still load Mermaid', () => {
+    expect([...detectSandboxLibs('<pre class="iui-mindmap">mindmap\n  root((A))\n    B</pre>', '')]).toContain('mermaid')
+    expect([...detectSandboxLibs('<div id="mm" class="iui-mindmap h-[360px]"></div>', '')]).not.toContain('mermaid')
   })
 
   it('referee only matches filterable-table / mindmap asks', () => {
