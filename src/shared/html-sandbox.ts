@@ -2597,6 +2597,9 @@ export function buildSandboxBridgeScript(frameId: string): string {
       if (st.textContent !== d.css) {
         st.textContent = d.css;
         if (__iuiScheme.mode !== 'auto') __iuiApplyScheme();
+        // Utility CSS lands in <head>: no body mutation, and in an off-screen (throttled) frame
+        // ResizeObserver may not deliver — re-measure explicitly so the frame can shrink.
+        if (window.__iuiSweep) window.__iuiSweep();
       }
     });
     try {
@@ -2730,6 +2733,12 @@ export function buildSandboxBridgeScript(frameId: string): string {
     __iuiRaf(run);
     setTimeout(run, 120);
   }
+  // Bounded re-measure sweep after late style / font / image changes (cheap: posts only on ≥2px moves).
+  var __iuiSweepTimers = [];
+  window.__iuiSweep = function () {
+    for (var i = 0; i < __iuiSweepTimers.length; i++) clearTimeout(__iuiSweepTimers[i]);
+    __iuiSweepTimers = [0, 300, 900, 2000, 4000].map(function (ms) { return setTimeout(function () { measure(); }, ms); });
+  };
   // Opaque-origin sandbox: Web Storage throws. F10: localStorage is backed by
   // the host (seeded in srcdoc, debounced storageSet back); sessionStorage
   // stays in memory for this document.
@@ -3341,7 +3350,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
       return __iuiAnchorClick.call(this);
     };
   } catch (e) {}
-  window.addEventListener('load', function () { measure(true); });
+  window.addEventListener('load', function () { measure(true); if (window.__iuiSweep) window.__iuiSweep(); });
 ` + DESIGN_ENHANCE_JS + `
   // F13: size changes come from ResizeObserver (html, body, page root); the
   // MutationObserver only watches structure/text, not every attribute tick.
