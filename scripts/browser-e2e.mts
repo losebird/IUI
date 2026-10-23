@@ -537,12 +537,22 @@ async function themingGesturesCase(browser: any): Promise<number> {
     await p.close()
   }
   if (seen.light?.color && seen.light.color === seen.dark?.color) problems.push(`chart text colour identical in light/dark (${seen.light.color})`)
-  {
-    const p = await load({ title: 'e', css: '', html: '<div id="c" style="height:200px"></div>', js: 'echarts.init(document.getElementById("c")).setOption({xAxis:{data:[1,2]},yAxis:{},series:[{type:"bar",data:[1,2]}]})' })
-    const r = await p.evaluate(() => { const e = (window as any).echarts; const i = e && e.getInstanceByDom(document.getElementById('c')); return { color0: i?.getOption().color?.[0] } })
-    if (!r.color0 || !/^#185fa5$/i.test(String(r.color0))) problems.push(`echarts not on iui theme (color0=${r.color0})`)
+  const inks: string[] = []
+  for (const scheme of ['light', 'dark']) {
+    const p = await load({ title: 'e', css: '', html: '<div id="c" style="height:200px"></div>', js: 'echarts.init(document.getElementById("c")).setOption({xAxis:{data:[1,2]},yAxis:{},series:[{type:"bar",data:[1,2]}]})' }, { colorScheme: scheme })
+    // Visual ③: the default ECharts palette starts from the theme's ink
+    // (--iui-chart-1), not a fixed brand blue — compare against the token.
+    const r = await p.evaluate(() => {
+      const e = (window as any).echarts; const i = e && e.getInstanceByDom(document.getElementById('c'))
+      const probe = document.createElement('i'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--iui-chart-1').trim(); document.body.appendChild(probe)
+      const want = getComputedStyle(probe).color; probe.style.color = String(i?.getOption().color?.[0] ?? ''); const got = getComputedStyle(probe).color; probe.remove()
+      return { color0: i?.getOption().color?.[0], want, got }
+    })
+    if (!r.color0 || !r.want || r.got !== r.want) problems.push(`echarts ${scheme} not on iui theme (color0=${r.color0}, --iui-chart-1=${r.want})`)
+    inks.push(String(r.got))
     await p.close()
   }
+  if (inks.length === 2 && inks[0] === inks[1]) problems.push(`echarts series ink identical in light/dark (${inks[0]})`)
   {
     const p = await load({ title: 'a', css: '', html: '<div style="display:flex;gap:8px"><button class="primary">主操作</button></div>', js: '', accent: '#F2C94C' })
     const r = await p.evaluate(() => { const bt = getComputedStyle(document.querySelector('button.primary')!); return { bg: bt.backgroundColor, ink: bt.color } })

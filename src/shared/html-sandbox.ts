@@ -2283,10 +2283,34 @@ export function buildSandboxBridgeScript(frameId: string): string {
   function __iuiSkipCheck(el) {
     return !!(el.closest && el.closest('[data-iui-toast],[data-iui-fail-strip],.iui-fail-strip,.leaflet-control-attribution,.leaflet-container,.ag-root-wrapper,[aria-hidden="true"],[data-iui-check-ignore]'));
   }
+  // Entrance fades (iuiEnter) and other finite animations paint text at a
+  // fraction of its final opacity; sampling them mid-flight reports contrast
+  // the user never sees once the page settles (CI: 2.9:1 on kanban avatars).
+  function __iuiFiniteAnims() {
+    var out = [];
+    try {
+      var list = document.getAnimations ? document.getAnimations() : [];
+      for (var i = 0; i < list.length; i++) {
+        var a = list[i], t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+        if ((a.playState === 'running' || a.playState === 'pending') && t && isFinite(t.endTime)) out.push(a);
+      }
+    } catch (eA) {}
+    return out;
+  }
+  function __iuiAnimTargets() {
+    var set = [], list = __iuiFiniteAnims();
+    for (var i = 0; i < list.length; i++) { var tg = list[i].effect && list[i].effect.target; if (tg && tg.nodeType === 1) set.push(tg); }
+    return set;
+  }
+  function __iuiAnimating(el, targets) {
+    for (var i = 0; i < targets.length; i++) if (targets[i] === el || (targets[i].contains && targets[i].contains(el))) return true;
+    return false;
+  }
   function __iuiSelfCheck() {
     var issues = [];
     var body = document.body;
     if (!body) return issues;
+    var animTargets = __iuiAnimTargets();
     var all = body.querySelectorAll('*');
     var small = 0, tiny = 0, smallSample = '', lowC = 0, sampled = 0, minRatio = 99, lowSamples = [];
     for (var i = 0; i < all.length && i < 2500; i++) {
@@ -2301,6 +2325,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
       // disabled controls and gradient-clipped text are intentionally faint.
       if (sampled >= 600 || inSvg) continue;
       if (el.closest && el.closest(':disabled,[aria-disabled="true"],.btn-disabled,[inert]')) continue;
+      if (animTargets.length && __iuiAnimating(el, animTargets)) continue;
       var fill = __iuiParseRgb(cs.webkitTextFillColor || '');
       if ((fill && fill.a < 0.05 && cs.webkitTextFillColor) || /text/.test(String(cs.backgroundClip || cs.webkitBackgroundClip || ''))) continue;
       sampled++;
@@ -2410,7 +2435,15 @@ export function buildSandboxBridgeScript(frameId: string): string {
   }
   var __iuiSelfChecked = false;
   var __iuiLastCheck = '', __iuiRechecks = 0, __iuiRecheckTimer = 0;
-  function __iuiRunSelfCheck() {
+  function __iuiRunSelfCheck(waited) {
+    // Let finite animations land first (capped), so contrast is read at rest.
+    var pending = waited ? [] : __iuiFiniteAnims();
+    if (pending.length) {
+      var done = false, go = function () { if (!done) { done = true; __iuiRunSelfCheck(true); } };
+      try { Promise.all(pending.map(function (a) { return a.finished; })).then(go, go); } catch (eW) { go(); return; }
+      setTimeout(go, 4000);
+      return;
+    }
     var issues = [];
     try { issues = __iuiSelfCheck(); } catch (eSC) { issues = []; }
     var sig = JSON.stringify(issues);
@@ -2423,7 +2456,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (__iuiSelfChecked) return;
     __iuiSelfChecked = true;
     setTimeout(function () {
-      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(__iuiRunSelfCheck, { timeout: 3000 });
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(function () { __iuiRunSelfCheck(); }, { timeout: 3000 });
       else __iuiRunSelfCheck();
     }, 1500);
     // JS-toggled states (a selected tab painted orange-on-orange) only exist

@@ -27,7 +27,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 72,
+      "whitespace": 73,
       "hero": 99
     },
     "total": 95
@@ -104,10 +104,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 69,
+      "whitespace": 47,
       "hero": 100
     },
-    "total": 95
+    "total": 91
   },
   "ds-kit": {
     "scores": {
@@ -148,10 +148,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 90,
+      "whitespace": 94,
       "hero": 100
     },
-    "total": 98
+    "total": 99
   },
   "form-bridge": {
     "scores": {
@@ -214,10 +214,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 96,
+      "whitespace": 50,
       "hero": 100
     },
-    "total": 99
+    "total": 92
   },
   "mermaid-mindmap": {
     "scores": {
@@ -225,10 +225,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 42,
+      "whitespace": 25,
       "hero": 100
     },
-    "total": 90
+    "total": 88
   },
   "scene-3d": {
     "scores": {
@@ -236,10 +236,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 94,
+      "whitespace": 97,
       "hero": 100
     },
-    "total": 99
+    "total": 100
   },
   "meeting-rooms": {
     "scores": {
