@@ -3996,6 +3996,32 @@ ${amap ? GCJ_JS : ''}
     L.map = function () {
       var map = origMap.apply(this, arguments);
       trackMap(map);
+      // ⑥: fitBounds while the container is still collapsed (utility CSS not compiled yet, narrow
+      // 390 frames) picks zoom 0 — the whole world. Remember such a fit and redo it once the
+      // container has a real size, unless the reader has moved the map meanwhile.
+      try {
+        var fit0 = map.fitBounds;
+        var tiny = function () { var z = map.getSize(); return z.x < 64 || z.y < 64; };
+        map.fitBounds = function (b, o) {
+          map.__iuiRefit = tiny() ? { b: b, o: o } : null;
+          return fit0.apply(map, arguments);
+        };
+        var refit = function () {
+          var r = map.__iuiRefit;
+          if (!r || tiny()) return;
+          map.__iuiRefit = null;
+          try { fit0.call(map, r.b, Object.assign({}, r.o || {}, { animate: false })); } catch (eF) {}
+        };
+        map.on('resize', refit);
+        map.on('dragstart', function () { map.__iuiRefit = null; });
+        if (typeof ResizeObserver !== 'undefined') {
+          new ResizeObserver(function () {
+            if (!map.__iuiRefit) return;
+            try { map.invalidateSize({ animate: false }); } catch (eI) {}
+            refit();
+          }).observe(map.getContainer());
+        }
+      } catch (eR) {}
       try { if (window.__iuiTrackDeclutter) window.__iuiTrackDeclutter(map); } catch (eD) {}
       try {
         map.on('tileerror', function () {
