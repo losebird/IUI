@@ -4845,6 +4845,13 @@ function buildMermaidGuardScript(): string {
       + '.muted rect,.muted path,.muted polygon,.input rect,.input path,.input polygon{fill:' + b2 + '!important;stroke:transparent!important}.muted .nodeLabel,.muted text{color:' + mut + '!important;fill:' + mut + '!important}'
       + '.edgeLabel,.edgeLabel p{font-size:12px;color:' + mut + '}.edgeLabel rect,.labelBkg{fill:' + bg + ';background:' + bg + '}'
       + 'rect.actor{rx:10px;ry:10px;stroke:' + b3 + '!important}.messageText{fill:' + mut + '!important}'
+      // Old Mermaid mindmap pages (④ moved to ECharts trees): base-theme section colours derive from the
+      // page surface and turn black-on-black in dark mode — pin nodes to base-300 / ink, root to an ink capsule.
+      + '.mindmap-node rect,.mindmap-node path,.mindmap-node circle,.mindmap-node polygon{fill:' + b3 + '!important;stroke:none!important}'
+      + '.mindmap-node text{fill:' + ink + '!important}.mindmap-node span{color:' + ink + '!important}'
+      + '.mindmap-node.section-root rect,.mindmap-node.section-root path,.mindmap-node.section-root circle,.mindmap-node.section-root polygon{fill:' + ink + '!important}'
+      + '.mindmap-node.section-root text{fill:' + bg + '!important}.mindmap-node.section-root span{color:' + bg + '!important}'
+      + '[class*="section-edge-"]{stroke:' + line + '!important}'
       + '.grid .tick line{stroke:' + rgba(ink, 0.07) + '!important}.grid .tick text{fill:' + mut + '!important;font-size:11px!important}.grid path{stroke:none!important}rect.task{rx:6px;ry:6px}.sectionTitle{fill:' + mut + '!important}';
     return {
       startOnLoad: false,
