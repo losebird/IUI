@@ -377,6 +377,8 @@ export const EN = {
   'sandbox.saveImageFailed': 'Could not render the image — try Download HTML',
   'sandbox.selfCheckPill': '{n} layout issues found · Fix',
   'sandbox.selfCheckDismiss': 'Dismiss',
+  'sandbox.autoFix.sent': 'Asked the model to fix text contrast',
+  'sandbox.autoFix.desc': 'Some text was unreadable (contrast below 3:1); the model will patch only the colors. Turn off in Settings › IUI › Auto repair.',
   'sandbox.selfCheckFilled': 'Fix request added',
   'sandbox.selfCheckPrompt': 'The page self-check found these layout issues — please fix them. Use iui-patch for small fixes; rewrite the page only if there are many:',
   'sandbox.selfCheck.smallText': 'Text too small (<11.5px)',

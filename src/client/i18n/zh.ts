@@ -372,6 +372,8 @@ export const ZH: Record<keyof typeof EN, string> = {
   'sandbox.saveImageFailed': '生成图片失败，可改用下载 HTML',
   'sandbox.selfCheckPill': '发现 {n} 处排版问题 · 一键优化',
   'sandbox.selfCheckDismiss': '忽略',
+  'sandbox.autoFix.sent': '已自动请求修复文字对比度',
+  'sandbox.autoFix.desc': '页面有文字看不清（对比度低于 3:1），已让模型用补丁只改颜色。可在设置 › IUI › 自动修复 关闭。',
   'sandbox.selfCheckFilled': '已填入优化请求',
   'sandbox.selfCheckPrompt': '这页自检发现以下排版问题，请修复。小问题请用 iui-patch 只改相关部分，问题多时再整页重写：',
   'sandbox.selfCheck.smallText': '字号过小（<11.5px）',

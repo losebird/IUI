@@ -68,6 +68,7 @@ import { writeIuiConfigField } from './settings/index.ts'
 import { deleteUserTemplate, saveUserTemplateFromPage } from './user-template-store.ts'
 import { ChromeIcon, chromeCss as ck } from './chrome/icons.tsx'
 import { pushTipToast } from './tip-toast.tsx'
+import { claimAutoFix, contrastFixPrompt, contrastIssueToFix, isFenceLive, markFenceLive, sendAutoFix } from './auto-fix.ts'
 import { NextStepChips, pageIntentOf } from './next-steps-ui.tsx'
 import { FEEDBACK_REASONS, getPageFeedback, pageFeedbackKey, recordSelfCheck, recordVote, type FeedbackReason, type FeedbackVote } from './feedback-store.ts'
 import {
@@ -495,7 +496,10 @@ function showStreamingStageChrome(parsed: HtmlSandboxSpec, ready: boolean): bool
   return parsed.partial === true
 }
 
-export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: { raw: string; streaming?: boolean; storageKey?: string | null }): ReactNode {
+/** visual ⑤: eligibility for the one-shot contrast patch (fresh pages only). */
+export interface SandboxAutoFix { key: string; sessionId: string | undefined }
+
+export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, autoFix = null }: { raw: string; streaming?: boolean; storageKey?: string | null; autoFix?: SandboxAutoFix | null }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
@@ -504,6 +508,8 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
   const [frameId] = useState(newSandboxFrameId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const onAction = useGenuiAction()
+  const autoFixRef = useRef(autoFix)
+  autoFixRef.current = autoFix
   /** F3: every outbound action/sendPrompt from this frame passes the gate. */
   const actionGateRef = useRef<FrameActionGate | null>(null)
   if (actionGateRef.current === null) actionGateRef.current = createFrameActionGate()
@@ -918,6 +924,17 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         const issues = event.data.issues.slice(0, 10)
         setSelfCheck({ issues })
         try { recordSelfCheck(pageFeedbackKey(effectiveRaw), pageIntentOf(shellRef.current, parsed?.title), issues) } catch { /* storage */ }
+        // visual ⑤: < 3:1 text on a page generated just now → one automatic
+        // iui-patch request (自动修复 setting; one attempt per page lineage).
+        const fix = autoFixRef.current
+        const contrast = fix ? contrastIssueToFix(issues) : null
+        if (fix && contrast && getRuntimeConfigSnapshot().fenceFeedback && claimAutoFix(fix.key)) {
+          setSelfCheckDismissed(true)
+          void sendAutoFix(fix.sessionId, contrastFixPrompt(contrast, parsed?.title ?? null)).then((sent) => {
+            if (sent) pushTipToast({ title: t('sandbox.autoFix.sent'), description: t('sandbox.autoFix.desc'), durationMs: 5000 })
+            else setSelfCheckDismissed(false)
+          })
+        }
         return
       }
       if (event.data.type === 'authorSettled') {
@@ -1883,7 +1900,8 @@ function VersionedFrame({ raw, streaming, storageKey, scope, fenceKey, pageId }:
   return (
     <div data-iui-page={pageId ?? undefined}>
       <VersionBar versions={versions} current={fenceKey} active={shown?.fenceKey ?? fenceKey} onPick={(k) => setPicked(k === fenceKey ? null : k)} />
-      <HtmlSandboxFrame key={shown && shown.fenceKey !== fenceKey ? `v:${shown.fenceKey}` : 'self'} raw={showRaw} streaming={streaming} storageKey={storageKey} />
+      <HtmlSandboxFrame key={shown && shown.fenceKey !== fenceKey ? `v:${shown.fenceKey}` : 'self'} raw={showRaw} streaming={streaming} storageKey={storageKey}
+        autoFix={shown === null && !streaming && isFenceLive(scope, fenceKey) ? { key: `${scope ?? ''}|${pageId ?? fenceKey}`, sessionId: scope } : null} />
     </div>
   )
 }
@@ -1892,6 +1910,7 @@ function VersionedFrame({ raw, streaming, storageKey, scope, fenceKey, pageId }:
 function SandboxPageFence({ raw, fenceKey, context }: { raw: string; fenceKey: string; context: GenuiFenceContext | undefined }): ReactNode {
   const streaming = context?.streaming === true && context.source === undefined
   const scope = context?.sessionId
+  if (streaming) markFenceLive(scope, fenceKey)
   const spec = useMemo(() => (streaming ? null : parseHtmlSandboxFence(raw)), [raw, streaming])
   const pageId = spec ? sandboxPageId(spec) : null
   const storageKey = spec ? lineageStorageKey(scope, fenceKey, spec.id) : pageStateKey(scope, fenceKey)
@@ -1946,6 +1965,7 @@ function SandboxPatchFence({ raw, fenceKey, context }: { raw: string; fenceKey: 
   const [showSource, setShowSource] = useState(false)
   const streaming = context?.streaming === true && context.source === undefined
   const scope = context?.sessionId
+  if (streaming) markFenceLive(scope, fenceKey)
   const order = fenceOrder(context)
   const merge = useMemo(
     () => (streaming ? null : mergePatchFence(raw, scope, fenceKey, order)),

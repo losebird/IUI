@@ -44,6 +44,7 @@ import { assetUrl } from './asset-loader.ts'
 import { startRuntimeConfigWatch } from './runtime-config.ts'
 import { onBindingWatchActive, setBindingSessionHint, stopBindingWatchNow } from './binding-store.ts'
 import { resolveViewedSessionId } from './session-resolver.ts'
+import { registerConversationSender } from './auto-fix.ts'
 import { installIuiSettings } from './settings/index.ts'
 import { installMarkdownRescue } from './markdown-rescue.tsx'
 import { installPageOffer } from './page-offer.ts'
@@ -207,6 +208,15 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
     if (el === null) return false
     return writeComposerEditable(el, text)
   })
+  // visual ⑤: the one-shot contrast auto-fix sends through the fence's session.
+  const stopAutoFixSender = registerConversationSender(async (sessionId, text) => {
+    const id = (sessionId as SessionId | undefined) ?? resolveViewedSessionId(ctx.sessions.list.getSnapshot())
+    if (id === undefined) return false
+    const conversation = ctx.sessions.scope(id)?.get('conversation') as IConversation | undefined
+    if (conversation === undefined) return false
+    await conversation.send(text)
+    return true
+  })
   const stopSettings = installIuiSettings(ctx)
   const stopMdRescue = installMarkdownRescue(ctx)
   const stopPageOffer = installPageOffer()
@@ -241,6 +251,7 @@ const stopRuntimeWatch = startRuntimeConfigWatch()
   disposers.push(stopBindingWatchNow)
   disposers.push(trackBindingSession(ctx))
   disposers.push(stopComposerFallback)
+  disposers.push(stopAutoFixSender)
   // Keyed toolview: the harness dispatches 'tool.call.toolview' by wire tool
   // name; registering under 'render_ui' gives the tool's result card the
   // GenUI renderer (reading the repaired spec from result meta). The toolview

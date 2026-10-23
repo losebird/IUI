@@ -273,7 +273,18 @@ export const SANDBOX_FREEZE_MAX_CHARS = 3_000_064
 /** G15: self-check findings posted once after the page settles. */
 export const SELF_CHECK_KINDS = ['smallText', 'lowContrast', 'overflowX', 'blankCanvas', 'brokenImage', 'consoleError', 'blankArea'] as const
 export type SandboxSelfCheckKind = (typeof SELF_CHECK_KINDS)[number]
-export interface SandboxSelfCheckIssue { kind: SandboxSelfCheckKind; count: number; serious: boolean; detail?: string }
+/** One low-contrast element as measured in the frame (computed colors, composited backdrop). */
+export interface SandboxContrastSample { text: string; sel: string; ratio: number; fg: string; bg: string }
+export interface SandboxSelfCheckIssue { kind: SandboxSelfCheckKind; count: number; serious: boolean; detail?: string; minRatio?: number; samples?: SandboxContrastSample[] }
+
+function isSelfCheckSamples(v: unknown): v is SandboxContrastSample[] {
+  return Array.isArray(v) && v.length <= 5 && v.every((x) => x !== null && typeof x === 'object'
+    && typeof (x as SandboxContrastSample).text === 'string' && (x as SandboxContrastSample).text.length <= 80
+    && typeof (x as SandboxContrastSample).sel === 'string' && (x as SandboxContrastSample).sel.length <= 80
+    && typeof (x as SandboxContrastSample).ratio === 'number' && Number.isFinite((x as SandboxContrastSample).ratio)
+    && typeof (x as SandboxContrastSample).fg === 'string' && /^#[0-9a-f]{6}$/i.test((x as SandboxContrastSample).fg)
+    && typeof (x as SandboxContrastSample).bg === 'string' && /^#[0-9a-f]{6}$/i.test((x as SandboxContrastSample).bg))
+}
 
 export const SANDBOX_IMAGE_MAX_CHARS = 48 * 1024 * 1024
 export const SANDBOX_RESOURCE_MAX_CHARS = 12 * 1024 * 1024
@@ -407,7 +418,9 @@ export function isIuiSandboxHostMessage(data: unknown): data is IuiSandboxHostMe
         && SELF_CHECK_KINDS.includes((x as { kind?: unknown }).kind as SandboxSelfCheckKind)
         && typeof (x as { count?: unknown }).count === 'number' && Number.isFinite((x as { count: number }).count)
         && typeof (x as { serious?: unknown }).serious === 'boolean'
-        && ((x as { detail?: unknown }).detail === undefined || (typeof (x as { detail?: unknown }).detail === 'string' && ((x as { detail: string }).detail.length <= 160))))
+        && ((x as { detail?: unknown }).detail === undefined || (typeof (x as { detail?: unknown }).detail === 'string' && ((x as { detail: string }).detail.length <= 160)))
+        && ((x as { minRatio?: unknown }).minRatio === undefined || (typeof (x as { minRatio?: unknown }).minRatio === 'number' && Number.isFinite((x as { minRatio: number }).minRatio)))
+        && ((x as { samples?: unknown }).samples === undefined || isSelfCheckSamples((x as { samples?: unknown }).samples)))
       && typeof record.serious === 'number' && Number.isFinite(record.serious)
   }
   if (record.type === 'fetchResource') {
@@ -2138,25 +2151,122 @@ export function buildSandboxBridgeScript(frameId: string): string {
     };
   } catch (eCE) {}
   window.addEventListener('error', function () { __iuiConsoleErrors++; });
+  // Computed colors arrive as rgb(), oklch(), oklab() or color(srgb …) (daisyUI
+  // themes are oklch): normalize anything through a 1×1 canvas, cached.
+  var __iuiColorCv = null, __iuiColorCache = {}, __iuiColorN = 0;
   function __iuiParseRgb(c) {
-    var m = /rgba?\\(([^)]+)\\)/.exec(String(c || ''));
-    if (!m) return null;
-    var p = m[1].split(/[\\s,\\/]+/).filter(Boolean).map(parseFloat);
-    if (p.length < 3) return null;
-    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+    c = String(c || '').trim();
+    if (!c || c === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
+    var m = /^rgba?\\(([^)]+)\\)$/.exec(c);
+    if (m) {
+      var p = m[1].split(/[\\s,\\/]+/).filter(Boolean).map(function (v) { return /%$/.test(v) ? parseFloat(v) / 100 : parseFloat(v); });
+      if (p.length >= 3 && !isNaN(p[0])) return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+    }
+    if (Object.prototype.hasOwnProperty.call(__iuiColorCache, c)) return __iuiColorCache[c];
+    var out = null;
+    try {
+      if (!__iuiColorCv) { __iuiColorCv = document.createElement('canvas'); __iuiColorCv.width = 1; __iuiColorCv.height = 1; }
+      var cx = __iuiColorCv.getContext('2d', { willReadFrequently: true });
+      cx.fillStyle = '#010203';
+      cx.fillStyle = c;
+      if (cx.fillStyle !== '#010203' || /^#010203$/i.test(c)) {
+        cx.clearRect(0, 0, 1, 1);
+        cx.fillRect(0, 0, 1, 1);
+        var d = cx.getImageData(0, 0, 1, 1).data;
+        out = { r: d[0], g: d[1], b: d[2], a: d[3] / 255 };
+      }
+    } catch (eCol) { out = null; }
+    if (__iuiColorN++ < 400) __iuiColorCache[c] = out;
+    return out;
   }
   function __iuiLum(c) {
     var f = function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
     return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
   }
-  function __iuiBgOf(el) {
-    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+  function __iuiOver(top, under) {
+    var a = top.a + under.a * (1 - top.a);
+    if (a <= 0) return { r: 0, g: 0, b: 0, a: 0 };
+    return {
+      r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
+      g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
+      b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
+      a: a,
+    };
+  }
+  function __iuiCanvasBase() {
+    var sch = String(getComputedStyle(document.documentElement).colorScheme || '');
+    return /dark/.test(sch) && !/light/.test(sch) ? { r: 18, g: 18, b: 18, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
+  }
+  function __iuiImageish(n, cs) {
+    if (/^(IMG|VIDEO|CANVAS|PICTURE|IFRAME|svg)$/i.test(n.tagName)) return true;
+    return !!(cs.backgroundImage && cs.backgroundImage !== 'none');
+  }
+  // Composite translucent layers down to the first opaque one. Null = text over
+  // an image / gradient / canvas, which a flat color cannot judge.
+  function __iuiComposite(list) {
+    var layers = [];
+    for (var i = 0; i < list.length; i++) {
+      var n = list[i];
       var cs = getComputedStyle(n);
-      if (cs.backgroundImage && cs.backgroundImage !== 'none') return null;
+      if (__iuiImageish(n, cs)) return null;
       var c = __iuiParseRgb(cs.backgroundColor);
-      if (c && c.a > 0.9) return c;
+      if (c && c.a > 0.01) { layers.push(c); if (c.a > 0.98) break; }
     }
-    return { r: 255, g: 255, b: 255, a: 1 };
+    var acc = __iuiCanvasBase();
+    for (var k = layers.length - 1; k >= 0; k--) acc = __iuiOver(layers[k], acc);
+    return acc;
+  }
+  function __iuiBgOf(el) {
+    var chain = [];
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) chain.push(n);
+    return __iuiComposite(chain);
+  }
+  // What is actually painted under the text: the hit-test stack below the
+  // element at its first text line (catches absolutely positioned backdrops and
+  // photos that are siblings, not ancestors). Falls back to the ancestor walk.
+  function __iuiBackdrop(el) {
+    try {
+      var tn = null;
+      for (var i = 0; i < el.childNodes.length; i++) { var ch = el.childNodes[i]; if (ch.nodeType === 3 && /\\S/.test(ch.nodeValue || '')) { tn = ch; break; } }
+      if (tn && document.elementsFromPoint) {
+        var rg = document.createRange();
+        rg.selectNodeContents(tn);
+        var rc = rg.getClientRects()[0];
+        if (rc && rc.width > 0) {
+          var x = rc.left + Math.min(rc.width / 2, 12), y = rc.top + rc.height / 2;
+          if (x >= 0 && y >= 0 && x < window.innerWidth && y < window.innerHeight) {
+            var stack = document.elementsFromPoint(x, y);
+            var at = stack.indexOf(el);
+            if (at >= 0) {
+              var below = [];
+              for (var j = at + 1; j < stack.length; j++) { if (!el.contains(stack[j])) below.push(stack[j]); }
+              var ownCs = getComputedStyle(el);
+              var own = __iuiParseRgb(ownCs.backgroundColor);
+              if (__iuiImageish(el, ownCs)) return null;
+              var under = __iuiComposite(below);
+              if (under === null) return null;
+              return own && own.a > 0.01 ? __iuiOver(own, under) : under;
+            }
+          }
+        }
+      }
+    } catch (eBd) {}
+    return __iuiBgOf(el);
+  }
+  function __iuiOpacity(el) {
+    var o = 1;
+    for (var n = el; n && n.nodeType === 1 && o > 0.05; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity) || 0;
+    return o;
+  }
+  function __iuiHex(c) {
+    var h = function (v) { var x = Math.max(0, Math.min(255, Math.round(v))).toString(16); return x.length < 2 ? '0' + x : x; };
+    return '#' + h(c.r) + h(c.g) + h(c.b);
+  }
+  function __iuiSel(el) {
+    var s = el.tagName.toLowerCase();
+    if (el.id) return s + '#' + el.id;
+    var cls = typeof el.className === 'string' ? el.className.trim().split(/\\s+/).filter(function (x) { return x && !/[:\\/\\[]/.test(x); }).slice(0, 3) : [];
+    return s + (cls.length ? '.' + cls.join('.') : '');
   }
   function __iuiOwnText(el) {
     for (var i = 0; i < el.childNodes.length; i++) {
@@ -2178,7 +2288,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
     var body = document.body;
     if (!body) return issues;
     var all = body.querySelectorAll('*');
-    var small = 0, tiny = 0, smallSample = '', lowC = 0, severe = 0, lowSample = '', sampled = 0;
+    var small = 0, tiny = 0, smallSample = '', lowC = 0, sampled = 0, minRatio = 99, lowSamples = [];
     for (var i = 0; i < all.length && i < 2500; i++) {
       var el = all[i];
       if (!__iuiOwnText(el) || /^(SCRIPT|STYLE|NOSCRIPT|OPTION|SUP|SUB)$/.test(el.tagName) || __iuiSkipCheck(el)) continue;
@@ -2187,21 +2297,37 @@ export function buildSandboxBridgeScript(frameId: string): string {
       var fs = parseFloat(cs.fontSize) || 16;
       var inSvg = !!(el.closest && el.closest('svg'));
       if (fs < 11.5 && !inSvg) { small++; if (fs < 11) tiny++; if (!smallSample) smallSample = (el.textContent || '').trim().slice(0, 24) + ' · ' + Math.round(fs * 10) / 10 + 'px'; }
-      // SVG text sits on shape fills the box walk cannot see (mermaid, d3).
-      if (sampled < 80 && !inSvg) {
-        sampled++;
-        var fg = __iuiParseRgb(cs.color), bg = __iuiBgOf(el);
-        if (fg && bg && fg.a > 0.5) {
-          var l1 = __iuiLum(fg), l2 = __iuiLum(bg);
-          var ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-          var large = fs >= 18 || (fs >= 14 && parseInt(cs.fontWeight, 10) >= 700);
-          if (ratio < (large ? 1.8 : 2.3)) severe++;
-          if (ratio < (large ? 2.2 : 3)) { lowC++; if (!lowSample) lowSample = (el.textContent || '').trim().slice(0, 24) + ' · ' + Math.round(ratio * 10) / 10 + ':1'; }
-        }
+      // SVG text sits on shape fills the box walk cannot see (mermaid, d3);
+      // disabled controls and gradient-clipped text are intentionally faint.
+      if (sampled >= 600 || inSvg) continue;
+      if (el.closest && el.closest(':disabled,[aria-disabled="true"],.btn-disabled,[inert]')) continue;
+      var fill = __iuiParseRgb(cs.webkitTextFillColor || '');
+      if ((fill && fill.a < 0.05 && cs.webkitTextFillColor) || /text/.test(String(cs.backgroundClip || cs.webkitBackgroundClip || ''))) continue;
+      sampled++;
+      var fg = (fill && fill.a >= 0.05 && cs.webkitTextFillColor && cs.webkitTextFillColor !== cs.color) ? fill : __iuiParseRgb(cs.color);
+      var bg = __iuiBackdrop(el);
+      if (!fg || !bg) continue;
+      var op = __iuiOpacity(el);
+      var fgEff = __iuiOver({ r: fg.r, g: fg.g, b: fg.b, a: fg.a * op }, bg);
+      var l1 = __iuiLum(fgEff), l2 = __iuiLum(bg);
+      var ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      if (ratio < 3) {
+        lowC++;
+        if (ratio < minRatio) minRatio = ratio;
+        var txt = '';
+        for (var t = 0; t < el.childNodes.length; t++) if (el.childNodes[t].nodeType === 3) txt += el.childNodes[t].nodeValue;
+        lowSamples.push({ text: txt.replace(/\\s+/g, ' ').trim().slice(0, 24), sel: __iuiSel(el).slice(0, 60), ratio: Math.round(ratio * 10) / 10, fg: __iuiHex(fgEff), bg: __iuiHex(bg) });
       }
     }
     if (small > 0) issues.push({ kind: 'smallText', count: small, serious: tiny >= 3 || small >= 8, detail: smallSample });
-    if (lowC > 0) issues.push({ kind: 'lowContrast', count: lowC, serious: severe >= 2, detail: lowSample });
+    if (lowC > 0) {
+      lowSamples.sort(function (x, y) { return x.ratio - y.ratio; });
+      var seen = {}, top = [];
+      for (var q = 0; q < lowSamples.length && top.length < 3; q++) { var sk = lowSamples[q].sel + '|' + lowSamples[q].fg + lowSamples[q].bg; if (!seen[sk]) { seen[sk] = 1; top.push(lowSamples[q]); } }
+      // G15 / visual ⑤: < 3:1 is unreadable at any size — serious, and the host
+      // may auto-request one iui-patch for it.
+      issues.push({ kind: 'lowContrast', count: lowC, serious: true, minRatio: Math.round(minRatio * 100) / 100, samples: top, detail: top[0].text + ' · ' + top[0].ratio + ':1' });
+    }
     var root = document.documentElement;
     // The host clips overflow-x on html/body/#iui-preview-root, so overflowing
     // content is silently cut: look for boxes past the edge clipped only there.
@@ -2283,19 +2409,30 @@ export function buildSandboxBridgeScript(frameId: string): string {
     return issues.slice(0, 10);
   }
   var __iuiSelfChecked = false;
+  var __iuiLastCheck = '', __iuiRechecks = 0, __iuiRecheckTimer = 0;
+  function __iuiRunSelfCheck() {
+    var issues = [];
+    try { issues = __iuiSelfCheck(); } catch (eSC) { issues = []; }
+    var sig = JSON.stringify(issues);
+    if (sig === __iuiLastCheck) return;
+    __iuiLastCheck = sig;
+    var serious = issues.filter(function (x) { return x.serious; }).length;
+    post({ type: 'selfCheck', issues: issues, serious: serious });
+  }
   function __iuiScheduleSelfCheck() {
     if (__iuiSelfChecked) return;
     __iuiSelfChecked = true;
-    var run = function () {
-      var issues = [];
-      try { issues = __iuiSelfCheck(); } catch (eSC) { issues = []; }
-      var serious = issues.filter(function (x) { return x.serious; }).length;
-      post({ type: 'selfCheck', issues: issues, serious: serious });
-    };
     setTimeout(function () {
-      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(run, { timeout: 3000 });
-      else run();
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(__iuiRunSelfCheck, { timeout: 3000 });
+      else __iuiRunSelfCheck();
     }, 1500);
+    // JS-toggled states (a selected tab painted orange-on-orange) only exist
+    // after a click: re-check a few times, posting only when the result changes.
+    document.addEventListener('click', function () {
+      if (__iuiRechecks >= 6) return;
+      clearTimeout(__iuiRecheckTimer);
+      __iuiRecheckTimer = setTimeout(function () { __iuiRechecks++; __iuiRunSelfCheck(); }, 900);
+    }, true);
   }
   window.__iuiSelfCheck = __iuiSelfCheck;
   window.__iuiScheduleSelfCheck = __iuiScheduleSelfCheck;

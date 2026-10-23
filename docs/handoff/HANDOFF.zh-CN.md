@@ -1,20 +1,22 @@
 # IUI 视觉重做 · 交接文档
 
-> 交接时间：2026-10（第 3 步完成后更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
+> 交接时间：2026-10（第 5 步完成后更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
 > 本目录：`docs/handoff/`（只在 `hotfix/0.13.0-iui.27` 分支上，`main` 没有；先 `git fetch origin && git checkout hotfix/0.13.0-iui.27`）
 
 ## 1. 现在在哪一步
 
 - 3 轮视觉方案**全部已确认**（第 1、2 轮按「推荐」；第 3 轮 ⑪ ⑫ 和 999px 修复也已确认要做）。
-- 第 6 节第 1–3 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
+- 第 6 节第 1–5 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
 
   | 步骤 | 提交 | 内容 | 对比图 |
   |---|---|---|---|
   | 1 主题底座 | `cbd9a0d` | daisyUI「IUI 中性」（iui / iui-dark + corporate / dim）内联进沙箱；OIU 配色删除，旧变量桥接到 daisyUI token；Inter 离线；page-accent 只改 primary；customTokensJson 白名单 | `progress/step1/` |
   | 2 提示词 / starter | `eb04998` | 常驻提示、页面类型提示、兜底示例、design-lint 换 daisyUI 写法；⑧ 6 个模板重做（`pattern-starters.ts`） | `progress/step2/` |
   | 3 库默认主题 | `cb8c4ef` | **Tailwind 4 按页编译**（`src/themes/tailwind-jit.ts`，见下）；**OIU 文件已删**（→ `host-kit.ts` / `host-polish.ts` / `shared/trip-animator.ts`）；①② Chart.js / ECharts 精修；③ AG Grid；④ 脑图 = ECharts 树图；⑤ 3D `look` 预设 clay（默认）/ toon / data / studio；⑨ Mermaid 灰阶 + `flowchart LR` + `:::focal/:::muted/:::ext`；Leaflet / d3 / GSAP 默认值；动效配方 | `progress/step3/` |
+  | 4 插件界面 ⑪⑫ + 999px | `3bba461` | 工具栏图标 + ⋯ 菜单分组；外观弹层；修改失败卡改黄色提示；骨架屏「已接收 X KB」；ToastCard（撤销）；模板中心（缩略图、「我的」）；删成就 / 目录死入口；设置页行列表 / 单预览 / 连通性小表 / 保存条；容器圆角改 `--radius-box` | `progress/step4/` |
+  | 5 设计检查 | 见 git log | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
 
-- **下一步：第 4 步插件界面（⑪ ⑫）+ 999px 修复**（已确认，尚未开工）。之后是第 5–7 步。
+- **下一步：第 6 步视觉回归**（`scripts/e2e-visual.mts` 改注入 iui-html 等，见第 6 节）。之后是第 7 步。
 - 之前的 36 个 hotfix 提交（F1–F28、G1–G16、Batch C–F、R5 等）都在这个分支上，详见 `IUI-修复方案.zh-CN.md`。
 
 ### 第 3 步留下的实现要点（接手必读）
@@ -35,7 +37,7 @@
 | `demo/site/r2/*.html` | 第 2、3 轮演示页：`forms/info/media/data/itinerary/weather/pricing/hotels/rooms/kanban/states/mobile/mermaid/gchart/interact/dev` + `chrome-page/chrome-chat/chrome-settings`（第 3 轮）。`?theme=iui|iui-dark|corporate|dim`、`?w=宽度` |
 | `demo/shoot.mjs` / `compose.py` / `sheets*.json` | 截图与拼图脚本 |
 | `demo/chrome/` | 在真实 dsh web 里截插件界面的脚本（`launch.sh` 起 dsh，`drv.mjs <step>.mjs` 跑步骤） |
-| `progress/step1–3/` | 已完成各步的改前 / 改后对比图（浅色 688、深色 688、390） |
+| `progress/step1–5/` | 已完成各步的改前 / 改后对比图（浅色 688、深色 688、390） |
 | `demo/vis.mts` | `scripts/e2e-visual.mts` 的草稿副本（注入方式需改，见 6.3） |
 
 演示页运行方法见 `demo/README.md`。
@@ -73,7 +75,7 @@
 
 ## 6. 实施顺序（已全部确认）
 
-（1–3 已完成，见第 1 节；从 4 开始）
+（1–5 已完成，见第 1 节；从 6 开始）
 
 1. **主题底座**：把 `common.css` 的 iui / iui-dark token 落到 `src/themes/`，沙箱注入 daisyUI + 主题；保留 `corporate`、`dim`；删 OIU；`page-accent.ts` 只改 primary 一组；`custom-tokens.ts` 只开放白名单 token。
 2. **同步提示词**：`src/shared/oiu-pattern-starters.ts`（现为 `pattern-starters.ts`）、常驻提示、`design-lint.ts` 的 `designLintNote()`（仍写着 `--color-text-*`、`.iui-stat`）全部换成 daisyUI 写法；starter 按 ⑧ 的 6 个模板重做。
