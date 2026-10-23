@@ -15,7 +15,7 @@
   | 3 库默认主题 | `cb8c4ef` | **Tailwind 4 按页编译**（`src/themes/tailwind-jit.ts`，见下）；**OIU 文件已删**（→ `host-kit.ts` / `host-polish.ts` / `shared/trip-animator.ts`）；①② Chart.js / ECharts 精修；③ AG Grid；④ 脑图 = ECharts 树图；⑤ 3D `look` 预设 clay（默认）/ toon / data / studio；⑨ Mermaid 灰阶 + `flowchart LR` + `:::focal/:::muted/:::ext`；Leaflet / d3 / GSAP 默认值；动效配方 | `progress/step3/` |
   | 4 插件界面 ⑪⑫ + 999px | `3bba461` | 工具栏图标 + ⋯ 菜单分组；外观弹层；修改失败卡改黄色提示；骨架屏「已接收 X KB」；ToastCard（撤销）；模板中心（缩略图、「我的」）；删成就 / 目录死入口；设置页行列表 / 单预览 / 连通性小表 / 保存条；容器圆角改 `--radius-box` | `progress/step4/` |
   | 5 设计检查 | `c0b24e7` | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
-  | 6 视觉回归 | `37ee29c` `96e18dd` `86c13ad` `53c606d` `c6c4708` `e06af30` `4739e23` | CI 修绿；**真实 dsh 视觉回归** `pnpm run test:dsh-visual`（`scripts/dsh-visual.mts`，24 项 × 浅 688 / 深 688 / 390 = 72 张，像素差 + `scoreSrcdoc` 打分，CI 任务 `dsh-visual` 带 `--gate`，基线 `scripts/golden/dsh-visual/` 由 CI 生成）；真实 dsh 里发现并修了 7 处（见下）；CI run 39932541465 两个 job 全绿（门禁已生效） | `progress/step6/` |
+  | 6 视觉回归 | `37ee29c` `96e18dd` `86c13ad` `53c606d` `c6c4708` `e06af30` `4739e23`；第 2 轮 `35446e0` `c423bd9` `37d487d` `d74bab1` `3d42941` `a46fcca` `38928c9` `257bc3c` 及基线提交 | CI 修绿；**真实 dsh 视觉回归** `pnpm run test:dsh-visual`（`scripts/dsh-visual.mts`，现 26 项 × 浅 688 / 深 688 / 390 = 78 张，像素差 + `scoreSrcdoc` 打分，CI 任务 `dsh-visual` 带 `--gate`，基线 `scripts/golden/dsh-visual/` 由 CI 生成）；真实 dsh 里发现并修了 7 处 + 第 2 轮 4 处（见下）；门禁已生效 | `progress/step6/`（第 2 轮：`*-fix.png`） |
 
 - 第 1–5 步用户都已确认；第 6 步**待用户确认**。之后是第 7 步（抽 20 个旧会话核对、更新说明）。
 
@@ -27,7 +27,13 @@
   - **基线只能用 CI 产物更新**：去掉 `--gate` 跑一次（或看失败 run 的 artifact `dsh-visual`），下载 `shots/*.png` 覆盖 `scripts/golden/dsh-visual/`。容差默认 0.5%，行程页（地图）3%，3D 4%。
   - `scripts/e2e-visual.mts` 已改为转发到 `dsh-visual.mts`（旧 `dsh-ui` 注入方式作废）；无宿主 harness / `test:browser` / `visual-score` 降为辅助。
 - **真实 dsh 里发现并修复**（`96e18dd`）：① 减弱动效 `transition-duration` 0.01ms→0s（脑图在 reduce 下布局炸开）；② 屏幕外 iframe 高度卡在最大值（rAF 暂停时 120ms 兜底 + 观察 body 顶层子元素），390 下行程页曾 2400px 高；③ 3D 热点编号深色白底白字；④ 旧围栏提示 / CHIP 深色白底；⑤ 设置页保存栏常驻 sticky 盖住表单 → 只在有改动时 sticky；⑥ 设置页预览 390 下一字一行 → `min-width:320px` + 横向滚动。⑦（`4739e23`，开门禁后 CI 发现）行程页 390 框架高度偶发仍卡在 2483px：Tailwind 样式写进 `<head>` 不触发 body 的 MutationObserver、屏幕外 iframe 的 ResizeObserver 也可能不回调 → 样式到达后主动重测，并在 load / 样式到达后 0–4s 内有限次重测。`e06af30` 修了 `--gate` 像素差在 CI 报 `__name is not defined`。
-- **已知 / 未覆盖**：390 下 3D 热点标签互相重叠（未修）；旧 GenUI 目录组件（含 PlotBlock）已移除，只回归「目录组件卡已移除」提示；普通 ```mermaid 由宿主显示为代码块（IUI 只在 iui-html 内渲染 Mermaid）；390 下 dsh 自身折叠侧栏、设置弹窗保留左侧导航（宿主行为）；深色 KaTeX 偏暗在真实 dsh 里不复现。没有覆盖真实模型流式输出（回放会话）。
+- **第 2 轮（用户看图后指出脑图与第 3 步定稿不一致 + 3D 标签重叠 + 390 地图）**：
+  - ④ 脑图（`35446e0`，真实 bug）：提示词推荐「ECharts 树图放 `.iui-mindmap`」，但 boot 会对 `.iui-mindmap` 加载并 `mermaid.run` → 真实 dsh 显示 **Syntax error in text**。现在只把含源码文本的 `.mermaid/.iui-mindmap` 交给 Mermaid（`__iuiIsMermaidSource`，`detectSandboxLibs` / author-js-runtime 同步）。回归用的 starter `mermaid-mindmap`（id 不变）改为 ECharts 树图；新增 starter `mermaid-flow`（⑨ flowchart LR + 时序）；新增回归项 `lib-mermaid`、`lib-mindmap-old`（旧 Mermaid 脑图兼容）。390 下树图 / Mermaid 保留最小宽度、框内横向滚动（Mermaid 不缩到 70% 以下，`38928c9` 在作者自己 `mermaid.run` 后也生效）。
+  - ⑧ 行程地图（`c423bd9`）：390 下缩成世界地图——容器 <64px 时的 `fitBounds` 在有尺寸后重做（用户拖动则取消）。行程页容差 3% 太宽，门禁没自动抓到，可考虑收紧。
+  - ⑤ 3D（`37d487d` `a46fcca` `257bc3c`）：热点标签重叠 / 超出舞台时收为编号（文字留在 aria-label / title）；舞台在隐藏时初始化（宽 0）或中间态窄宽 → 用户未操作前，尺寸明显变化就重新取景（CI 390 曾空白、热点挤在中心；旧基线本身是空白图，已换）。
+  - `3d42941`：dsh-visual 记录框架控制台警告（artifact 里 `console-<mode>.txt`）。
+  - `test:browser` 的 leaflet-map 用例依赖 nominatim / 瓦片网络，CI 偶发失败（重跑即过）。
+- **已知 / 未覆盖**：AG Grid 390 下只显示首列、需横向滚动；390 行程地图右下站点标签贴近 Day 切换条；旧 GenUI 目录组件（含 PlotBlock）已移除，只回归「目录组件卡已移除」提示；普通 ```mermaid 由宿主显示为代码块（IUI 只在 iui-html 内渲染 Mermaid）；390 下 dsh 自身折叠侧栏、设置弹窗保留左侧导航（宿主行为）；深色 KaTeX 偏暗在真实 dsh 里不复现。没有覆盖真实模型流式输出（回放会话）。
 
 - 之前的 36 个 hotfix 提交（F1–F28、G1–G16、Batch C–F、R5 等）都在这个分支上，详见 `IUI-修复方案.zh-CN.md`。
 
