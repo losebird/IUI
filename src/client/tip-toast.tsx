@@ -2,15 +2,20 @@
  * tip-toast.tsx — lightweight body-level tips (Markdown auto-remediate, etc.).
  * Independent of the achievement stack so product tips stay quieter.
  */
-import { createElement, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createElement, useEffect, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import css from './GenuiBlock.module.css'
+import { useT } from './i18n/index.ts'
+import { ChromeIcon, chromeCss as ck } from './chrome/icons.tsx'
 
 export interface TipToast {
   title: string
   description?: string
   /** ms; default 4200 */
   durationMs?: number
+  /** visual(⑪): leading icon tone (default 'info'). */
+  tone?: 'info' | 'success'
+  /** visual(⑪): one inline action, e.g. 撤销 after 已保存为模板. */
+  action?: { label: string; onClick: () => void }
 }
 
 interface TipItem extends TipToast {
@@ -73,25 +78,56 @@ function TipToasts() {
     [],
   )
 
+  const dismiss = (key: number): void => {
+    setItems((prev) => prev.filter((i) => i.key !== key))
+    const id = timers.current.get(key)
+    if (id !== undefined) window.clearTimeout(id)
+    timers.current.delete(key)
+  }
+
   if (items.length === 0) return null
-  return createElement(
-    'div',
-    { className: css.tipToasts, 'data-iui-tip-toasts': true, role: 'status', 'aria-live': 'polite' },
-    items.map((item) =>
-      createElement(
-        'div',
-        { key: item.key, className: css.tipToast },
-        createElement('span', { className: css.tipToastBadge, 'aria-hidden': true }, '✦'),
-        createElement(
-          'div',
-          { className: css.tipToastBody },
-          createElement('div', { className: css.tipToastTitle }, item.title),
-          item.description
-            ? createElement('div', { className: css.tipToastDesc }, item.description)
-            : null,
-        ),
-      ),
-    ),
+  return (
+    <div className={`${ck.root} ${ck.toasts}`} data-iui-tip-toasts="" role="status" aria-live="polite">
+      {items.map((item) => (
+        <ToastCard
+          key={item.key}
+          tone={item.tone ?? 'info'}
+          title={item.title}
+          {...(item.description ? { description: item.description } : {})}
+          {...(item.action ? { action: { label: item.action.label, onClick: () => { item.action!.onClick(); dismiss(item.key) } } } : {})}
+          onClose={() => dismiss(item.key)}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** visual(⑪): the one toast card shared by tips, 已保存为模板 and achievements. */
+export function ToastCard(props: {
+  tone: 'info' | 'success' | 'achievement'
+  title: string
+  description?: string
+  action?: { label: string; onClick: () => void }
+  onClose?: () => void
+}): ReactElement {
+  const t = useT()
+  const icon = props.tone === 'success' ? 'circle-check' : props.tone === 'achievement' ? 'trophy' : 'sparkles'
+  return (
+    <div className={ck.toast} data-iui-toast={props.tone}>
+      <span className={ck.toastIcon} data-tone={props.tone}><ChromeIcon name={icon} size={18} /></span>
+      <div className={ck.toastBody}>
+        <div className={ck.toastTitle}>{props.title}</div>
+        {props.description ? <div className={ck.toastDesc}>{props.description}</div> : null}
+      </div>
+      {props.action ? (
+        <button type="button" className={`${ck.btn} ${ck.btnSm}`} data-iui-toast-action="1" onClick={props.action.onClick}>{props.action.label}</button>
+      ) : null}
+      {props.onClose ? (
+        <button type="button" className={ck.iconBtn} aria-label={t('toast.close')} title={t('toast.close')} onClick={props.onClose}>
+          <ChromeIcon name="x" size={15} />
+        </button>
+      ) : null}
+    </div>
   )
 }
 

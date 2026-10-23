@@ -10,7 +10,8 @@ import { createRoot } from 'react-dom/client'
 import { consumeUnlocks, subscribeAchievements } from './achievement-store.ts'
 import { useT } from './i18n/index.ts'
 import type { AchievementDef } from './achievements.ts'
-import css from './GenuiBlock.module.css'
+import { chromeCss as ck } from './chrome/icons.tsx'
+import { ToastCard } from './tip-toast.tsx'
 
 interface ToastItem {
   key: number
@@ -45,14 +46,15 @@ function AchievementToasts() {
   }, [])
 
   if (items.length === 0) return null
-  return createElement('div', { className: css.achToasts, 'data-genui-achievement-toasts': true },
-    items.map(item => createElement('div', { key: item.key, className: css.achToast },
-      createElement('span', { className: css.achToastBadge, 'aria-hidden': true }, '🏆'),
-      createElement('div', { className: css.achToastBody },
-        createElement('div', { className: css.achToastName }, t('ach.toast.unlocked', { name: item.ach.name })),
-        createElement('div', { className: css.achToastDesc }, item.ach.description),
-      ),
-    )),
+  // visual(⑪): same card as every other toast (trophy icon, title + description, ×).
+  return createElement('div', { className: `${ck.root} ${ck.toasts}`, 'data-genui-achievement-toasts': true, style: { bottom: 84 } },
+    items.map(item => createElement(ToastCard, {
+      key: item.key,
+      tone: 'achievement',
+      title: t('ach.toast.title', { name: item.ach.name }),
+      description: item.ach.description,
+      onClose: () => setItems(prev => prev.filter(i => i.key !== item.key)),
+    })),
   )
 }
 

@@ -29,6 +29,7 @@ import type { GenuiActionHandler } from './action-context.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { TemplateDrawer } from './TemplateDrawer.tsx'
+import { ChromeIcon } from './chrome/icons.tsx'
 import { clearSessionPanel, getPanelExpandToken, getPanelSpec, setLocalPanel, subscribePanel, subscribePanelExpand } from './panel-store.ts'
 import { useT } from './i18n/index.ts'
 import css from './GenuiBlock.module.css'
@@ -72,9 +73,6 @@ export function GenuiPanel({ sessionId, sendGenuiAction: _sendGenuiAction, inser
   const [resizing, setResizing] = useState(false)
   const dragStart = useRef<{ y: number; height: number } | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
-  // Template center (0.9.4) + achievements (0.9.5): the drawer host —
-  // null = closed, 'templates' | 'achievements' = open on that tab.
-  const [drawer, setDrawer] = useState<null | 'templates' | 'achievements'>(null)
   const [flash, setFlash] = useState<string | null>(null)
   const flashTimer = useRef(0)
   const hasSpec = spec !== null && spec.items.length > 0
@@ -202,38 +200,19 @@ export function GenuiPanel({ sessionId, sendGenuiAction: _sendGenuiAction, inser
           type="button"
           className={css.panelToggle}
           aria-expanded={!collapsed}
+          aria-label={t('panel.templates.aria')}
           onClick={() => setCollapsed(c => !c)}
         >
-          <span className={css.panelBadge}>{t('panel.badge')}</span>
-          <span className={css.panelTitle}>{spec?.title ?? t(drawer !== null ? 'panel.title.explore' : 'panel.title.default')}</span>
+          {/* visual(⑪): the panel IS the template center — 「模板 · 从模板开始一个新页面」.
+              The 成就 / 目录面板 entries were dead (only said "removed"); achievement
+              data and unlock toasts stay. */}
+          <span className={css.panelTitle}>{t('tpl.title')}</span>
+          <span className={css.panelSubtitle}>{t('tpl.subtitle')}</span>
           <span className={css.panelChevron} aria-hidden>
-            {/* 折叠状态对应的箭头。 */}
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d={collapsed ? 'M12 10L8.70711 6.70711C8.31658 6.31658 7.68342 6.31658 7.29289 6.70711L4 10' : 'M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6'} stroke="currentColor" />
             </svg>
           </span>
-        </button>
-        {/* Template center (0.9.4): one button — the discovery surface for
-            new users and a quick-start entry for everyone. */}
-        <button
-          type="button"
-          className={`${css.panelTpl}${drawer === 'templates' ? ` ${css.panelTplActive}` : ''}`}
-          aria-label={t('panel.templates.aria')}
-          title={t('panel.templates.title')}
-          onClick={() => { setCollapsed(false); setDrawer(d => (d === 'templates' ? null : 'templates')) }}
-        >
-          {t('panel.templates')}
-        </button>
-        {/* Achievements (0.9.5): the exploration trophies, rendered by GenUI
-            itself (dogfooding). */}
-        <button
-          type="button"
-          className={`${css.panelTpl}${drawer === 'achievements' ? ` ${css.panelTplActive}` : ''}`}
-          aria-label={t('panel.achievements.aria')}
-          title={t('panel.achievements.title')}
-          onClick={() => { setCollapsed(false); setDrawer(d => (d === 'achievements' ? null : 'achievements')) }}
-        >
-          {t('panel.achievements')}
         </button>
         {/* In-place dismiss (issue #23): the same local override `/panel
             clear` applies — persists to localStorage, notifies subscribers,
@@ -245,10 +224,10 @@ export function GenuiPanel({ sessionId, sendGenuiAction: _sendGenuiAction, inser
           title={t('panel.close.aria')}
           onClick={() => setLocalPanel(sessionId, null)}
         >
-          <span aria-hidden>✕</span>
+          <ChromeIcon name="x" size={15} />
         </button>
       </div>
-      {hint && drawer === null && (
+      {hint && collapsed && (
         <div className={css.panelHint} role="status">
           {t('panel.hint')}
         </div>
@@ -260,20 +239,13 @@ export function GenuiPanel({ sessionId, sendGenuiAction: _sendGenuiAction, inser
           data-genui-panel-body
           style={bodyHeight === null ? undefined : { height: bodyHeight }}
         >
-          {drawer !== null ? (
-            <TemplateDrawer
-              tab={drawer}
-              onUse={(text) => {
-                recordTemplateUse()
-                insertTemplate(text)
-                showFlash(t('panel.flash.inserted'))
-              }}
-            />
-          ) : spec !== null ? (
-            <div data-iui-legacy-catalog="1" style={{ padding: 12, fontSize: 13, lineHeight: 1.5, color: 'var(--dsw-alias-label-secondary, #374151)' }}>
-              <strong>目录面板已移除。</strong>请改用 <code>{'```iui-html'}</code> 自由页（HTML/CSS/JS 沙箱）。
-            </div>
-          ) : null}
+          <TemplateDrawer
+            onUse={(text) => {
+              recordTemplateUse()
+              insertTemplate(text)
+              showFlash(t('panel.flash.inserted'))
+            }}
+          />
         </div>
       )}
       {flash !== null && (

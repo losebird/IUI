@@ -54,7 +54,7 @@ import {
 } from './theme/apply-theme.ts'
 import { getActivePackId } from './theme/apply-pack.ts'
 import { EmptyState, ErrorState } from './ui/StatusBlock.tsx'
-import { SandboxSkeleton, SandboxStreamingPill, sandboxStreamProgress, streamedLineCount } from './sandbox-skeleton.tsx'
+import { SandboxSkeleton, SandboxStreamingPill, sandboxStreamProgress, streamedLineCount, utf8Bytes } from './sandbox-skeleton.tsx'
 import { acquireBindingWatch, getAppDataSnapshot, subscribeBindings } from './binding-store.ts'
 import { getCdnSource, getNetContextForBuild, getRuntimeConfigSnapshot, setCdnPresetOverride, subscribeRuntimeConfig } from './runtime-config.ts'
 import { normalizeCdnOrder, normalizeCdnPreset, type VendorSource } from '../shared/vendor-registry.ts'
@@ -65,7 +65,8 @@ import { capActionPayload, createFrameActionGate, type ActionVerdict, type Frame
 import { AppearancePanel } from './appearance-panel.tsx'
 import { getDefaultPageAppearance, saveDefaultPageAppearance, subscribeDefaultPageAppearance } from './page-appearance-store.ts'
 import { writeIuiConfigField } from './settings/index.ts'
-import { saveUserTemplateFromPage } from './user-template-store.ts'
+import { deleteUserTemplate, saveUserTemplateFromPage } from './user-template-store.ts'
+import { ChromeIcon, chromeCss as ck } from './chrome/icons.tsx'
 import { pushTipToast } from './tip-toast.tsx'
 import { NextStepChips, pageIntentOf } from './next-steps-ui.tsx'
 import { FEEDBACK_REASONS, getPageFeedback, pageFeedbackKey, recordSelfCheck, recordVote, type FeedbackReason, type FeedbackVote } from './feedback-store.ts'
@@ -193,20 +194,6 @@ function appearanceBuildOptions(a: PageAppearance): { appearanceCss?: string; ap
   return { appearanceCss: pageAppearanceCss(a), appearanceScheme: a.scheme }
 }
 
-const MENU_STYLE: CSSProperties = {
-  position: 'absolute',
-  right: 0,
-  top: 'calc(100% + 4px)',
-  zIndex: 10,
-  minWidth: 132,
-  display: 'flex',
-  flexDirection: 'column',
-  padding: 4,
-  borderRadius: 10,
-  border: '1px solid var(--dsl-g-border-surface, hsl(240 6% 90%))',
-  background: 'var(--dsw-alias-bg-base, #fff)',
-  boxShadow: '0 8px 24px rgba(15,23,42,.12)',
-}
 
 const SELF_CHECK_PILL_STYLE: CSSProperties = {
   position: 'absolute', right: 10, bottom: 10, zIndex: 3, display: 'flex', alignItems: 'stretch',
@@ -218,16 +205,6 @@ const SELF_CHECK_PILL_BTN: CSSProperties = {
   minHeight: 32, padding: '0 12px', cursor: 'pointer',
 }
 
-const MENU_ITEM: CSSProperties = {
-  textAlign: 'left',
-  fontSize: 13,
-  padding: '7px 10px',
-  border: 'none',
-  borderRadius: 6,
-  background: 'transparent',
-  color: 'var(--dsw-alias-label-primary, #1f2937)',
-  cursor: 'pointer',
-}
 
 /** G9: the frozen card is one big resume button over the static copy. */
 const FROZEN_OVERLAY_STYLE: CSSProperties = {
@@ -624,8 +601,6 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     try { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches } catch { return false }
   }, [])
   const compactToolbar = narrow && !fullscreen
-  const toolbarBtn: CSSProperties = narrow || coarse ? { ...TOOLBAR_BTN, minHeight: 32, minWidth: 32 } : TOOLBAR_BTN
-  const menuItem: CSSProperties = narrow || coarse ? { ...MENU_ITEM, minHeight: 36 } : MENU_ITEM
   const fsButtonRef = useRef<HTMLButtonElement | null>(null)
   const prevFsModeRef = useRef<FullscreenMode>('off')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1273,6 +1248,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           label={streamLabel(t(`sandbox.skeleton.${prog.phase}`), raw)}
           pct={prog.pct}
           height={clampHeight(baseHeight, 220)}
+          received={utf8Bytes(raw)}
           {...(parsed.title ? { title: parsed.title } : {})}
         />
       </div>
@@ -1376,8 +1352,10 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
     setFsMode('off')
   }
 
+  // visual(⑪): icon toolbar + grouped ⋯ menu (外观… / 重新加载 / 导出与分享 / 保存为模板 / 反馈一行).
+  const menuItemClass = ck.item
   const toolbar = (
-    <div style={STAGE_ROW} aria-live="polite">
+    <div style={STAGE_ROW} className={`${ck.root}${narrow || coarse ? ` ${ck.coarse}` : ''}`} aria-live="polite">
       {showStreamingStageChrome(parsed, ready) && stages.map((stage) => (
         <span key={stage} style={CHIP}>{stageLabel(stage, t)}</span>
       ))}
@@ -1388,18 +1366,20 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
       {!compactToolbar && <button
         ref={fsButtonRef}
         type="button"
-        style={toolbarBtn}
+        className={ck.iconBtn}
         data-iui-fullscreen-toggle="1"
         aria-pressed={fullscreen}
+        aria-label={fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
+        title={fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
         onClick={() => (fullscreen ? exitFullscreen() : enterFullscreen())}
       >
-        {fullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
+        <ChromeIcon name={fullscreen ? 'minimize' : 'maximize'} size={16} />
       </button>}
       <div ref={menuRef} style={{ position: 'relative' }}>
         <button
           ref={compactToolbar ? fsButtonRef : undefined}
           type="button"
-          style={{ ...toolbarBtn, padding: '5px 9px', letterSpacing: 1 }}
+          className={ck.iconBtn}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-label={t('sandbox.more')}
@@ -1407,10 +1387,10 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
           data-iui-sandbox-menu="1"
           onClick={() => setMenuOpen((v) => !v)}
         >
-          ⋯
+          <ChromeIcon name="ellipsis" size={18} />
         </button>
         {menuOpen && (
-          <div role="menu" style={MENU_STYLE}>
+          <div role="menu" className={`${ck.menu}${menuView === 'appearance' ? ` ${ck.menuWide}` : ''}`}>
             {menuView === 'appearance' ? (
               <AppearancePanel
                 value={appearance}
@@ -1422,16 +1402,17 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
               />
             ) : menuView === 'feedback' ? (
               <div data-iui-feedback-reasons="1" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ ...menuItem, cursor: 'default', opacity: 0.7, fontSize: 12 }}>{feedbackNote ?? t('sandbox.feedback.reasonTitle')}</div>
+                <div className={ck.menuTitle}>{feedbackNote ?? t('sandbox.feedback.reasonTitle')}</div>
                 {FEEDBACK_REASONS.map((reason) => (
-                  <button key={reason} type="button" role="menuitem" style={menuItem} data-iui-feedback-reason={reason}
+                  <button key={reason} type="button" role="menuitem" className={menuItemClass} data-iui-feedback-reason={reason}
                     disabled={feedbackNote !== null}
                     onClick={() => castVote('down', reason)}
                   >
                     {t(`sandbox.feedback.reason.${reason}`)}
                   </button>
                 ))}
-                <button type="button" role="menuitem" style={{ ...menuItem, opacity: 0.7 }} disabled={feedbackNote !== null} onClick={() => castVote('down')}>
+                <div className={ck.sep} />
+                <button type="button" role="menuitem" className={menuItemClass} style={{ color: 'var(--ck-fg-3)' }} disabled={feedbackNote !== null} onClick={() => castVote('down')}>
                   {t('sandbox.feedback.skip')}
                 </button>
               </div>
@@ -1440,17 +1421,27 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
               <button
                 type="button"
                 role="menuitem"
-                style={{ ...menuItem, fontWeight: 600 }}
+                className={`${menuItemClass} ${ck.itemStrong}`}
                 data-iui-menu-fullscreen="1"
                 onClick={() => { setMenuOpen(false); enterFullscreen() }}
               >
-                {t('sandbox.openFullscreen')}
+                <ChromeIcon name="maximize" size={15} />{t('sandbox.openFullscreen')}
               </button>
             )}
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
+              data-iui-sandbox-appearance="1"
+              onClick={() => setMenuView('appearance')}
+            >
+              <ChromeIcon name="palette" size={15} />{t('sandbox.appearanceMenu')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className={menuItemClass}
+              data-iui-sandbox-reload="1"
               onClick={() => {
                 setMenuOpen(false)
                 setStopped(false)
@@ -1460,21 +1451,14 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                 setErrorKind(null)
               }}
             >
-              {t('sandbox.reload')}
+              <ChromeIcon name="refresh-cw" size={15} />{t('sandbox.reload')}
             </button>
+            <div className={ck.menuTitle} role="presentation">{t('sandbox.menu.export')}</div>
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
-              data-iui-sandbox-appearance="1"
-              onClick={() => setMenuView('appearance')}
-            >
-              {t('sandbox.appearance')}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
+              data-iui-sandbox-download="1"
               onClick={() => {
                 setMenuOpen(false)
                 void (async () => {
@@ -1491,12 +1475,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                 })()
               }}
             >
-              {t('sandbox.download')}
+              <ChromeIcon name="share" size={15} />{t('sandbox.download')}
             </button>
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
+              data-iui-sandbox-offline="1"
               disabled={offlineNote === t('sandbox.offlinePacking')}
               onClick={() => {
                 if (offlineNote) return
@@ -1541,12 +1526,12 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                 })()
               }}
             >
-              {offlineNote ?? t('sandbox.downloadOffline')}
+              <ChromeIcon name={offlineNote === t('sandbox.offlinePacking') ? 'loader-circle' : 'download'} size={15} className={offlineNote === t('sandbox.offlinePacking') ? ck.spin : undefined} />{offlineNote ?? t('sandbox.downloadOffline')}
             </button>
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
               data-iui-sandbox-save-image="1"
               disabled={imageNote === t('sandbox.saveImageProgress')}
               onClick={() => {
@@ -1573,12 +1558,13 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                 })()
               }}
             >
-              {imageNote ?? t('sandbox.saveImage')}
+              <ChromeIcon name={imageNote === t('sandbox.saveImageProgress') ? 'loader-circle' : 'image'} size={15} className={imageNote === t('sandbox.saveImageProgress') ? ck.spin : undefined} />{imageNote ?? t('sandbox.saveImage')}
             </button>
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
+              data-iui-sandbox-copy="1"
               onClick={async () => {
                 const ok = await copyText(effectiveRaw)
                 setCopied(ok)
@@ -1586,36 +1572,47 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
                 else setMenuOpen(false)
               }}
             >
-              {copied ? t('sandbox.copied') : t('sandbox.copy')}
+              <ChromeIcon name={copied ? 'check' : 'code'} size={15} />{copied ? t('sandbox.copied') : t('sandbox.copy')}
             </button>
+            <div className={ck.sep} />
             <button
               type="button"
               role="menuitem"
-              style={menuItem}
+              className={menuItemClass}
               data-iui-sandbox-save-template="1"
               disabled={templateNote !== null || parsed === null || parsed.partial === true}
               onClick={() => {
                 // S6: save this page's source to 「我的模板」 (drawer + Settings → IUI → 模板).
                 void saveUserTemplateFromPage({ source: effectiveRaw, ...(parsed?.title ? { name: parsed.title } : {}) }, writeIuiConfigField)
-                  .then(({ result }) => setTemplateNote(t(result === 'synced' ? 'sandbox.templateSaved' : 'sandbox.templateSavedLocal')))
+                  .then(({ result, template }) => {
+                    setTemplateNote(t(result === 'synced' ? 'sandbox.templateSaved' : 'sandbox.templateSavedLocal'))
+                    // visual(⑪): one toast with 撤销 (removes the template again).
+                    pushTipToast({
+                      tone: 'success',
+                      title: t('toast.templateSaved').replace('{name}', template.name),
+                      action: { label: t('toast.undo'), onClick: () => { void deleteUserTemplate(template.id, writeIuiConfigField) } },
+                      durationMs: 5000,
+                    })
+                  })
                   .catch(() => setTemplateNote(t('sandbox.templateFailed')))
                   .finally(() => { window.setTimeout(() => { setTemplateNote(null); setMenuOpen(false) }, 1600) })
               }}
             >
-              {templateNote ?? t('sandbox.saveTemplate')}
+              <ChromeIcon name="bookmark" size={15} />{templateNote ?? t('sandbox.saveTemplate')}
             </button>
-            <div data-iui-feedback={vote ?? 'none'} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px 2px', borderTop: '1px solid rgba(127,127,127,.18)', marginTop: 4 }}>
-              <span style={{ flex: 1, fontSize: 12, opacity: 0.65 }}>{feedbackNote ?? t('sandbox.feedback.label')}</span>
+            <div className={ck.sep} />
+            <div className={ck.feedbackRow} data-iui-feedback={vote ?? 'none'}>
+              <span className={ck.feedbackLabel}>{feedbackNote ?? t('sandbox.feedback.label')}</span>
               <button type="button" role="menuitemradio" aria-checked={vote === 'up'} aria-label={t('sandbox.feedback.up')} title={t('sandbox.feedback.up')}
                 data-iui-feedback-vote="up"
-                style={{ ...toolbarBtn, padding: '3px 8px', ...(vote === 'up' ? { background: 'rgba(127,127,127,.16)' } : {}) }}
+                className={`${ck.iconBtn}${vote === 'up' ? ` ${ck.voteOn}` : ''}`}
                 onClick={() => castVote(vote === 'up' ? null : 'up')}
-              >👍</button>
+              ><ChromeIcon name="thumbs-up" size={15} /></button>
               <button type="button" role="menuitemradio" aria-checked={vote === 'down'} aria-label={t('sandbox.feedback.down')} title={t('sandbox.feedback.down')}
                 data-iui-feedback-vote="down"
-                style={{ ...toolbarBtn, padding: '3px 8px', ...(vote === 'down' ? { background: 'rgba(127,127,127,.16)' } : {}) }}
+                className={`${ck.iconBtn}${vote === 'down' ? ` ${ck.voteOn}` : ''}`}
                 onClick={() => { if (vote === 'down') castVote(null); else setMenuView('feedback') }}
-              >👎</button>
+              ><ChromeIcon name="thumbs-down" size={15} /></button>
             </div>
             </>)}
           </div>
@@ -1744,7 +1741,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null }: 
         {!storageReady && <SandboxSkeleton label={t('sandbox.skeleton.loading')} height={fullscreen ? '100%' : height} showProgress={false} />}
         {storageReady && (parsed.partial || holdSectionJs) && !stopped && parsed.html.trim() === '' && (() => {
           const prog = sandboxStreamProgress(parsed)
-          return <SandboxSkeleton overlay label={streamLabel(t(`sandbox.skeleton.${prog.phase}`), raw)} pct={prog.pct} {...(parsed.title ? { title: parsed.title } : {})} />
+          return <SandboxSkeleton overlay label={streamLabel(t(`sandbox.skeleton.${prog.phase}`), raw)} pct={prog.pct} received={utf8Bytes(raw)} {...(parsed.title ? { title: parsed.title } : {})} />
         })()}
         {storageReady && (parsed.partial || holdSectionJs) && !stopped && parsed.html.trim() !== '' && (
           <SandboxStreamingPill label={streamLabel(t('sandbox.stream.static'), raw)} />
@@ -1963,7 +1960,7 @@ function SandboxPatchFence({ raw, fenceKey, context }: { raw: string; fenceKey: 
     registerPageVersion(scope, { fenceKey, pageId: merge.pageId, raw: merge.raw, page: pageFromSpec(spec), storageKey: merge.storageKey, ...(order ? { order } : {}) })
   }, [scope, fenceKey, okRaw, order?.join(',')])
   if (streaming || merge === null) {
-    return <div data-iui-patch="streaming"><SandboxSkeleton label={t('sandbox.patchStreaming')} showProgress={false} height={120} /></div>
+    return <div data-iui-patch="streaming"><SandboxSkeleton label={t('sandbox.patchStreaming')} showProgress={false} height={120} received={utf8Bytes(raw)} /></div>
   }
   if (merge.kind === 'ok') {
     return (
@@ -1972,18 +1969,34 @@ function SandboxPatchFence({ raw, fenceKey, context }: { raw: string; fenceKey: 
       </div>
     )
   }
+  // visual(⑪): a calm amber notice — the page kept its previous version; the raw
+  // parser reason lives under 技术细节 instead of a red 错误 banner.
   return (
-    <div data-iui-patch={merge.kind}>
-      <ErrorState
-        kind="sandbox-patch-error"
-        title={merge.kind === 'no-base' ? t('sandbox.patchNoBase') : t('sandbox.patchFailed')}
-        detail={merge.reason}
-        actions={[
-          { label: t('sandbox.patchRewrite'), onClick: () => { void insertIntoComposer(patchRewritePrompt(t, merge.reason)) } },
-          { label: showSource ? t('sandbox.patchHideSource') : t('sandbox.patchShowSource'), onClick: () => setShowSource((v) => !v) },
-        ]}
-      />
-      {showSource ? <pre data-iui-patch-source="" style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 320, overflow: 'auto' }}>{raw}</pre> : null}
+    <div data-iui-patch={merge.kind} className={ck.root}>
+      <div className={ck.notice} role="status" data-iui-patch-notice="1">
+        <ChromeIcon name="triangle-alert" size={18} />
+        <div className={ck.noticeBody}>
+          <div className={ck.noticeTitle}>{merge.kind === 'no-base' ? t('sandbox.patchNoBase') : t('sandbox.patchFailed')}</div>
+          <p className={ck.noticeText}>{merge.kind === 'no-base' ? t('sandbox.patchNoBaseHint') : t('sandbox.patchKeptHint')}</p>
+          <div className={ck.noticeActions}>
+            <button type="button" className={`${ck.btn} ${ck.btnInk} ${ck.btnSm}`} data-iui-patch-rewrite="1"
+              onClick={() => { void insertIntoComposer(patchRewritePrompt(t, merge.reason)) }}
+            >
+              <ChromeIcon name="wand-sparkles" size={14} />{t('sandbox.patchRewrite')}
+            </button>
+            <button type="button" className={`${ck.btn} ${ck.btnSm}`} data-iui-patch-toggle-source="1" aria-expanded={showSource}
+              onClick={() => setShowSource((v) => !v)}
+            >
+              <ChromeIcon name="file-diff" size={14} />{showSource ? t('sandbox.patchHideSource') : t('sandbox.patchShowSource')}
+            </button>
+          </div>
+          {showSource ? <pre data-iui-patch-source="" className={ck.source}>{raw}</pre> : null}
+          <details className={ck.details} data-iui-patch-details="1">
+            <summary>{t('sandbox.patchTechDetails')}</summary>
+            <pre>{merge.reason}</pre>
+          </details>
+        </div>
+      </div>
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { cdnOrderFromProbe, decideNetContext, type MapTilesSetting } from '../..
 import { setNetworkProbeSnapshot } from '../runtime-config.ts'
 import { assetUrl } from '../asset-loader.ts'
 import { getRuntimeConfigSnapshot } from '../runtime-config.ts'
+import { ChromeIcon } from '../chrome/icons.tsx'
 import styles from './IuiSettingsSection.module.css'
 
 type LocaleT = (key: string) => string
@@ -68,42 +69,52 @@ export function NetworkProbeCard({ t, preset, mapTiles = 'auto', initial }: { t:
   const ranked = cdnOrderFromProbe(snap)
   const order = (snap ? ranked : [...DEFAULT_AUTO_CDN_ORDER]).map((id) => t(LABEL_KEY[id])).join(' → ') || t('netProbeDown')
   const when = snap ? new Date(snap.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+  const okCount = snap ? snap.results.filter((r) => r.ok).length : 0
+  const status = busy ? t('netProbeChecking') : failed ? t('netProbeFailed') : snap ? t('netProbeAt').replace('{time}', when) : t('netProbeNone')
   return (
-    <div className={styles.switchCard} data-iui-network-probe={snap ? snap.results.filter((r) => r.ok).length + '/' + snap.results.length : busy ? 'busy' : 'none'}>
-      <div className={styles.switchCopy}>
-        <div className={styles.switchTitle}>{t('netProbeTitle')}</div>
-        <p className={styles.switchHint}>
-          {busy ? t('netProbeChecking') : failed ? t('netProbeFailed') : snap ? t('netProbeAt').replace('{time}', when) : t('netProbeNone')}
-        </p>
-        {snap && (
-          <div className={styles.inlineActions}>
-            {snap.results.map((r) => (
-              <span key={r.id} data-iui-probe={r.id} data-ok={r.ok ? '1' : '0'}
-                className={`${styles.healthChip} ${r.ok ? styles.healthOk : styles.healthBad}`}
-              >
-                {t(LABEL_KEY[r.id])} · {r.ok ? `${r.ms} ms` : t('netProbeDown')}
-              </span>
-            ))}
-          </div>
-        )}
-        {snap && (
-          <ul className={styles.switchHint} data-iui-net-auto={`${ctx.tiles}|${ctx.wiki ? 'wiki' : 'map'}|${ranked.join(',')}`} style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            {preset === 'auto' && <li>{t('netAutoLibs').replace('{order}', order)}</li>}
-            <li>{t('netAutoTiles').replace('{tiles}', t(ctx.tiles === 'amap' ? 'netAutoTilesAmap' : 'netAutoTilesDefault'))}</li>
-            <li>{t('netAutoPhotos').replace('{photos}', t(ctx.wiki ? 'netAutoPhotosWiki' : 'netAutoPhotosMap'))}</li>
-          </ul>
-        )}
-        {advice.map((a) => (
-          <p key={a} className={a === 'switch-china' || a === 'switch-global' || a === 'cdn-all-down' ? styles.warn : styles.switchHint} data-iui-probe-advice={a}>
-            {t(`netProbeAdvice.${a}`)}
+    <div className={styles.probe} data-iui-network-probe={snap ? okCount + '/' + snap.results.length : busy ? 'busy' : 'none'}>
+      <div className={styles.switchCard}>
+        <div className={styles.switchCopy}>
+          <div className={styles.switchTitle}>{t('netProbeTitle')}</div>
+          <p className={styles.switchHint}>
+            {status}
+            {snap && !busy ? ` · ${t('netProbeSummary').replace('{ok}', String(okCount)).replace('{total}', String(snap.results.length))}` : ''}
           </p>
-        ))}
+        </div>
+        <div className={styles.rowControl}>
+          <button type="button" className={styles.secondaryBtn} data-iui-probe-recheck="1" disabled={busy} onClick={() => run(true)}>
+            <ChromeIcon name={busy ? 'loader-circle' : 'refresh-cw'} size={13} />
+            {t('netProbeRecheck')}
+          </button>
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-        <button type="button" className={styles.secondaryBtn} style={{ whiteSpace: 'nowrap' }} data-iui-probe-recheck="1" disabled={busy} onClick={() => run(true)}>
-          {t('netProbeRecheck')}
-        </button>
-      </div>
+      {(snap || advice.length > 0) && (
+        <div className={styles.probeBody}>
+          {snap && (
+            <div className={styles.probeGrid}>
+              {snap.results.map((r) => (
+                <span key={r.id} data-iui-probe={r.id} data-ok={r.ok ? '1' : '0'} className={styles.probeCell}>
+                  <i className={`${styles.probeDot} ${r.ok ? (r.ms > 1000 ? styles.probeSlow : styles.probeOk) : styles.probeBad}`} aria-hidden="true" />
+                  <span className={styles.probeName}>{t(LABEL_KEY[r.id])}</span>
+                  <span className={styles.probeMs}>{r.ok ? `${r.ms} ms` : t('netProbeDown')}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {snap && (
+            <ul className={styles.probeNotes} data-iui-net-auto={`${ctx.tiles}|${ctx.wiki ? 'wiki' : 'map'}|${ranked.join(',')}`}>
+              {preset === 'auto' && <li>{t('netAutoLibs').replace('{order}', order)}</li>}
+              <li>{t('netAutoTiles').replace('{tiles}', t(ctx.tiles === 'amap' ? 'netAutoTilesAmap' : 'netAutoTilesDefault'))}</li>
+              <li>{t('netAutoPhotos').replace('{photos}', t(ctx.wiki ? 'netAutoPhotosWiki' : 'netAutoPhotosMap'))}</li>
+            </ul>
+          )}
+          {advice.map((a) => (
+            <p key={a} className={a === 'switch-china' || a === 'switch-global' || a === 'cdn-all-down' ? styles.warn : styles.switchHint} data-iui-probe-advice={a}>
+              {t(`netProbeAdvice.${a}`)}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

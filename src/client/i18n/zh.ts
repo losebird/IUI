@@ -486,7 +486,7 @@ export const ZH: Record<keyof typeof EN, string> = {
 'next.aria': '继续修改建议',
 'starter.aria': '试试这些',
 // S6: 我的模板
-'tpl.category.mine': '我的模板',
+'tpl.category.mine': '我的',
 'tpl.mine.badge': '我的',
 'tpl.mine.empty': '还没有自己的模板。在页面右上角 ⋯ 里点「保存为模板」即可收藏。',
 'tpl.mine.delete': '删除',
@@ -497,4 +497,20 @@ export const ZH: Record<keyof typeof EN, string> = {
 'sandbox.templateSavedLocal': '已保存到「我的模板」（仅此浏览器）',
 'sandbox.templateFailed': '保存失败：页面太大或模板已满',
 
+// visual(⑪⑫): plugin chrome
+'sandbox.appearanceMenu': "外观…",
+'sandbox.menu.export': "导出与分享",
+'sandbox.patchKeptHint': "页面已保留修改前的版本，没有丢内容。可以让模型整页重写这一页。",
+'sandbox.patchNoBaseHint': "没找到这次要修改的页面，聊天里已有的页面都没变。可以让模型整页重写。",
+'sandbox.patchTechDetails': "技术细节",
+'sandbox.skeleton.title': "正在生成页面",
+'sandbox.skeleton.received': "已接收 {size}",
+'toast.templateSaved': "已保存为模板「{name}」",
+'toast.undo': "撤销",
+'toast.close': "关闭",
+'ach.toast.title': "解锁成就 · {name}",
+'appearance.scope': "仅此页",
+'tpl.title': "模板",
+'tpl.starter.badge': "示例页",
+'tpl.subtitle': "从模板开始一个新页面",
 }

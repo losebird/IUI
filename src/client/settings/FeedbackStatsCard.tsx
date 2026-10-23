@@ -64,7 +64,7 @@ export function FeedbackStatsCard({ t }: { t: LocaleT }) {
           {t('feedbackConsent')}
         </label>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className={styles.rowControl}>
         <button type="button" className={styles.secondaryBtn} data-iui-feedback-export="1"
           disabled={!consent || summary.pages === 0} onClick={download}
         >

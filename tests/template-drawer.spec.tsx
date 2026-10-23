@@ -36,13 +36,14 @@ describe('TemplateDrawer', () => {
     expect(screen.getByText('随堂测验')).toBeTruthy()
   })
 
-  it('点击卡片：显示沙箱提示与试用/复制（无 GenuiBlock）', async () => {
+  it('点击卡片：显示描述、指令与试用/复制（无 GenuiBlock、无「已移除」死文案）', async () => {
     renderDrawer()
     fireEvent.click(screen.getByText('项目仪表盘'))
     const preview = document.querySelector('[data-genui-template-preview]')
     expect(preview).toBeTruthy()
-    expect(document.querySelector('[data-iui-legacy-catalog="1"]')).toBeTruthy()
-    expect(preview!.textContent).toMatch(/目录组件预览已移除|Catalog previews removed/)
+    expect(document.querySelector('[data-iui-legacy-catalog]')).toBeNull()
+    expect(preview!.textContent).not.toMatch(/已移除|removed/)
+    expect(preview!.querySelector('pre')?.textContent).toContain('仪表盘')
     expect(screen.getByRole('button', { name: '试用：插入输入框' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /复制指令/ })).toBeTruthy()
   })
@@ -68,11 +69,11 @@ describe('TemplateDrawer', () => {
     expect(writeText).toHaveBeenCalledTimes(1)
   })
 
-  it('成就面板显示沙箱提示（无目录 GenuiBlock）', () => {
-    const withTab = render(<TemplateDrawer tab="achievements" onUse={() => {}} />)
-    expect(document.querySelector('[data-genui-achievements]')).toBeTruthy()
-    expect(document.querySelector('[data-iui-legacy-catalog="1"]')).toBeTruthy()
+  it('visual(⑪)：卡片带缩略图，抽屉不再有成就页', () => {
+    renderDrawer()
+    expect(document.querySelectorAll('[data-genui-template-thumb]').length).toBeGreaterThan(0)
+    expect(document.querySelector('[data-genui-achievements]')).toBeNull()
     expect(screen.queryByRole('tab', { name: '成就' })).toBeNull()
-    withTab.unmount()
+    expect(screen.getByRole('tab', { name: '我的' })).toBeTruthy()
   })
 })

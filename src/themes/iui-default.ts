@@ -17,6 +17,9 @@ export const iuiDefaultTheme: ThemePack = {
   tokens: {
     /* Radius — soft product, not bubbly toy */
     '--dsl-g-radius-surface': '16px',
+    /* 999px = pill for CONTROLS only (button / input / chip). Containers
+       (table frame, media, tooltip, details, quiz options…) use
+       var(--radius-box, var(--dsl-g-radius-sm)) so they never turn into ovals. */
     '--dsl-g-radius-control': '999px',
     '--dsl-g-radius-sm': '10px',
     '--dsl-g-radius-pill': '999px',

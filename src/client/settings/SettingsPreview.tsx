@@ -1,6 +1,6 @@
 /**
  * S3: live settings preview — the real sandbox runtime (same srcdoc builder as chat
- * pages) in light and dark side by side. Appearance edits are posted live (no reload);
+ * pages), one scheme at a time (浅色 / 深色 switch). Appearance edits are posted live (no reload);
  * token edits rebuild the frame.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -60,7 +60,6 @@ function PreviewFrame(props: { scheme: Scheme; appearance: PageAppearance; token
   }, [frameId])
   return (
     <figure className={styles.previewPane} data-iui-settings-preview={scheme}>
-      <figcaption className={styles.previewMeta}>{props.label}</figcaption>
       <iframe
         ref={ref}
         title={props.label}
@@ -74,11 +73,10 @@ function PreviewFrame(props: { scheme: Scheme; appearance: PageAppearance; token
   )
 }
 
-export function SettingsPreview(props: { appearance: PageAppearance; tokensKey: string; t: (key: string) => string }) {
+/** visual(⑫): ONE full-width preview with a 浅色 / 深色 switch (the side-by-side pair squeezed 12,480 → 12,48). */
+export function SettingsPreview(props: { appearance: PageAppearance; tokensKey: string; t: (key: string) => string; scheme?: Scheme }) {
+  const scheme = props.scheme ?? 'light'
   return (
-    <div className={styles.previewGrid}>
-      <PreviewFrame scheme="light" appearance={props.appearance} tokensKey={props.tokensKey} label={props.t('previewLight')} />
-      <PreviewFrame scheme="dark" appearance={props.appearance} tokensKey={props.tokensKey} label={props.t('previewDark')} />
-    </div>
+    <PreviewFrame key={scheme} scheme={scheme} appearance={props.appearance} tokensKey={props.tokensKey} label={props.t(scheme === 'dark' ? 'previewDark' : 'previewLight')} />
   )
 }

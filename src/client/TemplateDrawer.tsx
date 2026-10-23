@@ -9,11 +9,74 @@ import { listHtmlSandboxStarters } from '../shared/html-sandbox.ts'
 import { deleteUserTemplate, getUserTemplates, subscribeUserTemplates } from './user-template-store.ts'
 import { userTemplatePrompt, type UserTemplate } from './settings/user-templates.ts'
 import { writeIuiConfigField } from './settings/index.ts'
+import { ChromeIcon } from './chrome/icons.tsx'
 import css from './TemplateDrawer.module.css'
 
 export interface TemplateDrawerProps {
   onUse: (instruction: string) => void
-  tab: 'templates' | 'achievements'
+  /** Kept for API compatibility; the achievements tab was a dead entry (visual ⑪). */
+  tab?: 'templates'
+}
+
+type ThumbKind = TemplateCategory | 'mine' | 'map' | 'table' | 'board' | 'cover' | 'calendar' | 'scene'
+
+/** visual(⑪): which mini preview a built-in starter page gets. */
+function starterThumb(id: string): ThumbKind {
+  if (/itinerary|route|map/.test(id)) return 'map'
+  if (/weather|chart/.test(id)) return 'chart'
+  if (/pricing|compare/.test(id)) return 'data'
+  if (/hotel|cover|gallery/.test(id)) return 'cover'
+  if (/grid|sheet|table/.test(id)) return 'table'
+  if (/mermaid|mindmap|flow/.test(id)) return 'flow'
+  if (/scene|3d/.test(id)) return 'scene'
+  if (/room|calendar|meeting/.test(id)) return 'calendar'
+  if (/kanban|board/.test(id)) return 'board'
+  return 'dashboard'
+}
+
+/** visual(⑪): a tiny drawn preview so cards are not plain text. Purely decorative. */
+function TemplateThumb({ kind }: { kind: ThumbKind }) {
+  const bars = (heights: number[], hot = -1) => heights.map((h, i) => <i key={i} className={i === hot ? css.tInk : undefined} style={{ height: `${h}%` }} />)
+  let body
+  switch (kind) {
+    case 'dashboard':
+      body = <span className={css.tDash}><span><i /><i /><i /></span><b /></span>
+      break
+    case 'data':
+      body = <span className={css.tCols}><i /><i className={css.tOn} /><i /></span>
+      break
+    case 'flow':
+      body = <span className={css.tFlow}><i className={css.tInk} /><i className={css.tInk} /><i /><i /><i /></span>
+      break
+    case 'chart':
+      body = <span className={css.tBars}><s />{bars([30, 55, 40, 75, 50, 95], 5)}</span>
+      break
+    case 'quiz':
+      body = <span className={css.tQuiz}><i /><i className={css.tOk} /><i /></span>
+      break
+    case 'interactive':
+      body = <span className={css.tCtrl}><i /><b /><i /></span>
+      break
+    case 'mine':
+    case 'map':
+      body = <span className={css.tLine}><svg viewBox="0 0 60 30" aria-hidden="true"><path d="M4 24 L18 14 L30 19 L44 8 L56 12" /></svg><span><i /><i /><i /></span></span>
+      break
+    case 'table':
+      body = <span className={css.tTable}>{Array.from({ length: 4 }, (_, i) => <i key={i} />)}</span>
+      break
+    case 'board':
+      body = <span className={css.tCols}><i /><i /><i /></span>
+      break
+    case 'cover':
+      body = <span className={css.tCover}><i /><i /><i /></span>
+      break
+    case 'calendar':
+      body = <span className={css.tTable}>{Array.from({ length: 3 }, (_, i) => <i key={i} />)}</span>
+      break
+    default:
+      body = <span className={css.tDash}><span><i /><i /></span><b /></span>
+  }
+  return <span className={css.thumb} aria-hidden="true" data-genui-template-thumb={kind}>{body}</span>
 }
 
 const CATEGORIES = ['all', 'mine', ...TEMPLATE_CATEGORIES] as const
@@ -44,7 +107,7 @@ export function templateMatches(q: string, ...fields: string[]): boolean {
   return q.split(/\s+/).filter(Boolean).every(term => hay.includes(term))
 }
 
-export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
+export function TemplateDrawer({ onUse }: TemplateDrawerProps) {
   const t = useT()
   const localeRevision = useLocaleRevision()
   const [category, setCategory] = useState<Category>('all')
@@ -88,46 +151,37 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
     } catch { /* ignore */ }
   }
 
-  if (tab === 'achievements') {
-    return (
-      <div className={css.wrap} data-genui-templates="achievements">
-        <div className={css.achievements} data-genui-achievements data-iui-legacy-catalog="1">
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--dsw-alias-label-secondary, #374151)' }}>
-            {zh
-              ? '成就面板的目录组件卡已移除。继续用 ```iui-html 自由页即可。'
-              : 'Achievement catalog cards removed. Keep using ```iui-html sandbox pages.'}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className={css.wrap} data-genui-templates>
-      <div className={css.cats} role="tablist" aria-label={t('tpl.categories.aria')}>
-        {CATEGORIES.filter(c => c !== 'mine' || mineAll.length > 0 || category === 'mine').map(c => (
-          <button
-            key={c}
-            type="button"
-            role="tab"
-            aria-selected={category === c}
-            className={`${css.cat}${category === c ? ` ${css.catActive}` : ''}`}
-            data-genui-template-cat={c}
-            onClick={() => { setCategory(c); setSelected(null); setSelectedMine(null) }}
-          >
-            {t(categoryLabelKey(c))}
-          </button>
-        ))}
+      <div className={css.bar}>
+        <div className={css.cats} role="tablist" aria-label={t('tpl.categories.aria')}>
+          {CATEGORIES.map(c => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={category === c}
+              className={`${css.cat}${category === c ? ` ${css.catActive}` : ''}`}
+              data-genui-template-cat={c}
+              onClick={() => { setCategory(c); setSelected(null); setSelectedMine(null) }}
+            >
+              {t(categoryLabelKey(c))}
+            </button>
+          ))}
+        </div>
+        <label className={css.searchBox}>
+          <ChromeIcon name="search" size={14} />
+          <input
+            type="search"
+            className={css.search}
+            data-genui-template-search
+            value={query}
+            placeholder={t('tpl.search')}
+            aria-label={t('tpl.search')}
+            onChange={(e) => { setQuery(e.target.value); setSelected(null); setSelectedMine(null) }}
+          />
+        </label>
       </div>
-      <input
-        type="search"
-        className={css.search}
-        data-genui-template-search
-        value={query}
-        placeholder={t('tpl.search')}
-        aria-label={t('tpl.search')}
-        onChange={(e) => { setQuery(e.target.value); setSelected(null); setSelectedMine(null) }}
-      />
       <div className={css.list}>
         {category === 'mine' && mineAll.length === 0 && (
           <p className={css.empty} data-genui-template-mine-empty>{t('tpl.mine.empty')}</p>
@@ -143,8 +197,11 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
             className={`${css.card}${selectedMine?.id === tpl.id ? ` ${css.cardActive}` : ''}`}
             onClick={() => { setSelected(null); setSelectedMine(prev => (prev?.id === tpl.id ? null : tpl)) }}
           >
-            <span className={css.cardName}>{tpl.name}</span>
-            <span className={css.cardMeta}>{t('tpl.mine.badge')}</span>
+            <TemplateThumb kind="mine" />
+            <span className={css.cardHead}>
+              <span className={css.cardName}>{tpl.name}</span>
+              <span className={css.cardMeta}>{t('tpl.mine.badge')}</span>
+            </span>
             <span className={css.cardDesc}>{tpl.description ?? (tpl.createdAt ? tpl.createdAt.slice(0, 10) : '')}</span>
           </button>
         ))}
@@ -155,8 +212,11 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
             className={`${css.card}${selected?.id === tpl.id ? ` ${css.cardActive}` : ''}`}
             onClick={() => { setSelectedMine(null); setSelected(prev => (prev?.id === tpl.id ? null : tpl)) }}
           >
-            <span className={css.cardName}>{tpl.name}</span>
-            <span className={css.cardMeta}>{t(categoryLabelKey(tpl.category))}</span>
+            <TemplateThumb kind={tpl.category} />
+            <span className={css.cardHead}>
+              <span className={css.cardName}>{tpl.name}</span>
+              <span className={css.cardMeta}>{t(categoryLabelKey(tpl.category))}</span>
+            </span>
             <span className={css.cardDesc}>{tpl.description}</span>
           </button>
         ))}
@@ -174,8 +234,11 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
               demo: { items: [] },
             }) }}
           >
-            <span className={css.cardName}>{s.title}</span>
-            <span className={css.cardMeta}>iui-html</span>
+            <TemplateThumb kind={starterThumb(s.id)} />
+            <span className={css.cardHead}>
+              <span className={css.cardName}>{s.title}</span>
+              <span className={css.cardMeta}>{t('tpl.starter.badge')}</span>
+            </span>
             <span className={css.cardDesc}>{s.summary}</span>
           </button>
         ))}
@@ -200,8 +263,8 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
             </button>
           </div>
           <div className={css.preview}>
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--dsw-alias-label-secondary, #374151)' }}>{t('tpl.mine.preview')}</p>
-            <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap', opacity: 0.85, maxHeight: 220, overflow: 'auto' }}>{(selectedMine.source ?? selectedMine.instruction ?? '').slice(0, 4000)}</pre>
+            <p className={css.previewDesc}>{t('tpl.mine.preview')}</p>
+            <pre className={css.previewPre}>{(selectedMine.source ?? selectedMine.instruction ?? '').slice(0, 4000)}</pre>
           </div>
         </div>
       )}
@@ -216,13 +279,9 @@ export function TemplateDrawer({ onUse, tab }: TemplateDrawerProps) {
               {copied ? t('tpl.copied') : t('tpl.copy')}
             </button>
           </div>
-          <div className={css.preview} data-iui-legacy-catalog="1">
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--dsw-alias-label-secondary, #374151)' }}>
-              {zh
-                ? '目录组件预览已移除。请用「试用」把指令插入输入框，模型会输出 ```iui-html 自由页。'
-                : 'Catalog previews removed. Use Try to insert a prompt; the model emits ```iui-html sandbox pages.'}
-            </p>
-            <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap', opacity: 0.85 }}>{selected.instruction}</pre>
+          <div className={css.preview}>
+            <p className={css.previewDesc}>{selected.description}</p>
+            <pre className={css.previewPre}>{selected.instruction}</pre>
           </div>
         </div>
       )}

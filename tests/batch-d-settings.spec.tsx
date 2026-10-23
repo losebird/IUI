@@ -142,7 +142,7 @@ describe('S6 我的模板', () => {
     await replaceUserTemplates([{ id: 'mine-1', name: '我的周报', source: page }])
     const onUse = vi.fn()
     render(<TemplateDrawer tab="templates" onUse={onUse} />)
-    fireEvent.click(screen.getByRole('tab', { name: '我的模板' }))
+    fireEvent.click(screen.getByRole('tab', { name: '我的' }))
     const card = document.querySelector('[data-genui-template-mine="mine-1"]') as HTMLElement
     expect(card).toBeTruthy()
     fireEvent.click(card)

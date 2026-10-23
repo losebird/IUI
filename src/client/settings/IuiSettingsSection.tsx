@@ -27,7 +27,8 @@ import { currentLocale } from '../i18n/index.ts'
 import { getDefaultPageAppearance, saveDefaultPageAppearance, subscribeDefaultPageAppearance } from '../page-appearance-store.ts'
 import { clearAllPageState } from '../page-storage.ts'
 import { getRuntimeConfigSnapshot, refreshRuntimeConfig } from '../runtime-config.ts'
-import { setCustomTokens } from '../theme/apply-theme.ts'
+import { isHostDarkTheme, setCustomTokens } from '../theme/apply-theme.ts'
+import { ChromeIcon } from '../chrome/icons.tsx'
 import { lockVisualPreview, unlockVisualPreview } from '../theme/preview-lock.ts'
 import { deleteUserTemplate, getUserTemplates, replaceUserTemplates, subscribeUserTemplates } from '../user-template-store.ts'
 import { writeIuiConfigField } from './config-bridge.ts'
@@ -138,9 +139,28 @@ function SwitchRow(props: { title: string; hint: string; checked: boolean; disab
         <p className={styles.switchHint}>{props.hint}</p>
         {props.children}
       </div>
-      <Switch checked={props.checked} disabled={props.disabled} label={props.title} onChange={props.onChange} />
+      <div className={styles.rowControl}>
+        <Switch checked={props.checked} disabled={props.disabled} label={props.title} onChange={props.onChange} />
+      </div>
     </div>
   )
+}
+
+/** visual(⑫): small icon + title above each group card. */
+function GroupTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <h3 className={styles.groupTitle}>
+      <ChromeIcon name={icon} size={14} />
+      {children}
+    </h3>
+  )
+}
+
+/** visual(⑫): how many fields differ from the last saved snapshot (for the save bar). */
+export function countChangedFields(current: Readonly<Record<string, { text: string } | undefined>>, baseline: Readonly<Record<string, string>>, names: readonly string[]): number {
+  let n = 0
+  for (const name of names) if ((current[name]?.text ?? '') !== (baseline[name] ?? '')) n++
+  return n
 }
 
 export function IuiSettingsSection(props: {
@@ -227,6 +247,32 @@ export function IuiSettingsSection(props: {
     />
   )
 
+  // ---- 保存条 (visual ⑫) ----
+  const baseline = useRef<Record<string, string>>({})
+  if (!state.dirty) {
+    const snap: Record<string, string> = {}
+    for (const name of SETTINGS_FIELD_NAMES) snap[name] = state[name]?.text ?? ''
+    baseline.current = snap
+  }
+  const changed = state.dirty ? Math.max(1, countChangedFields(state as unknown as Record<string, { text: string } | undefined>, baseline.current, SETTINGS_FIELD_NAMES)) : 0
+  const saveAll = (): void => {
+    props.save()
+    if (rawTemplatesTouched.current) {
+      rawTemplatesTouched.current = false
+      void replaceUserTemplates(parseUserTemplatesJson(state.userTemplatesJson?.text).templates)
+    }
+    window.setTimeout(() => { void refreshRuntimeConfig().then(() => unlockVisualPreview()) }, 200)
+    window.setTimeout(() => { void refreshRuntimeConfig() }, 800)
+  }
+  const discardAll = (): void => {
+    props.discard()
+    rawTemplatesTouched.current = false
+    setCustomTokens(getRuntimeConfigSnapshot().customTokensJson)
+    unlockVisualPreview()
+    void refreshRuntimeConfig()
+  }
+  const [previewScheme, setPreviewScheme] = useState<'light' | 'dark'>(() => (isHostDarkTheme() ? 'dark' : 'light'))
+
   return (
     <div className={styles.section} data-iui-settings="v2">
       <div>
@@ -237,28 +283,28 @@ export function IuiSettingsSection(props: {
       <SettingsForm
         labels={formLabels(t)}
         state={state}
-        onSave={() => {
-          props.save()
-          if (rawTemplatesTouched.current) {
-            rawTemplatesTouched.current = false
-            void replaceUserTemplates(parseUserTemplatesJson(state.userTemplatesJson?.text).templates)
-          }
-          window.setTimeout(() => { void refreshRuntimeConfig().then(() => unlockVisualPreview()) }, 200)
-          window.setTimeout(() => { void refreshRuntimeConfig() }, 800)
-        }}
-        onDiscard={() => {
-          props.discard()
-          rawTemplatesTouched.current = false
-          setCustomTokens(getRuntimeConfigSnapshot().customTokensJson)
-          unlockVisualPreview()
-          void refreshRuntimeConfig()
-        }}
+        onSave={saveAll}
+        onDiscard={discardAll}
       >
         <section className={styles.group} data-iui-settings-group="appearance">
-          <h3 className={styles.groupTitle}>{t('groupAppearance')}</h3>
-          <p className={styles.groupHint}>{t('groupAppearanceHint')}</p>
-          <div className={styles.appearanceLayout}>
-            <div className={styles.inlineActions} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <GroupTitle icon="palette">{t('groupAppearance')}</GroupTitle>
+          <div className={styles.card}>
+            <div className={styles.previewHead}>
+              <span className={styles.previewMeta}>{t('previewCaption')}</span>
+              <div className={styles.miniSeg} role="radiogroup" aria-label={t('previewCaption')}>
+                {(['light', 'dark'] as const).map((scheme) => (
+                  <button key={scheme} type="button" role="radio" aria-checked={previewScheme === scheme} data-iui-settings-preview-scheme={scheme}
+                    onClick={() => setPreviewScheme(scheme)}
+                  >
+                    {t(scheme === 'light' ? 'previewLight' : 'previewDark')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.previewBody}>
+              <SettingsPreview appearance={appearance} scheme={previewScheme} tokensKey={tokenCheck.error === null ? JSON.stringify(tokenCheck.tokens) : ''} t={t} />
+            </div>
+            <div className={styles.cardSection}>
               <AppearancePanel
                 embedded
                 value={appearance}
@@ -268,55 +314,58 @@ export function IuiSettingsSection(props: {
                 onSaveDefault={() => undefined}
                 onBack={() => undefined}
               />
-              <div className={styles.inlineActions}>
-                <button type="button" className={styles.secondaryBtn} data-iui-settings-appearance-reset="1"
-                  disabled={isDefaultPageAppearance(appearance)}
-                  onClick={() => chooseAppearance({ ...DEFAULT_PAGE_APPEARANCE })}
-                >
-                  {t('appearanceReset')}
-                </button>
-                {appearanceNote ? <span className={styles.hint} data-iui-settings-appearance-note="1">{appearanceNote}</span> : null}
-              </div>
             </div>
-            <div>
-              <SettingsPreview appearance={appearance} tokensKey={tokenCheck.error === null ? JSON.stringify(tokenCheck.tokens) : ''} t={t} />
-              <p className={styles.hint}>{t('previewHint')}</p>
+            <div className={styles.cardFoot}>
+              {appearanceNote ? <span className={styles.hint} data-iui-settings-appearance-note="1">{appearanceNote}</span> : <span className={styles.hint}>{t('groupAppearanceHint')}</span>}
+              <button type="button" className={styles.secondaryBtn} data-iui-settings-appearance-reset="1"
+                disabled={isDefaultPageAppearance(appearance)}
+                onClick={() => chooseAppearance({ ...DEFAULT_PAGE_APPEARANCE })}
+              >
+                {t('appearanceReset')}
+              </button>
             </div>
           </div>
         </section>
 
         <section className={styles.group} data-iui-settings-group="generation">
-          <h3 className={styles.groupTitle}>{t('groupGeneration')}</h3>
-          <label className={styles.overrideField}>
-            <span className={styles.overrideLabel}>{t('uiEagerness')}</span>
-            <select className={styles.select} disabled={ro} value={enumOf(state.uiEagerness, 'uiEagerness')}
-              onChange={(event) => props.edit('uiEagerness', event.currentTarget.value)}
-            >
-              <option value="restrained">{t('uiEagernessRestrained')}</option>
-              <option value="balanced">{t('uiEagernessBalanced')}</option>
-              <option value="eager">{t('uiEagernessEager')}</option>
-            </select>
-            <span className={styles.hint}>{t('uiEagernessHint')}</span>
-          </label>
-          <SwitchRow attr="fenceFeedback" title={t('fenceFeedback')} hint={t('fenceFeedbackHint')}
-            checked={boolOf(state.fenceFeedback, 'fenceFeedback')} disabled={ro}
-            onChange={(v) => props.edit('fenceFeedback', v ? 'true' : 'false')}
-          />
-          <SwitchRow attr="formatReferee" title={t('formatReferee')} hint={t('formatRefereeHint')}
-            checked={boolOf(state.formatReferee, 'formatReferee')} disabled={ro}
-            onChange={(v) => props.edit('formatReferee', v ? 'true' : 'false')}
-          />
+          <GroupTitle icon="sparkles">{t('groupGeneration')}</GroupTitle>
+          <div className={styles.card}>
+            <div className={styles.switchCard} data-iui-setting="uiEagerness">
+              <div className={styles.switchCopy}>
+                <div className={styles.switchTitle}>{t('uiEagerness')}</div>
+                <p className={styles.switchHint}>{t('uiEagernessHint')}</p>
+              </div>
+              <div className={styles.rowControl}>
+                <select className={styles.select} disabled={ro} value={enumOf(state.uiEagerness, 'uiEagerness')} aria-label={t('uiEagerness')}
+                  onChange={(event) => props.edit('uiEagerness', event.currentTarget.value)}
+                >
+                  <option value="restrained">{t('uiEagernessRestrained')}</option>
+                  <option value="balanced">{t('uiEagernessBalanced')}</option>
+                  <option value="eager">{t('uiEagernessEager')}</option>
+                </select>
+              </div>
+            </div>
+            <SwitchRow attr="fenceFeedback" title={t('fenceFeedback')} hint={t('fenceFeedbackHint')}
+              checked={boolOf(state.fenceFeedback, 'fenceFeedback')} disabled={ro}
+              onChange={(v) => props.edit('fenceFeedback', v ? 'true' : 'false')}
+            />
+            <SwitchRow attr="formatReferee" title={t('formatReferee')} hint={t('formatRefereeHint')}
+              checked={boolOf(state.formatReferee, 'formatReferee')} disabled={ro}
+              onChange={(v) => props.edit('formatReferee', v ? 'true' : 'false')}
+            />
+          </div>
           <p className={styles.hint} data-iui-settings-repairs={counts ? `${counts.repairs}/${counts.formats}` : ''}>
             {counts === null ? null : counts.repairs + counts.formats === 0 ? t('repairStatsNone') : fill(t('repairStats'), counts)}
           </p>
         </section>
 
         <section className={styles.group} data-iui-settings-group="network">
-          <h3 className={styles.groupTitle}>{t('groupNetwork')}</h3>
+          <GroupTitle icon="globe">{t('groupNetwork')}</GroupTitle>
           <p className={styles.groupHint}>{t('cdnSourceHint')}</p>
+          <div className={styles.card}>
           <NetworkProbeCard t={t} preset={cdnPreset as CdnPreset} mapTiles={mapTiles as MapTilesSetting} />
           {/* Batch F: everything is automatic; manual overrides live under「高级」. */}
-          <details className={styles.devDetails} data-iui-settings-advanced="network" open={cdnPreset !== 'auto' || mapTiles !== 'auto' ? true : undefined}>
+          <details className={styles.cardDetails} data-iui-settings-advanced="network" open={cdnPreset !== 'auto' || mapTiles !== 'auto' ? true : undefined}>
           <summary>{t('netAdvanced')}</summary>
           <label className={styles.overrideField}>
             <span className={styles.overrideLabel}>{t('cdnPreset')}</span>
@@ -351,10 +400,12 @@ export function IuiSettingsSection(props: {
             <span className={styles.hint}>{t('mapTilesHint')}</span>
           </label>
           </details>
+          </div>
         </section>
 
         <section className={styles.group} data-iui-settings-group="privacy">
-          <h3 className={styles.groupTitle}>{t('groupPrivacy')}</h3>
+          <GroupTitle icon="lock">{t('groupPrivacy')}</GroupTitle>
+          <div className={styles.card}>
           <SwitchRow attr="strictImagePolicy" title={t('strictImagePolicy')} hint={t('strictImagePolicyHint')}
             checked={boolOf(state.strictImagePolicy, 'strictImagePolicy')} disabled={ro}
             onChange={(v) => props.edit('strictImagePolicy', v ? 'true' : 'false')}
@@ -364,36 +415,53 @@ export function IuiSettingsSection(props: {
               <div className={styles.switchTitle}>{t('pageStorage')}</div>
               <p className={styles.switchHint}>{pageStorageNotice ?? t('pageStorageHint')}</p>
             </div>
-            <button type="button" className={styles.secondaryBtn}
-              onClick={() => { void clearAllPageState().then(() => setPageStorageNotice(t('pageStorageCleared'))) }}
-            >
-              {t('pageStorageClear')}
-            </button>
+            <div className={styles.rowControl}>
+              <button type="button" className={styles.secondaryBtn} data-iui-settings-page-storage-clear="1"
+                onClick={() => { void clearAllPageState().then(() => setPageStorageNotice(t('pageStorageCleared'))) }}
+              >
+                {t('pageStorageClear')}
+              </button>
+            </div>
           </div>
           <FeedbackStatsCard t={t} />
+          </div>
         </section>
 
         <section className={styles.group} data-iui-settings-group="templates">
-          <h3 className={styles.groupTitle}>{t('groupTemplates')}</h3>
-          <p className={styles.groupHint}>{t('templatesHint')}</p>
-          <div className={styles.templateList}>
-            {templates.length === 0 ? (
-              <p className={styles.hint}>{t('templateEmpty')}</p>
-            ) : templates.map((tpl) => (
-              <div key={tpl.id} className={styles.templateRow} data-iui-settings-template={tpl.id}>
-                <div className={styles.templateMain}>
-                  <span className={styles.templateName}>{tpl.name}</span>
-                  <span className={styles.templateDesc}>{tpl.description ?? (tpl.createdAt ? tpl.createdAt.slice(0, 10) : '')}</span>
+          <GroupTitle icon="bookmark">{t('groupTemplates')}</GroupTitle>
+          <div className={styles.card}>
+            <div className={styles.switchCard}>
+              <div className={styles.switchCopy}>
+                <div className={styles.switchTitle}>{fill(t('templatesCount'), { count: templates.length })}</div>
+                <p className={styles.switchHint}>{templates.length === 0 ? t('templateEmpty') : t('templatesHint')}</p>
+              </div>
+              <div className={styles.rowControl}>
+                <button type="button" className={styles.secondaryBtn} data-iui-settings-template-import="1" onClick={() => fileRef.current?.click()}>
+                  {t('templateImport')}
+                </button>
+                <button type="button" className={styles.secondaryBtn} data-iui-settings-template-export="1" disabled={templates.length === 0}
+                  onClick={() => downloadJson(`iui-templates-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(JSON.parse(serializeUserTemplates(templates) || '[]'), null, 2))}
+                >
+                  {t('templateExport')}
+                </button>
+                <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onImport} data-iui-settings-template-file="1" />
+              </div>
+            </div>
+            {templates.map((tpl) => (
+              <div key={tpl.id} className={styles.switchCard} data-iui-settings-template={tpl.id}>
+                <div className={styles.switchCopy}>
+                  <div className={styles.switchTitle}>{tpl.name}</div>
+                  <p className={styles.switchHint}>{tpl.description ?? (tpl.createdAt ? tpl.createdAt.slice(0, 10) : '')}</p>
                 </div>
-                <div className={styles.templateActions}>
-                  <button type="button" className={styles.miniBtn}
+                <div className={styles.rowControl}>
+                  <button type="button" className={styles.secondaryBtn}
                     onClick={() => {
                       void insertIntoComposer(userTemplatePrompt(tpl, zh)).then((r) => setTemplateNotice(t(r === 'inserted' ? 'templateInserted' : r === 'copied' ? 'templateCopied' : 'templateInsertFailed')))
                     }}
                   >
                     {t('templateUse')}
                   </button>
-                  <button type="button" className={styles.miniBtnDanger} data-iui-settings-template-delete={tpl.id}
+                  <button type="button" className={`${styles.secondaryBtn} ${styles.dangerBtn}`} data-iui-settings-template-delete={tpl.id}
                     onClick={() => { void deleteUserTemplate(tpl.id, writeIuiConfigField) }}
                   >
                     {t('templateDelete')}
@@ -402,21 +470,10 @@ export function IuiSettingsSection(props: {
               </div>
             ))}
           </div>
-          <div className={styles.inlineActions}>
-            <button type="button" className={styles.secondaryBtn} data-iui-settings-template-import="1" onClick={() => fileRef.current?.click()}>
-              {t('templateImport')}
-            </button>
-            <button type="button" className={styles.secondaryBtn} data-iui-settings-template-export="1" disabled={templates.length === 0}
-              onClick={() => downloadJson(`iui-templates-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(JSON.parse(serializeUserTemplates(templates) || '[]'), null, 2))}
-            >
-              {t('templateExport')}
-            </button>
-            <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onImport} data-iui-settings-template-file="1" />
-          </div>
           {templateNotice ? <p className={styles.hint} role="status">{templateNotice}</p> : null}
         </section>
 
-        <details className={styles.devDetails} data-iui-settings-group="developer">
+        <details className={`${styles.card} ${styles.devDetails}`} data-iui-settings-group="developer">
           <summary>{t('groupDeveloper')}</summary>
           <div className={styles.devBody}>
             <p className={styles.groupHint}>{t('groupDeveloperHint')}</p>
@@ -504,7 +561,22 @@ export function IuiSettingsSection(props: {
           </div>
         </details>
 
-        <p className={styles.hint} data-iui-settings-save-scope="1">{t('saveScope')}</p>
+        {/* visual(⑫): one save bar — 「N 项改动未保存 · 对新消息生效」 放弃 / 保存. It
+            replaces the host form footer (hidden by the sibling rule in the CSS). */}
+        <div className={`${styles.saveBar}${state.dirty ? ` ${styles.saveBarDirty}` : ''}`} data-iui-settings-save-bar={changed}>
+          {state.dirty ? <span className={styles.saveDot} aria-hidden="true" /> : null}
+          <span className={styles.saveText} data-iui-settings-save-scope="1">
+            {state.failed ? t('saveFailed') : state.dirty ? (changed === 1 ? t('unsavedOne') : fill(t('unsavedCount'), { count: changed })) : t('saveScope')}
+          </span>
+          {state.dirty && (
+            <button type="button" className={styles.ghostBtn} data-iui-settings-discard="1" disabled={state.saving} onClick={discardAll}>
+              {t('discard')}
+            </button>
+          )}
+          <button type="button" className={styles.inkBtn} data-iui-settings-save="1" disabled={!state.dirty || state.invalid || state.saving} onClick={saveAll}>
+            {state.saving ? t('saving') : t('save')}
+          </button>
+        </div>
       </SettingsForm>
     </div>
   )
