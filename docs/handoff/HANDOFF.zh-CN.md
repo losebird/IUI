@@ -1,6 +1,6 @@
 # IUI 视觉重做 · 交接文档
 
-> 交接时间：2026-10（第 5 步完成后更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
+> 交接时间：2026-10（第 5 步完成、第 6 步刚开始调研时更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
 > 本目录：`docs/handoff/`（只在 `hotfix/0.13.0-iui.27` 分支上，`main` 没有；先 `git fetch origin && git checkout hotfix/0.13.0-iui.27`）
 
 ## 1. 现在在哪一步
@@ -14,9 +14,23 @@
   | 2 提示词 / starter | `eb04998` | 常驻提示、页面类型提示、兜底示例、design-lint 换 daisyUI 写法；⑧ 6 个模板重做（`pattern-starters.ts`） | `progress/step2/` |
   | 3 库默认主题 | `cb8c4ef` | **Tailwind 4 按页编译**（`src/themes/tailwind-jit.ts`，见下）；**OIU 文件已删**（→ `host-kit.ts` / `host-polish.ts` / `shared/trip-animator.ts`）；①② Chart.js / ECharts 精修；③ AG Grid；④ 脑图 = ECharts 树图；⑤ 3D `look` 预设 clay（默认）/ toon / data / studio；⑨ Mermaid 灰阶 + `flowchart LR` + `:::focal/:::muted/:::ext`；Leaflet / d3 / GSAP 默认值；动效配方 | `progress/step3/` |
   | 4 插件界面 ⑪⑫ + 999px | `3bba461` | 工具栏图标 + ⋯ 菜单分组；外观弹层；修改失败卡改黄色提示；骨架屏「已接收 X KB」；ToastCard（撤销）；模板中心（缩略图、「我的」）；删成就 / 目录死入口；设置页行列表 / 单预览 / 连通性小表 / 保存条；容器圆角改 `--radius-box` | `progress/step4/` |
-  | 5 设计检查 | 见 git log | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
+  | 5 设计检查 | `c0b24e7` | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
 
-- **下一步：第 6 步视觉回归**（`scripts/e2e-visual.mts` 改注入 iui-html 等，见第 6 节）。之后是第 7 步。
+- 第 1–5 步用户都已确认。**下一步：第 6 步视觉回归**（见第 6 节第 6 条和下面「第 6 步调研记录」）。之后是第 7 步。
+
+### 第 6 步调研记录（还没写代码，工作区干净）
+
+- **CI 从第 1 步起一直是红的**（`.github/workflows/ci.yml` 的 `Browser regression (chromium)` = `pnpm run test:browser` = `scripts/browser-e2e.mts`；tsc / vitest / build 都过）。`c0b24e7` 那次的失败项：
+  1. `visual score · 24 starters`：`echarts-mini` whitespace 69→47、`ag-grid-sheet` 96→52、`mermaid-mindmap` 42→25（第 3 步改了图表 / 表格 / 脑图后留白变多，`scripts/golden/visual-baseline.json` 没更新；要先确认是基线过期还是真退化，再 `pnpm run test:visual -- --update-baseline`）。
+  2. `chart/echarts theming light+dark…`：`echarts not on iui theme (color0=#0a0a0a)`——断言还按旧主题色写，第 3 步 ECharts 默认色改成了墨色系，断言要跟着改（或确认是真问题）。
+  3. `batch C … self-check (24 starters clean)`（第 5 步新暴露）：CI 里 `ds-kit` 的按钮 `fg #fafafa / bg #ffffff`（主色没上，疑似 CI 里时序 / 字体 / 资源加载差异）、`meeting-rooms` 的 `badge-soft` 2.4:1 与 `.meta` 2.7:1、`kanban-board` 头像 `span.ini` 2.9:1。本地 harness 探测这 24 个 starter 是零误报，所以要在 CI 环境复现（可能是 headless-shell 与本地 chromium 差异）；后两项更像 starter 本身颜色偏浅，应改 starter。
+  - 日志用 GitHub API 取：`GET /repos/losebird/IUI/actions/runs?branch=hotfix/0.13.0-iui.27` → `/actions/runs/<id>/jobs` → `/actions/jobs/<job>/logs`。
+  - 本地复现：`npx tsx scripts/browser-e2e.mts`（约 5 分钟；本机能连外网 CDN）。
+- `scripts/e2e-visual.mts`（604 行）需要真实 `dsh` 二进制（`DSH_BIN` 或 PATH），原 agent 机器上**没有 dsh**，跑不了。它现在往 `[data-chat-flow]` 注入 `.md-code-block`（label=`dsh-ui`，pre>code=gallerySpec JSON），然后断言流式骨架、ECharts 引擎按需、本地筛选、文件树、accent 卡片、浅/深表面方向等，全部是旧 GenUI 组件。
+  - 计划：默认组改为注入 `iui-html`（24 个 starter 中选 ⑧ 的 6 个模板 + 状态页）、`iui-patch`、`svg`；旧 gallery 断言整体挪进 `--legacy` 组，用 `page.route('**/runtime-config.json', …)` 把响应里的 `legacyFences` 改成 `true` 打开旧围栏（客户端开关在 `src/client/runtime-config.ts` `isLegacyFencesEnabled()`，服务端在 `src/plugin/fence-feedback.ts`；插件配置字段 `src/plugin/config-schema.ts`）。
+- 因为 CI 没有 dsh，建议另做一个**无宿主**的视觉回归脚本进 CI：复用 `docs/handoff/demo/harness/`（Vite 打包真实组件），覆盖第 6 条列的各项（KaTeX / Mermaid / ECharts / AG Grid / 脑图 / 3D 可以用对应 starter：`echarts-mini`、`ag-grid-sheet`、`mermaid-mindmap`、`scene-3d`，KaTeX 需要自己写一页），每项浅 688 / 深 688 / 390 截图，和 `scripts/golden/` 下的基线 PNG 做像素差（可在浏览器 canvas 里算，免装 pngjs）+ `scripts/visual-score.mts` 的 `scoreSrcdoc` 打分。**基线要在 CI 环境生成**（字体 / chromium 版本不同，本机生成的基线到 CI 一定差很多）：先让 CI 以「只出图不判定」模式跑一次、把截图作为 artifact 上传，下载后提交为基线，再打开阈值判定。地图（瓦片）和 3D 动画容易抖，阈值放宽或遮罩。
+- `scripts/visual-score.mts`：6 条规则（minFont / contrast / overflow / narrow / whitespace / hero），基线 `scripts/golden/visual-baseline.json`，单项掉 >8 分或整页 <75 即失败；`browser-e2e.mts` 里已调用 `visualScoreCase`。
+
 - 之前的 36 个 hotfix 提交（F1–F28、G1–G16、Batch C–F、R5 等）都在这个分支上，详见 `IUI-修复方案.zh-CN.md`。
 
 ### 第 3 步留下的实现要点（接手必读）
@@ -25,7 +39,7 @@
 - srcdoc 里 `<style id="iui-tw-static">`（切 html/css/js 文本得到的类，位于作者 CSS 之前）；iframe 内 MutationObserver 收集新 class → `postMessage({source:'iui-tailwind',type:'need'})` → 宿主 `installTailwindHost()` 编译回 `<style id="iui-tw">`。`IUI_UTILITIES_CSS` 里已有的类（`border`、`bg-base-*`、`text-base-content/NN` 等）和 daisyUI 的 `collapse/table/filter` 不再生成。
 - design-lint：`tailwind-utility` 规则已删，改为 `tailwind-hex`（只拦 `text-[#333]` 这类写死颜色）。
 - 库补丁注意：AG Grid UMD 命名空间只读，`createGrid` 包装是 `Object.create(agGrid)` 后替换 `window.agGrid`；AG Grid / Mermaid 在脚本 `load` 事件**捕获阶段**打补丁（作者 JS 由轮询 `data-iui-done` 触发，晚于捕获阶段）。
-- 截图脚本（在原 agent 机器上，不在仓库里）：`shot-specs.mts`（按 spec 生成 srcdoc → Playwright 截浅色 688 / 深色 688 / 浅色 390）+ `compose.py`（改前 / 改后拼图）。改前用 `git worktree` 检出上一步提交，同脚本输出。
+- 截图脚本：第 4–5 步用的无宿主 harness 已放进 `docs/handoff/demo/harness/`（用法见其 README）。第 1–3 步用的是原 agent 机器上的 `shot-specs.mts`（按 spec 生成 srcdoc → Playwright 截浅色 688 / 深色 688 / 浅色 390）+ `compose.py`（改前 / 改后拼图）。改前用 `git worktree` 检出上一步提交，同脚本输出。
 
 ## 2. 文件说明
 
@@ -38,6 +52,7 @@
 | `demo/shoot.mjs` / `compose.py` / `sheets*.json` | 截图与拼图脚本 |
 | `demo/chrome/` | 在真实 dsh web 里截插件界面的脚本（`launch.sh` 起 dsh，`drv.mjs <step>.mjs` 跑步骤） |
 | `progress/step1–5/` | 已完成各步的改前 / 改后对比图（浅色 688、深色 688、390） |
+| `demo/harness/` | 无宿主截图 harness（Vite 打包真实组件 + Playwright 截浅/深/390 + 拼图），第 4–5 步对比图都用它，见其 README |
 | `demo/vis.mts` | `scripts/e2e-visual.mts` 的草稿副本（注入方式需改，见 6.3） |
 
 演示页运行方法见 `demo/README.md`。
@@ -75,7 +90,7 @@
 
 ## 6. 实施顺序（已全部确认）
 
-（1–5 已完成，见第 1 节；从 6 开始）
+（1–5 已完成并经用户确认，见第 1 节；从 6 开始，调研记录见第 1 节）
 
 1. **主题底座**：把 `common.css` 的 iui / iui-dark token 落到 `src/themes/`，沙箱注入 daisyUI + 主题；保留 `corporate`、`dim`；删 OIU；`page-accent.ts` 只改 primary 一组；`custom-tokens.ts` 只开放白名单 token。
 2. **同步提示词**：`src/shared/oiu-pattern-starters.ts`（现为 `pattern-starters.ts`）、常驻提示、`design-lint.ts` 的 `designLintNote()`（仍写着 `--color-text-*`、`.iui-stat`）全部换成 daisyUI 写法；starter 按 ⑧ 的 6 个模板重做。
@@ -90,4 +105,7 @@
 - 包管理 pnpm；在仓库根目录：`npx tsc --noEmit -p .`、`npx vitest run`、`npx tsx scripts/…`。
 - 真实 dsh 验证：`demo/chrome/launch.sh`（`DSH_HOME`、profile `wchrome`、`plugin add link:<仓库路径>`、`--port 3099`），日志里 `dsh web: http…` 是带 token 的地址；`drv.mjs` 用 Playwright 打开并执行步骤脚本。路径是原沙箱里的，换机器需改。
 - 常用选择器：沙箱 `[data-iui-html-sandbox]`，围栏 `.genui-dom-fence`，输入框 `[data-composer-input]`；设置在左下「更多」→「设置」→「IUI」。
+- 全量 `npx vitest run` 约 3 分钟（151 个文件 / 1418 个测试，`c0b24e7` 全绿），建议后台跑：`(npx vitest run > log 2>&1; echo EXIT=$? >> log) &`。
+- 第 5 步实现要点：自检逻辑在 `src/shared/html-sandbox.ts` 帧内脚本（`__iuiOver` / `__iuiComposite` / `__iuiBackdrop`，抽样 600，点击后最多复检 6 次、只在结果变化时上报）；`lowContrast` 带 `minRatio` + `samples{text,sel,ratio,fg,bg}`；自动修复在 `src/client/auto-fix.ts`（localStorage `iui.autofix.contrast.v1` 防重复，只对本会话流式生成的页面生效）；测试 `tests/visual-5-contrast.spec.tsx`。
+- 推送需要 token（原 agent 用 `http.extraHeader` 带 Basic 认证），提交作者沿用 `git log -1` 的作者。
 - 用户偏好：简体中文、简洁、先给结论；每步做完出「改前 / 改后」对比图（浅色 688、深色 688、390 宽）给用户确认后再继续。
