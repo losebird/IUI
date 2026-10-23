@@ -10,3 +10,5 @@ lib/
 
 .corepack-home/
 semantica.log
+.pack-out/
+losebird-iui*.tgz

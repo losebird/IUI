@@ -1,5 +1,18 @@
 # IUI 升级
 
+## GitHub Release tarball（推荐）
+
+别人和本机「只想用新版、不改源码」都走这条。先卸掉旧的 git / `link:` 规格，再装最新 tarball：
+
+```bash
+dsh plugin --profile <profile> remove @losebird/iui
+dsh plugin --profile <profile> add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz
+```
+
+然后重启 `dsh web`，硬刷新带 `?token=` 的页面。不要再用 `github:losebird/IUI` 升级——那会 clone 整仓并现场 `prepack`，进度常停在 `downloaded 0`。
+
+钉某一版时用该 Release 下的 `losebird-iui-<version>.tgz`，不要用 `latest`。
+
 ## 本机 file: 依赖
 
 ```bash
@@ -44,4 +57,7 @@ pnpm run build
 
 ## 回滚
 
-将 profile 依赖指回上一版 `file:` 路径或 git tag，重建 `lib/`，重启 web。自定义模板 JSON 可事先从设置导出备份。
+- **tarball：** `dsh plugin --profile <profile> remove @losebird/iui`，再 `add` 上一版 Release 里的 `losebird-iui-<version>.tgz`，重启 web。
+- **本机 file:：** 将 profile 依赖指回上一版路径或 git tag，重建 `lib/`，重启 web。
+
+自定义模板 JSON 可事先从设置导出备份。

@@ -28,17 +28,17 @@
 
 ## 安装
 
-需要 PATH 上有 `dsh`（或用 `npx @deepseek-ai/dsh`）、Node `^22.19 || >=24`，以及可用的 web profile。**不必先 clone。**
+需要 PATH 上有 `dsh`（或用 `npx @deepseek-ai/dsh`）、Node `^22.19 || >=24`，以及可用的 web profile。**不必先 clone。** 请装 [Releases](https://github.com/losebird/IUI/releases) 里打好的 **tarball**，不要用 `github:losebird/IUI`（那会 clone 整仓源码，进度条常停在 `downloaded 0`）。
 
 ```bash
-dsh plugin --profile <profile> add github:losebird/IUI
+dsh plugin --profile <profile> add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz
 dsh web
 ```
 
 把 `<profile>` 换成你实际用的（常见是 `web`）。没有全局 `dsh` 时：
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile <profile> add github:losebird/IUI
+npx @deepseek-ai/dsh plugin --profile <profile> add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz
 npx @deepseek-ai/dsh web
 ```
 

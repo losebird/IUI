@@ -28,17 +28,17 @@
 
 ## Install
 
-Needs `dsh` on your PATH (or `npx @deepseek-ai/dsh`), Node `^22.19 || >=24`, and a web profile. You do **not** need to clone this repo first.
+Needs `dsh` on your PATH (or `npx @deepseek-ai/dsh`), Node `^22.19 || >=24`, and a web profile. You do **not** need to clone this repo first. Install the **prebuilt tarball** from [Releases](https://github.com/losebird/IUI/releases) — not `github:losebird/IUI` (that clones the whole source tree and can sit on `downloaded 0` for a long time).
 
 ```bash
-dsh plugin --profile <profile> add github:losebird/IUI
+dsh plugin --profile <profile> add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz
 dsh web
 ```
 
 Replace `<profile>` with yours (often `web`). Without a global `dsh`:
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile <profile> add github:losebird/IUI
+npx @deepseek-ai/dsh plugin --profile <profile> add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz
 npx @deepseek-ai/dsh web
 ```
 

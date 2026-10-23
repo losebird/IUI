@@ -77,6 +77,38 @@ npm pack --dry-run
 
 **不要在干跑阶段执行 `npm publish`。没有 Ace npm token 就不要 publish。**
 
+## GitHub Release tarball（当前对外安装路径）
+
+npm 组织未就绪时，用户装的是 GitHub Release 上的预构建包，不是 `github:losebird/IUI` 整仓。
+
+```bash
+pnpm install
+pnpm run build
+pnpm run pack:dry          # 闸门；失败不要发
+node scripts/verify-pack.mjs --keep   # 需要留下 tgz 时
+
+VERSION=$(node -p "require('./package.json').version")
+# verify-pack --keep 把 tgz 打在临时目录并打印路径；或：
+npm pack
+cp "losebird-iui-${VERSION}.tgz" losebird-iui.tgz
+
+git tag "v${VERSION}"
+git push origin "v${VERSION}"
+# 打 tag 会触发 .github/workflows/release.yml，把两个 tgz 挂到 Release。
+# 若要本机直接发（CI 不通时）：
+gh release create "v${VERSION}" \
+  "losebird-iui-${VERSION}.tgz" \
+  losebird-iui.tgz \
+  --title "IUI ${VERSION}" \
+  --notes "Prebuilt plugin. Install: dsh plugin --profile web add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz"
+```
+
+用户命令必须指向 **`.tgz` 文件 URL**（`dsh plugin add` 把 github.com 仓库 URL 当成 git clone）。稳定入口：
+
+`https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz`
+
+每个 Release 再挂一份带版本号的 `losebird-iui-<version>.tgz` 供钉版本。发完后在干净 profile 用 tarball 装一次，走 ACCEPTANCE A–E。
+
 ## 正式发布步骤
 
 ```bash
@@ -92,10 +124,10 @@ npm publish --access public
 
 ## 发布后
 
-1. 在干净 profile 用 registry 安装：`pnpm add @losebird/iui@0.12.0-iui.45`  
+1. 在干净 profile 用 tarball 安装：`dsh plugin --profile web add https://github.com/losebird/IUI/releases/latest/download/losebird-iui.tgz`（npm 组织就绪后改测 `pnpm add @losebird/iui`）  
 2. 重复 ACCEPTANCE A–E  
-3. 打 git tag：`v0.12.0-iui.45`  
-4. 更新 `docs/INSTALL.md` 版本说明
+3. 确认 Release 同时有 `losebird-iui.tgz` 和 `losebird-iui-<version>.tgz`  
+4. 更新 `docs/INSTALL.md` 钉版本示例 URL
 
 ## 诚实未完成（不要写进「已生产就绪」）
 
