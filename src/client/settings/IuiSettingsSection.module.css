@@ -657,9 +657,11 @@
 }
 .miniSeg button[aria-checked='true'] { background: var(--st-surface); color: var(--st-fg); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 17, 21, 0.1); }
 :global(body[data-ds-dark-theme]) .miniSeg button[aria-checked='true'] { background: color-mix(in srgb, var(--st-fg) 16%, transparent); box-shadow: none; }
-.previewBody { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.previewBody { padding: 0; border: 0; border-radius: 0; background: transparent; overflow-x: auto; }
 .previewPane { margin: 0; }
-.previewFrame { border: 0; border-radius: 0; height: 340px; }
+/* At phone width the host keeps its settings nav, leaving ~150px here: lay the sample page out
+   at a readable 320px and let it scroll sideways instead of one character per line. */
+.previewFrame { border: 0; border-radius: 0; height: 340px; min-width: 320px; }
 .cardSection { padding: 16px; border-top: 1px solid var(--st-sep); }
 .cardFoot {
   display: flex;
@@ -697,9 +699,10 @@
 .devBody { padding: 4px 16px 16px; }
 
 /* ---- save bar (replaces the host form footer) ---- */
+/* Only the dirty bar floats: a clean one is transparent, and sticking it over the scrolled
+   form made its hint and disabled 保存 overlap the rows underneath. */
 .saveBar {
-  position: sticky;
-  bottom: 12px;
+  position: relative;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -710,6 +713,8 @@
   background: transparent;
 }
 .saveBarDirty {
+  position: sticky;
+  bottom: 12px;
   background: var(--st-surface);
   border: 1px solid var(--st-border);
   box-shadow: 0 1px 2px rgba(15, 17, 21, 0.06), 0 10px 28px rgba(15, 17, 21, 0.1);

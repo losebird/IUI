@@ -27,7 +27,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 73,
+      "whitespace": 72,
       "hero": 99
     },
     "total": 95
@@ -148,10 +148,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 94,
+      "whitespace": 88,
       "hero": 100
     },
-    "total": 99
+    "total": 98
   },
   "form-bridge": {
     "scores": {
@@ -214,7 +214,7 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 50,
+      "whitespace": 49,
       "hero": 100
     },
     "total": 92
@@ -225,10 +225,10 @@
       "contrast": 100,
       "overflow": 100,
       "narrow": 100,
-      "whitespace": 25,
+      "whitespace": 50,
       "hero": 100
     },
-    "total": 88
+    "total": 92
   },
   "scene-3d": {
     "scores": {

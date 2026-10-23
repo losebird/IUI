@@ -19,7 +19,8 @@ describe('F23 accessibility css', () => {
   it('turns off animations and transitions under prefers-reduced-motion', () => {
     const block = HOST_A11Y_CSS.slice(HOST_A11Y_CSS.indexOf('@media (prefers-reduced-motion: reduce)'))
     expect(block).toContain('animation-duration: 0.01ms !important')
-    expect(block).toContain('transition-duration: 0.01ms !important')
+    // 0s, not 0.01ms: a 0.01ms duration (with transition-property: all) breaks Mermaid mindmap layout.
+    expect(block).toContain('transition-duration: 0s !important')
     expect(block).toContain('scroll-behavior: auto !important')
   })
 

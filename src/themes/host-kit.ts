@@ -794,10 +794,13 @@ button.primary:not(.btn):hover, button[type="submit"]:not(.secondary):not(.ghost
 .iui-actions > button { min-height: 40px; padding-inline: 18px; }
 .iui-actions > button.primary, .iui-actions > button[type="submit"] { min-width: 112px; }
 @media (max-width: 480px) { .iui-actions > button { flex: 1 1 auto; } }
+/* Transitions go to 0s, not 0.01ms: with the default transition-property: all, a 0.01ms
+   duration turns every style change into a transition, so libraries that set and measure in
+   one task (Mermaid mindmap's layout) read the old values and lay out ~8x too wide. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+    transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
   }
 }
 `.trim()

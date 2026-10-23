@@ -188,8 +188,9 @@ function renderLegacyCatalogTip(key: Key): ReactNode {
       style={{
         padding: '12px 14px',
         borderRadius: 12,
-        border: '1px solid var(--dsl-g-border-surface, #e5e7eb)',
-        background: 'var(--dsl-g-surface, #fff)',
+        // Rendered outside GenuiBlock, where --dsl-g-* are unset: fall back to host tokens, not white.
+        border: '1px solid var(--dsl-g-border-surface, var(--dsw-alias-border-l2, #e5e7eb))',
+        background: 'var(--dsl-g-surface, var(--dsw-alias-bg-layer-1, #fff))',
         fontSize: 13,
         color: 'var(--dsw-alias-label-secondary, #374151)',
         lineHeight: 1.5,

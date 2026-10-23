@@ -2716,12 +2716,19 @@ export function buildSandboxBridgeScript(frameId: string): string {
     if (force === true) __iuiMeasureForce = true;
     if (__iuiMeasureQueued) return;
     __iuiMeasureQueued = true;
-    __iuiRaf(function () {
+    // rAF is paused while the frame is scrolled out of view, which would leave the host at a
+    // stale (often the tallest) height until the reader scrolls back; a timer backs it up.
+    var done = false;
+    var run = function () {
+      if (done) return;
+      done = true;
       __iuiMeasureQueued = false;
       var f = __iuiMeasureForce;
       __iuiMeasureForce = false;
       measureNow(f);
-    });
+    };
+    __iuiRaf(run);
+    setTimeout(run, 120);
   }
   // Opaque-origin sandbox: Web Storage throws. F10: localStorage is backed by
   // the host (seeded in srcdoc, debounced storageSet back); sessionStorage
@@ -3343,9 +3350,23 @@ export function buildSandboxBridgeScript(frameId: string): string {
       var __iuiRo = new ResizeObserver(function () { measure(); });
       __iuiRo.observe(document.documentElement);
       if (document.body) __iuiRo.observe(document.body);
+      // Also every top-level body child: body/html often carry min-height:100vh, so when the
+      // content shrinks (e.g. utility CSS arriving after a tall unstyled first layout) neither
+      // resizes and the frame would stay at its tallest reported height.
+      var __iuiRoSeen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+      window.__iuiObserveKids = function () {
+        if (!__iuiRoSeen || !document.body) return;
+        var kids = document.body.children;
+        for (var i = 0; i < kids.length && i < 200; i++) {
+          var k = kids[i];
+          if (k.tagName === 'SCRIPT' || k.tagName === 'STYLE' || __iuiRoSeen.has(k)) continue;
+          __iuiRoSeen.add(k); __iuiRo.observe(k);
+        }
+      };
       var observeRoot = function () {
         var root = document.getElementById('iui-preview-root');
         if (root) __iuiRo.observe(root);
+        window.__iuiObserveKids();
       };
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observeRoot);
       else observeRoot();
@@ -3353,7 +3374,7 @@ export function buildSandboxBridgeScript(frameId: string): string {
   }
   if (typeof MutationObserver !== 'undefined' && document.body) {
     try {
-      new MutationObserver(function () { measure(); if (window.__iuiEnhance) window.__iuiEnhance(); })
+      new MutationObserver(function () { measure(); if (window.__iuiObserveKids) window.__iuiObserveKids(); if (window.__iuiEnhance) window.__iuiEnhance(); })
         .observe(document.body, { childList: true, subtree: true, characterData: true });
     } catch (e) {}
   }
