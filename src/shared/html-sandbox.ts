@@ -4917,7 +4917,8 @@ function buildMermaidGuardScript(): string {
       nodes.push(el);
     });
     if (nodes.length) { try { var pr = m.run({ nodes: nodes }); if (pr && pr.then) pr.then(fitNarrow, fitNarrow); } catch (e) {} }
-    fitNarrow();
+    // Author-run renders resolve on their own schedule: re-check a few times.
+    [0, 300, 1000, 2500].forEach(function (ms) { setTimeout(fitNarrow, ms); });
   }
   // Narrow frames (390): a wide flowchart scaled to fit gets ~4px text — keep ≥70% of natural
   // size and let the box scroll sideways instead.
