@@ -18,7 +18,7 @@
  * download the artifact, commit it, then turn --gate on.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -263,10 +263,19 @@ async function main(): Promise<number> {
       const page = await ctx.newPage()
       const errors: string[] = []
       page.on('pageerror', (e: Error) => errors.push(e.message))
+      // Frame console warnings / errors (iframes included) — CI-only failures need a trail.
+      let current = ''
+      const consoleLog = join(OUT, `console-${mode.id}.txt`)
+      page.on('console', (m: any) => {
+        const t = m.type()
+        if (t !== 'warning' && t !== 'error') return
+        try { appendFileSync(consoleLog, `[${current}] ${t}: ${String(m.text()).slice(0, 500)}\n`) } catch { /* best effort */ }
+      })
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
       await page.waitForTimeout(3000)
       await dismissOverlays(page)
       for (const key of sessionOrder) {
+        current = key
         await openSession(page, ids[key]!)
         await settle(page)
         await page.screenshot({ path: join(OUT, 'pages', `${key}-${mode.id}.png`), style: HIDE_DURING_SHOT }).catch(() => {})

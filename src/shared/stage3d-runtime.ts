@@ -298,8 +298,10 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       return stage;
     }
     var w = el.clientWidth || 480, h = el.clientHeight || 360;
+    if (!el.clientWidth || !el.clientHeight) { try { console.warn('[iui-3d] stage has no size at init (' + el.clientWidth + 'x' + el.clientHeight + '), using ' + w + 'x' + h); } catch (eW) {} }
     var small = w < 480;
     var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    try { renderer.domElement.addEventListener('webglcontextlost', function () { try { console.warn('[iui-3d] WebGL context lost'); } catch (eL) {} }); } catch (eC) {}
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2));
     renderer.setSize(w, h, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
