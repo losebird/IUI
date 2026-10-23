@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildHostKitCss } from '../src/themes/host-kit.ts'
 import { buildTripAnimatorScriptTag } from '../src/shared/trip-animator.ts'
@@ -98,6 +100,21 @@ describe('host kit (ex-OIU design system)', () => {
     expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('click-to-detail')
     expect(buildPatternNote('帮我做个南京三日游行程地图')).toContain('createTripAnimator(')
     expect(section).toContain('openLink(httpsUrl)')
+  })
+
+  // visual(②): the OIU design skill module is gone; SKILL.md carries the published contract.
+  it('tells the model that onFrame receives a frame object, not a numeric index', () => {
+    const skill = readFileSync(join(process.cwd(), 'SKILL.md'), 'utf8')
+    expect(skill).toContain('{progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}')
+    expect(skill).toContain('onFrame:function(f){activate(f.pinIndex)}')
+    expect(skill).toContain('参数不是数字下标')
+  })
+
+  it('tells the model to show onState\'s Chinese label and keep the English token', () => {
+    const skill = readFileSync(join(process.cwd(), 'SKILL.md'), 'utf8')
+    expect(skill).toContain('onState: function (st, label)')
+    expect(skill).toContain('`playing`、`paused`、`complete`')
+    expect(skill).toContain('「播放中」「已暂停」「已完成」')
   })
 
   it('lists new starters', () => {

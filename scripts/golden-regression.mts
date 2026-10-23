@@ -32,6 +32,7 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv)
 const manifest = JSON.parse(readFileSync(join(__dirname, 'golden/manifest.json'), 'utf8'))
+const releaseVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
 mkdirSync(args.outDir, { recursive: true })
 mkdirSync(join(args.outDir, 'fixtures'), { recursive: true })
 
@@ -324,7 +325,7 @@ for (const c of cases) {
 await browser.close()
 
 const summary = {
-  version: manifest.version,
+  version: releaseVersion,
   ranAt: new Date().toISOString(),
   url: args.url || null,
   outDir: args.outDir,
@@ -336,7 +337,7 @@ writeFileSync(join(args.outDir, 'manifest.json'), JSON.stringify(summary, null, 
 writeFileSync(join(args.outDir, 'REPORT.zh-CN.md'), [
   `# IUI 黄金问句回归报告`,
   ``,
-  `- 版本目标：${manifest.version}`,
+  `- 版本目标：${releaseVersion}`,
   `- 时间：${summary.ranAt}`,
   `- URL：${summary.url || '(fixture-only)'}`,
   `- 通过：${summary.passed} / 失败：${summary.failed}`,

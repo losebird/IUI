@@ -14,6 +14,7 @@
  * Kept static on purpose: a stable system prompt stays prefix-cacheable.
  */
 import { FENCE_LANG_PRIMARY } from '../config/defaults.ts'
+import { getStreamHeuristics } from '../config/stream-heuristics.ts'
 
 const LINES: readonly string[] = [
   "You render interactive UI INSIDE your reply with ONE fenced block in language `iui-html`: two header lines, then raw CSS, HTML and JS sections (no JSON, no escaping):",
@@ -29,18 +30,18 @@ const LINES: readonly string[] = [
   "document.getElementById('b').onclick = function () { /* 本地交互 */ };",
   "```",
   "",
-  "Markers alone on their own line, in that order; never ``` inside the block. Optional headers `accent: #E4572E` (topic colour → --color-primary), `libs: leaflet,chart`.",
+  "Markers on own lines, in order; never ``` inside the block. Optional headers `accent: #E4572E` (topic colour → --color-primary), `libs: leaflet,chart`.",
   "",
-  "**When:** visual / interactive asks (图表、看板、表单、地图、计算器、对比、游戏…) → 1 short sentence → the fence → optional 1 sentence. Facts, chat, coding / how-to → plain text. Never Markdown tables or ```json as UI, never files or tools.",
+  "**When:** visual/interactive asks (图表、看板、表单、地图、计算器、对比、游戏…) → 1 short sentence → the fence → optional 1 line. Facts, chat, coding / how-to → plain text. No Markdown tables or ```json as UI, never files or tools.",
   "",
-  "**Host runtime (never re-load):** daisyUI 5 + IUI neutral theme (auto dark): card card-body, btn btn-primary|neutral|outline|ghost btn-sm, badge badge-soft, stats stat-title stat-value, tabs tabs-box tab-active, input select toggle, table, progress, avatar. Tailwind 4 utilities compiled per page (flex grid gap-4 p-6 md:grid-cols-3 text-base-content/60 rounded-box): use them for layout, no hex for text / surfaces. Tokens --color-base-100|200|300|content, --color-primary|success|warning|error. Globals `Chart` / `window.iuiCreateChart(canvas,cfg)`, `L` (Leaflet), `echarts`, `agGrid`, `mermaid`, `window.createTripAnimator`; `three` / `gsap` / `d3` only via `import('three').then(...)` inside a function; other libraries HTTPS from cdn.jsdelivr.net / unpkg.com. Host hooks .iui-cols-2|3|4 .iui-actions .iui-empty .iui-skeleton .iui-badge-sample; icons `<i data-iui-icon=\"map-pin\"></i>` (Lucide names, no emoji).",
+  "**Host runtime (never re-load):** daisyUI 5 + IUI neutral theme (auto dark): card card-body, btn btn-primary|neutral|outline|ghost btn-sm, badge badge-soft, stats stat-title stat-value, tabs tabs-box tab-active, input select toggle, table, progress, avatar. Tailwind 4 utilities compiled per page (flex grid gap-4 p-6 md:grid-cols-3 text-base-content/60 rounded-box): use them for layout, no hex for text / surfaces. Tokens --color-base-100|200|300|content, --color-primary|success|warning|error. Globals `Chart` / `window.iuiCreateChart(canvas,cfg)`, `L` (Leaflet), `echarts`, `agGrid`, `mermaid`, `window.createTripAnimator`; `three` / `gsap` / `d3` only via `import('three').then(...)` inside a function; other libraries HTTPS from cdn.jsdelivr.net / unpkg.com. Host hooks .iui-cols-2|3|4 .iui-actions .iui-empty .iui-skeleton .iui-badge-sample; icons `<i data-iui-icon=\"map-pin\"></i>` (Lucide, no emoji).",
   "",
-  "**Runnable author JS (one error blanks the page):** classic script — no static `import … from`, no `typeof import`, no top-level `await`. NO network data (fetch/XHR blocked): embed sample data inline, tag it `<span class=\"iui-badge-sample\"></span>`. Charts: fixed-height wrapper (200–320px). Interactions stay in-page: no prompt()/alert()/confirm(); `video.play()` → `.catch(()=>{})`.",
+  "**Runnable author JS (one error blanks the page):** classic script — no static `import … from`, no `typeof import`, no top-level `await`. NO network data (fetch/XHR blocked): embed sample data inline, tag it `<span class=\"iui-badge-sample\"></span>`. Charts: fixed-height wrapper (200–320px). Stay in-page: no prompt()/alert()/confirm(); `video.play()` → `.catch(()=>{})`.",
   "",
   "**Bridge (on click, never on load):** `iuiSandbox.openLink(httpsUrl)` · `sendPrompt(text)` · `action(name,payload)` · `iuiSandbox.download(name,data)` · `copy(text)` · `storage.get/set` · `<button data-iui-send=\"summary\">` (choices → composer). Forms never navigate: `submit` + `preventDefault()`.",
   "",
   "**Design (finished on first paint):**",
-  "1. One hero (big number, chart, map or image) ≥30% of the first screen, then title + one-line context → stats → details on click.",
+  "1. One hero (number, chart, map or image) ≥30% of the first screen, then title + one-line context → stats → details on click.",
   "2. Hierarchy and spacing, not more boxes; specific sample data (real names, units, numbers).",
   "3. Text never below 12px. Chinese: a space between 中文 and English or numbers, thousands separators (12,480).",
   "4. Neutral ink and greys; primary only on the main action and selection, colour only for status.",
@@ -54,7 +55,12 @@ const LINES: readonly string[] = [
 ]
 
 export function buildGenuiSectionText(): string {
-  return LINES.join('\n').replaceAll('iui-html', FENCE_LANG_PRIMARY)
+  // PR #27: tool names come from the live allow-list (stream heuristics), never hard-coded here.
+  const names = getStreamHeuristics().toolsAllowedBeforeFence
+  const tools = names.length
+    ? `never files; tools only ${names.join(', ')} before the fence.`
+    : 'never files or tools.'
+  return LINES.join('\n').replace('never files or tools.', tools).replaceAll('iui-html', FENCE_LANG_PRIMARY)
 }
 
 export const GENUI_SECTION_TEXT = buildGenuiSectionText()

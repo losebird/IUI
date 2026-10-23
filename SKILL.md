@@ -42,13 +42,13 @@ document.getElementById('b').onclick = function () { /* 本地交互 */ };
 ### 地图 / 多站（南京密度，不是冻成某一城的模版）
 2 站及以上（行程、探店、一日游、景点详解）必须同时有：
 1. 真 Leaflet（`.iui-map-wrap` 高 300px，默认彩色底图）+ Pause/Replay
-2. 编号针 `.iui-pin-dot`（按类别加 `data-cat="food|sight|hotel|shop|nature|culture|transport"` 着色，选中项加 `.active` 会放大置顶；宿主自动把挤在一起的针错开）+ `createTripAnimator({stopCount, durationMs, pinElements, map, onFrame(f){f.pinIndex/f.pinProgress/f.activeStop}, onState(st){'playing'|'paused'|'complete'}})` → `{play, pause, replay}`（`pinElements` 先丢掉 `getElement()` 的 null）
+2. 编号针 `.iui-pin-dot`（按类别加 `data-cat="food|sight|hotel|shop|nature|culture|transport"` 着色，选中项加 `.active` 会放大置顶；宿主自动把挤在一起的针错开）+ `createTripAnimator({stopCount, durationMs, pinElements, map, onFrame, onState})` → `{play, pause, replay}`（`pinElements` 先丢掉 `getElement()` 的 null）。onFrame 给出对象 {progress, fromIndex, toIndex, fraction, activeStop, pinIndex, pinProgress}。参数不是数字下标。示例 `onFrame:function(f){activate(f.pinIndex)}`。onState 第一个参数是英文 token `playing`、`paused`、`complete`，第二个参数是显示用的中文标签「播放中」「已暂停」「已完成」。示例 `onState: function (st, label) { document.getElementById('status').textContent = label; }`。`st` 是英文 token，只做逻辑判断。
 3. 横滑 `.iui-cards-strip` + `.iui-stop-card`（多卡在第一次圆角框里滚，不要撑破边框）
 4. **点针或卡 → 页内详解**：停留 / 票或预约 / 怎么去 / 避坑（加一句为何排这一站）
 单点地图可省略横滑和播放，仍要真图 + marker + 该点详情。
 有日程/住宿/预算再画（住宿用 `.iui-compare-3`）；没有就省略。禁止把三日南京布局套到探店或天气。
 
-行程卡照片：优先调用工具 `get_trip_stop_images`（1–8 个维基标题，可附 `coordinates`），只会返回确实拍的是该地点的照片（Commons 文件名/描述/分类点名，或 300 m 内）。把 `image_url` 写入 `.photo img`，署名用折叠链接 `<a href=credit_url title="作者 · 许可">ⓘ 图片来自 Wikimedia</a>`（不要写文件名）。没有可信照片时保留空 `.photo` 并在卡片上写 `data-lat/data-lng`，宿主会画设计过的占位图；绝不用别处（如更有名的邻近地标）的照片顶替。
+行程卡照片：优先调用工具 `get_trip_stop_images`、`get_place_images`（1–8 个维基标题，可附 `coordinates`），只会返回确实拍的是该地点的照片（Commons 文件名/描述/分类点名，或 300 m 内）。把 `image_url` 写入 `.photo img`，署名用折叠链接 `<a href=credit_url title="作者 · 许可">ⓘ 图片来自 Wikimedia</a>`（不要写文件名）。没有可信照片时保留空 `.photo` 并在卡片上写 `data-lat/data-lng`，宿主会画设计过的占位图；绝不用别处（如更有名的邻近地标）的照片顶替。
 
 ### 定价三列
 `<div class="iui-compare-3">` 内三个 `.iui-tier`（一个 `.featured`）。桌面必须并排，禁止竖着堆三档。
