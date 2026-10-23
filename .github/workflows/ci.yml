@@ -43,3 +43,39 @@ jobs:
         env:
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
         run: pnpm run test:browser
+
+  # visual(⑥): the plugin inside the real dsh host (fixed npm version), replayed conversations,
+  # light 688 / dark 688 / 390 shots diffed against scripts/golden/dsh-visual/ (generated here).
+  dsh-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Install dsh + Playwright (chromium)
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/dsh" @deepseek-ai/dsh@0.2.1-rc.2
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Visual regression in dsh
+        env:
+          DSH_BIN: ${{ runner.temp }}/dsh/node_modules/.bin/dsh
+          PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
+        run: pnpm run test:dsh-visual
+      - name: Upload shots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-visual
+          path: .e2e-artifacts/dsh-visual
+          retention-days: 14

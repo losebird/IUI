@@ -241,12 +241,18 @@ async function waitSettled(page: any): Promise<void> {
  * Score one sandbox srcdoc. `browser` is a Playwright Browser; pages are created
  * and closed here (fresh window per width: setContent reuses globals).
  */
-export async function scoreSrcdoc(browser: any, srcdoc: string): Promise<VisualScore> {
-  const page = await browser.newPage({ viewport: { width: 720, height: 900 }, reducedMotion: 'reduce' })
+/**
+ * `canvas` is the host background behind the frame (frames are transparent): without it a
+ * dark-host srcdoc would be measured on white. `colorScheme` matches the host scheme.
+ */
+export async function scoreSrcdoc(browser: any, srcdoc: string, opts: { colorScheme?: 'light' | 'dark'; canvas?: string } = {}): Promise<VisualScore> {
+  const page = await browser.newPage({ viewport: { width: 720, height: 900 }, reducedMotion: 'reduce', ...(opts.colorScheme ? { colorScheme: opts.colorScheme } : {}) })
+  const paint = async (): Promise<void> => { if (opts.canvas) await page.addStyleTag({ content: `html{background:${opts.canvas} !important}` }) }
   const decoder = await browser.newPage()
   const notes: string[] = []
   try {
     await page.setContent(srcdoc, { waitUntil: 'load' })
+    await paint()
     await waitSettled(page)
     const text = await textMetrics(page)
     notes.push(...text.notes)
@@ -256,6 +262,7 @@ export async function scoreSrcdoc(browser: any, srcdoc: string): Promise<VisualS
     await page.goto('about:blank')
     await page.setViewportSize({ width: 360, height: 800 })
     await page.setContent(srcdoc, { waitUntil: 'load' })
+    await paint()
     await waitSettled(page)
     const over360 = await overflowPx(page)
     if (over720 > 1) notes.push(`overflow @720: ${over720}px`)
