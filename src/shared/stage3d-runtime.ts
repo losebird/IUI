@@ -298,6 +298,8 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
       return stage;
     }
     var w = el.clientWidth || 480, h = el.clientHeight || 360;
+    // Framed before layout (hidden / collapsed parent): redo the auto-fit once the stage has a real size.
+    var needRefit = !el.clientWidth || !el.clientHeight;
     if (!el.clientWidth || !el.clientHeight) { try { console.warn('[iui-3d] stage has no size at init (' + el.clientWidth + 'x' + el.clientHeight + '), using ' + w + 'x' + h); } catch (eW) {} }
     var small = w < 480;
     var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -523,6 +525,7 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     controls.autoRotate = !still && o.autoRotate !== false && !look;
     controls.autoRotateSpeed = Number(o.rotateSpeed) || 1.2;
     controls.update();
+    controls.addEventListener('start', function () { needRefit = false; });
     cv.style.touchAction = 'pan-y';
 
     // Animation clips.
@@ -843,6 +846,18 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         renderer.setSize(W, H, false);
         camera.aspect = W / H;
         camera.updateProjectionMatrix();
+        if (needRefit) {
+          needRefit = false;
+          try {
+            fit();
+            camera.position.copy(home.pos);
+            camera.near = home.dist / 100; camera.far = home.dist * 30; camera.updateProjectionMatrix();
+            controls.target.copy(home.target);
+            controls.minDistance = home.dist * 0.35;
+            controls.maxDistance = home.dist * 2.5;
+            controls.update();
+          } catch (eF) {}
+        }
         if (!running) { draw(); placePins(); }
       });
       ro.observe(el);
