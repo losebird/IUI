@@ -299,7 +299,9 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     }
     var w = el.clientWidth || 480, h = el.clientHeight || 360;
     // Framed before layout (hidden / collapsed parent): redo the auto-fit once the stage has a real size.
-    var needRefit = !el.clientWidth || !el.clientHeight;
+    // Until the user moves the camera, keep the framing in sync with the real stage size (hidden init, or an
+    // intermediate tiny width while the host lays out, would otherwise leave the model far away and pins clustered).
+    var needRefit = true, fitW = w, fitH = h, noSizeInit = !el.clientWidth || !el.clientHeight;
     if (!el.clientWidth || !el.clientHeight) { try { console.warn('[iui-3d] stage has no size at init (' + el.clientWidth + 'x' + el.clientHeight + '), using ' + w + 'x' + h); } catch (eW) {} }
     var small = w < 480;
     var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -597,7 +599,8 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
     }
     var fly = null;
     function flyTo(pos, target, ms) {
-      if (still || ms === 0) { camera.position.copy(pos); controls.target.copy(target); controls.update(); fly = null; return; }
+      if (still || ms === 0) { needRefit = false; camera.position.copy(pos); controls.target.copy(target); controls.update(); fly = null; return; }
+      needRefit = false;
       fly = { t0: performance.now(), ms: ms || 900, p0: camera.position.clone(), q0: controls.target.clone(), p1: pos.clone(), q1: target.clone() };
     }
     function findSpot(id) { for (var i = 0; i < stage.hotspots.length; i++) if (stage.hotspots[i].id === String(id)) return stage.hotspots[i]; return null; }
@@ -846,8 +849,9 @@ export function buildStage3dRuntimeScript(opts: Stage3dRuntimeOptions = {}): str
         renderer.setSize(W, H, false);
         camera.aspect = W / H;
         camera.updateProjectionMatrix();
-        if (needRefit) {
-          needRefit = false;
+        if (needRefit && W >= 64 && H >= 64 && (Math.abs(W - fitW) > 8 || Math.abs(H - fitH) > 8)) {
+          if (noSizeInit) { try { console.warn('[iui-3d] refit at ' + W + 'x' + H + ' (was ' + fitW + 'x' + fitH + ')'); } catch (eR) {} }
+          fitW = W; fitH = H;
           try {
             fit();
             camera.position.copy(home.pos);
