@@ -190,21 +190,23 @@ async function closeTransient(page: any): Promise<void> {
 
 /** In-browser pixel diff: share of pixels whose max channel delta > 24; writes a red overlay. */
 async function diffPng(page: any, a: string, b: string, out: string): Promise<{ ratio: number; size: string }> {
-  const r = await page.evaluate(async ([A, B]: string[]) => {
-    const load = (src: string) => new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src })
-    const [ia, ib] = await Promise.all([load(A!), load(B!)])
+  // Plain string (not a TS function): tsx/esbuild keepNames would inject `__name(...)` into
+  // nested helpers, which does not exist in the page ("ReferenceError: __name is not defined").
+  const r = await page.evaluate(`(async ([A, B]) => {
+    const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src })
+    const [ia, ib] = await Promise.all([load(A), load(B)])
     const w = Math.max(ia.width, ib.width), h = Math.max(ia.height, ib.height)
-    const ctx = (img: HTMLImageElement) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d')!; x.fillStyle = '#ff00ff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0); return x.getImageData(0, 0, w, h) }
+    const ctx = (img) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = '#ff00ff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0); return x.getImageData(0, 0, w, h) }
     const da = ctx(ia).data, db = ctx(ib).data
-    const c = document.createElement('canvas'); c.width = w; c.height = h; const o = c.getContext('2d')!; o.drawImage(ib, 0, 0)
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const o = c.getContext('2d'); o.drawImage(ib, 0, 0)
     const ov = o.getImageData(0, 0, w, h); let bad = 0
     for (let p = 0; p < da.length; p += 4) {
-      const d = Math.max(Math.abs(da[p]! - db[p]!), Math.abs(da[p + 1]! - db[p + 1]!), Math.abs(da[p + 2]! - db[p + 2]!))
+      const d = Math.max(Math.abs(da[p] - db[p]), Math.abs(da[p + 1] - db[p + 1]), Math.abs(da[p + 2] - db[p + 2]))
       if (d > 24) { bad++; ov.data[p] = 255; ov.data[p + 1] = 0; ov.data[p + 2] = 0; ov.data[p + 3] = 255 }
     }
     o.putImageData(ov, 0, 0)
-    return { ratio: bad / (w * h), size: `${ia.width}x${ia.height} → ${ib.width}x${ib.height}`, png: c.toDataURL('image/png') }
-  }, [`data:image/png;base64,${readFileSync(a).toString('base64')}`, `data:image/png;base64,${readFileSync(b).toString('base64')}`])
+    return { ratio: bad / (w * h), size: ia.width + 'x' + ia.height + ' → ' + ib.width + 'x' + ib.height, png: c.toDataURL('image/png') }
+  })(${JSON.stringify([`data:image/png;base64,${readFileSync(a).toString('base64')}`, `data:image/png;base64,${readFileSync(b).toString('base64')}`])})`) as { ratio: number; size: string; png: string }
   writeFileSync(out, Buffer.from(r.png.split(',')[1], 'base64'))
   return { ratio: r.ratio, size: r.size }
 }
