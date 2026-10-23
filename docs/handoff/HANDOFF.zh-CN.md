@@ -1,12 +1,12 @@
 # IUI 视觉重做 · 交接文档
 
-> 交接时间：2026-10（第 5 步完成、第 6 步刚开始调研时更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
+> 交接时间：2026-10（第 6 步完成、待用户确认时更新） ｜ 分支：`hotfix/0.13.0-iui.27`（版本 `0.13.0-iui.27`）｜ 仓库：losebird/IUI
 > 本目录：`docs/handoff/`（只在 `hotfix/0.13.0-iui.27` 分支上，`main` 没有；先 `git fetch origin && git checkout hotfix/0.13.0-iui.27`）
 
 ## 1. 现在在哪一步
 
 - 3 轮视觉方案**全部已确认**（第 1、2 轮按「推荐」；第 3 轮 ⑪ ⑫ 和 999px 修复也已确认要做）。
-- 第 6 节第 1–5 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
+- 第 6 节第 1–6 步**已完成并推送**（`hotfix/0.13.0-iui.27`）：
 
   | 步骤 | 提交 | 内容 | 对比图 |
   |---|---|---|---|
@@ -15,21 +15,19 @@
   | 3 库默认主题 | `cb8c4ef` | **Tailwind 4 按页编译**（`src/themes/tailwind-jit.ts`，见下）；**OIU 文件已删**（→ `host-kit.ts` / `host-polish.ts` / `shared/trip-animator.ts`）；①② Chart.js / ECharts 精修；③ AG Grid；④ 脑图 = ECharts 树图；⑤ 3D `look` 预设 clay（默认）/ toon / data / studio；⑨ Mermaid 灰阶 + `flowchart LR` + `:::focal/:::muted/:::ext`；Leaflet / d3 / GSAP 默认值；动效配方 | `progress/step3/` |
   | 4 插件界面 ⑪⑫ + 999px | `3bba461` | 工具栏图标 + ⋯ 菜单分组；外观弹层；修改失败卡改黄色提示；骨架屏「已接收 X KB」；ToastCard（撤销）；模板中心（缩略图、「我的」）；删成就 / 目录死入口；设置页行列表 / 单预览 / 连通性小表 / 保存条；容器圆角改 `--radius-box` | `progress/step4/` |
   | 5 设计检查 | `c0b24e7` | G15 对比度改按**渲染后计算颜色**：canvas 归一化 oklch/oklab、半透明背景逐层合成、`elementsFromPoint` 取真实底色（图片 / 渐变上跳过）、点击后复检（JS 切换的选中态）；< 3:1 且页面是本次会话里流式生成的 → 自动发一条 `[iui-autofix]` 请求只改颜色的 iui-patch（`src/client/auto-fix.ts`；「自动修复」开关控制；每个页面 lineage 只一次，持久化防循环） | `progress/step5/` |
+  | 6 视觉回归 | `37ee29c` `96e18dd` `86c13ad` `53c606d` + 本提交 | CI 修绿；**真实 dsh 视觉回归** `pnpm run test:dsh-visual`（`scripts/dsh-visual.mts`，24 项 × 浅 688 / 深 688 / 390 = 72 张，像素差 + `scoreSrcdoc` 打分，CI 任务 `dsh-visual` 带 `--gate`，基线 `scripts/golden/dsh-visual/` 由 CI 生成）；真实 dsh 里发现并修了 6 处（见下） | `progress/step6/` |
 
-- 第 1–5 步用户都已确认。**下一步：第 6 步视觉回归**（见第 6 节第 6 条和下面「第 6 步调研记录」）。之后是第 7 步。
+- 第 1–5 步用户都已确认；第 6 步**待用户确认**。之后是第 7 步（抽 20 个旧会话核对、更新说明）。
 
-### 第 6 步调研记录（还没写代码，工作区干净）
+### 第 6 步实现要点（接手必读）
 
-- **CI 从第 1 步起一直是红的**（`.github/workflows/ci.yml` 的 `Browser regression (chromium)` = `pnpm run test:browser` = `scripts/browser-e2e.mts`；tsc / vitest / build 都过）。`c0b24e7` 那次的失败项：
-  1. `visual score · 24 starters`：`echarts-mini` whitespace 69→47、`ag-grid-sheet` 96→52、`mermaid-mindmap` 42→25（第 3 步改了图表 / 表格 / 脑图后留白变多，`scripts/golden/visual-baseline.json` 没更新；要先确认是基线过期还是真退化，再 `pnpm run test:visual -- --update-baseline`）。
-  2. `chart/echarts theming light+dark…`：`echarts not on iui theme (color0=#0a0a0a)`——断言还按旧主题色写，第 3 步 ECharts 默认色改成了墨色系，断言要跟着改（或确认是真问题）。
-  3. `batch C … self-check (24 starters clean)`（第 5 步新暴露）：CI 里 `ds-kit` 的按钮 `fg #fafafa / bg #ffffff`（主色没上，疑似 CI 里时序 / 字体 / 资源加载差异）、`meeting-rooms` 的 `badge-soft` 2.4:1 与 `.meta` 2.7:1、`kanban-board` 头像 `span.ini` 2.9:1。本地 harness 探测这 24 个 starter 是零误报，所以要在 CI 环境复现（可能是 headless-shell 与本地 chromium 差异）；后两项更像 starter 本身颜色偏浅，应改 starter。
-  - 日志用 GitHub API 取：`GET /repos/losebird/IUI/actions/runs?branch=hotfix/0.13.0-iui.27` → `/actions/runs/<id>/jobs` → `/actions/jobs/<job>/logs`。
-  - 本地复现：`npx tsx scripts/browser-e2e.mts`（约 5 分钟；本机能连外网 CDN）。
-- `scripts/e2e-visual.mts`（604 行）需要真实 `dsh` 二进制（`DSH_BIN` 或 PATH），原 agent 机器上**没有 dsh**，跑不了。它现在往 `[data-chat-flow]` 注入 `.md-code-block`（label=`dsh-ui`，pre>code=gallerySpec JSON），然后断言流式骨架、ECharts 引擎按需、本地筛选、文件树、accent 卡片、浅/深表面方向等，全部是旧 GenUI 组件。
-  - 计划：默认组改为注入 `iui-html`（24 个 starter 中选 ⑧ 的 6 个模板 + 状态页）、`iui-patch`、`svg`；旧 gallery 断言整体挪进 `--legacy` 组，用 `page.route('**/runtime-config.json', …)` 把响应里的 `legacyFences` 改成 `true` 打开旧围栏（客户端开关在 `src/client/runtime-config.ts` `isLegacyFencesEnabled()`，服务端在 `src/plugin/fence-feedback.ts`；插件配置字段 `src/plugin/config-schema.ts`）。
-- 因为 CI 没有 dsh，建议另做一个**无宿主**的视觉回归脚本进 CI：复用 `docs/handoff/demo/harness/`（Vite 打包真实组件），覆盖第 6 条列的各项（KaTeX / Mermaid / ECharts / AG Grid / 脑图 / 3D 可以用对应 starter：`echarts-mini`、`ag-grid-sheet`、`mermaid-mindmap`、`scene-3d`，KaTeX 需要自己写一页），每项浅 688 / 深 688 / 390 截图，和 `scripts/golden/` 下的基线 PNG 做像素差（可在浏览器 canvas 里算，免装 pngjs）+ `scripts/visual-score.mts` 的 `scoreSrcdoc` 打分。**基线要在 CI 环境生成**（字体 / chromium 版本不同，本机生成的基线到 CI 一定差很多）：先让 CI 以「只出图不判定」模式跑一次、把截图作为 artifact 上传，下载后提交为基线，再打开阈值判定。地图（瓦片）和 3D 动画容易抖，阈值放宽或遮罩。
-- `scripts/visual-score.mts`：6 条规则（minFont / contrast / overflow / narrow / whitespace / hero），基线 `scripts/golden/visual-baseline.json`，单项掉 >8 分或整页 <75 即失败；`browser-e2e.mts` 里已调用 `visualScoreCase`。
+- **CI 修绿**（`37ee29c`）：调研记录里的 3 类失败——评分基线过期（重新生成 `visual-baseline.json`）、ECharts 断言改为跟随主题墨色、帧内自检改为等入场动画结束再取色（CI 的「主色没上」是动画首帧误报，starter 本身无需改色）。
+- **真实 dsh 回归**（`86c13ad`）：`@deepseek-ai/dsh@0.2.1-rc.2` 可直接 npm 安装（固定版本）。脚本用临时 `DSH_HOME`，`dsh plugin --profile web add link:<repo>` 装插件（装的是 `lib/` 构建产物，改 src 后要先 `pnpm run build`），覆盖写 `profiles/web/cordis.patch.yml` 关掉首启弹窗；`DEEPSEEK_API_KEY` 用假 key 只为列出模型、**不调用模型**；会话通过写入存储回放（`seed.mts`），所以截图里的内容是固定 fixture（`fixtures.mts`）。视口 1280×2400 / 390×2400。
+  - 本地：`DSH_BIN=… CHROMIUM_PATH=… PLAYWRIGHT_PATH=… npx tsx scripts/dsh-visual.mts [--only a,b] [--gate] [--update-baseline]`，全量约 10–12 分钟；报告 `.e2e-artifacts/dsh-visual/report.md`。
+  - **基线只能用 CI 产物更新**：去掉 `--gate` 跑一次（或看失败 run 的 artifact `dsh-visual`），下载 `shots/*.png` 覆盖 `scripts/golden/dsh-visual/`。容差默认 0.5%，行程页（地图）3%，3D 4%。
+  - `scripts/e2e-visual.mts` 已改为转发到 `dsh-visual.mts`（旧 `dsh-ui` 注入方式作废）；无宿主 harness / `test:browser` / `visual-score` 降为辅助。
+- **真实 dsh 里发现并修复**（`96e18dd`）：① 减弱动效 `transition-duration` 0.01ms→0s（脑图在 reduce 下布局炸开）；② 屏幕外 iframe 高度卡在最大值（rAF 暂停时 120ms 兜底 + 观察 body 顶层子元素），390 下行程页曾 2400px 高；③ 3D 热点编号深色白底白字；④ 旧围栏提示 / CHIP 深色白底；⑤ 设置页保存栏常驻 sticky 盖住表单 → 只在有改动时 sticky；⑥ 设置页预览 390 下一字一行 → `min-width:320px` + 横向滚动。
+- **已知 / 未覆盖**：390 下 3D 热点标签互相重叠（未修）；旧 GenUI 目录组件（含 PlotBlock）已移除，只回归「目录组件卡已移除」提示；普通 ```mermaid 由宿主显示为代码块（IUI 只在 iui-html 内渲染 Mermaid）；390 下 dsh 自身折叠侧栏、设置弹窗保留左侧导航（宿主行为）；深色 KaTeX 偏暗在真实 dsh 里不复现。没有覆盖真实模型流式输出（回放会话）。
 
 - 之前的 36 个 hotfix 提交（F1–F28、G1–G16、Batch C–F、R5 等）都在这个分支上，详见 `IUI-修复方案.zh-CN.md`。
 
@@ -53,7 +51,7 @@
 | `demo/chrome/` | 在真实 dsh web 里截插件界面的脚本（`launch.sh` 起 dsh，`drv.mjs <step>.mjs` 跑步骤） |
 | `progress/step1–5/` | 已完成各步的改前 / 改后对比图（浅色 688、深色 688、390） |
 | `demo/harness/` | 无宿主截图 harness（Vite 打包真实组件 + Playwright 截浅/深/390 + 拼图），第 4–5 步对比图都用它，见其 README |
-| `demo/vis.mts` | `scripts/e2e-visual.mts` 的草稿副本（注入方式需改，见 6.3） |
+| `demo/vis.mts` | 旧 `scripts/e2e-visual.mts` 的草稿副本（已被 `scripts/dsh-visual.mts` 取代） |
 
 演示页运行方法见 `demo/README.md`。
 

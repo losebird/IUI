@@ -71,7 +71,7 @@ jobs:
         env:
           DSH_BIN: ${{ runner.temp }}/dsh/node_modules/.bin/dsh
           PLAYWRIGHT_PATH: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
-        run: pnpm run test:dsh-visual
+        run: pnpm run test:dsh-visual -- --gate
       - name: Upload shots
         if: always()
         uses: actions/upload-artifact@v4
