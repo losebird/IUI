@@ -506,7 +506,31 @@ function showStreamingStageChrome(parsed: HtmlSandboxSpec, ready: boolean): bool
 /** visual ⑤: eligibility for the one-shot contrast patch (fresh pages only). */
 export interface SandboxAutoFix { key: string; sessionId: string | undefined }
 
-export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, autoFix = null }: { raw: string; streaming?: boolean; storageKey?: string | null; autoFix?: SandboxAutoFix | null }): ReactNode {
+/** FDE iframe uses `<base href="/dsh-app/">`; a root-absolute `/fde-session` misses the Host proxy. */
+export function adoptIuiAppPath(baseUri = typeof document === 'undefined' ? '/' : document.baseURI): string {
+  try {
+    return new URL('fde-session/adopt-iui-app', baseUri).pathname
+  } catch {
+    return '/fde-session/adopt-iui-app'
+  }
+}
+
+export function adoptIuiSessionId(explicit?: string | null): string {
+  const fromArg = String(explicit || '').trim()
+  if (fromArg) return fromArg
+  if (typeof location === 'undefined') return ''
+  try {
+    const hash = String(location.hash || '')
+    const marker = 'fde-session='
+    const at = hash.indexOf(marker)
+    if (at < 0) return ''
+    return decodeURIComponent(hash.slice(at + marker.length).split('&')[0].split('/')[0]).trim()
+  } catch {
+    return ''
+  }
+}
+
+export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, autoFix = null, sessionId }: { raw: string; streaming?: boolean; storageKey?: string | null; autoFix?: SandboxAutoFix | null; sessionId?: string }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
@@ -1524,17 +1548,17 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
                       ...appearanceBuildOptions(frameAppearance),
                       ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
                     })
-                    const res = await fetch('/fde-session/adopt-iui-app', {
+                    const res = await fetch(adoptIuiAppPath(), {
                       method: 'POST',
                       headers: { 'content-type': 'application/json' },
                       body: JSON.stringify({
                         html,
                         title: parsed.title || '',
-                        sessionId: autoFixRef.current?.sessionId || '',
+                        sessionId: adoptIuiSessionId(autoFixRef.current?.sessionId || sessionId),
                       }),
                     })
-                    const payload = await res.json().catch(() => ({}))
-                    if (!res.ok || payload.ok === false) {
+                    const payload = await res.json().catch(() => ({})) as { ok?: boolean }
+                    if (!res.ok || payload.ok !== true) {
                       setAdoptNote(t('sandbox.adoptAppFail'))
                       window.setTimeout(() => setAdoptNote(null), 2400)
                       return
@@ -1957,6 +1981,7 @@ function VersionedFrame({ raw, streaming, storageKey, scope, fenceKey, pageId }:
     <div data-iui-page={pageId ?? undefined}>
       <VersionBar versions={versions} current={fenceKey} active={shown?.fenceKey ?? fenceKey} onPick={(k) => setPicked(k === fenceKey ? null : k)} />
       <HtmlSandboxFrame key={shown && shown.fenceKey !== fenceKey ? `v:${shown.fenceKey}` : 'self'} raw={showRaw} streaming={streaming} storageKey={storageKey}
+        sessionId={scope}
         autoFix={shown === null && !streaming && isFenceLive(scope, fenceKey) ? { key: `${scope ?? ''}|${pageId ?? fenceKey}`, sessionId: scope } : null} />
     </div>
   )
