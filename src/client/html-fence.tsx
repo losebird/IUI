@@ -138,6 +138,13 @@ const FRAME_STYLE: CSSProperties = {
   colorScheme: 'normal',
 }
 
+/** Overlay host for frozen / self-check pills. Inset lives in the srcdoc
+ * (`#iui-preview-pad` + `#iui-preview-root` clip). Padding here is invisible
+ * when the iframe is transparent and does not stop in-frame overflow. */
+const FRAME_WRAP_STYLE: CSSProperties = {
+  position: 'relative',
+}
+
 const SHELL_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -598,6 +605,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
   const [offlineNote, setOfflineNote] = useState<string | null>(null)
   const [imageNote, setImageNote] = useState<string | null>(null)
   const [templateNote, setTemplateNote] = useState<string | null>(null)
+  const [adoptNote, setAdoptNote] = useState<string | null>(null)
   /** F11: native = Fullscreen API; overlay = fixed in place; portal = fixed under body (transformed ancestor). */
   const [fsMode, setFsMode] = useState<FullscreenMode>('off')
   const fullscreen = fsMode !== 'off'
@@ -711,6 +719,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
       // C6: libraries from the plugin's own asset route first, CDNs as fallback.
       ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
+      amapPlace: getRuntimeConfigSnapshot().amapWebKeyConfigured === true,
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
     [srcdocRebuildKey, designTokens, frameId, strictImages, storageReady, cdnKey],
@@ -1498,6 +1507,53 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
               type="button"
               role="menuitem"
               className={menuItemClass}
+              data-iui-sandbox-adopt-app="1"
+              disabled={adoptNote !== null || parsed === null || parsed.partial === true}
+              onClick={() => {
+                if (adoptNote) return
+                setMenuOpen(false)
+                setAdoptNote(t('sandbox.adoptAppWorking'))
+                void (async () => {
+                  try {
+                    const snap = await requestSandboxSnapshot(iframeRef.current, frameId)
+                    const html = buildSandboxDownloadHtml(parsed, {
+                      designTokens: mergeSandboxDesignTokens(designTokens, getActivePackId()),
+                      frameId: 'download',
+                      brandId: getActivePackId(),
+                      mergePackTokens: false,
+                      ...appearanceBuildOptions(frameAppearance),
+                      ...(snap && snap.html.trim() ? { liveHtml: snap.html, liveCss: snap.css, liveState: snap.state } : {}),
+                    })
+                    const res = await fetch('/fde-session/adopt-iui-app', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({
+                        html,
+                        title: parsed.title || '',
+                        sessionId: autoFixRef.current?.sessionId || '',
+                      }),
+                    })
+                    const payload = await res.json().catch(() => ({}))
+                    if (!res.ok || payload.ok === false) {
+                      setAdoptNote(t('sandbox.adoptAppFail'))
+                      window.setTimeout(() => setAdoptNote(null), 2400)
+                      return
+                    }
+                    setAdoptNote(t('sandbox.adoptAppDone'))
+                    window.setTimeout(() => setAdoptNote(null), 2400)
+                  } catch {
+                    setAdoptNote(t('sandbox.adoptAppFail'))
+                    window.setTimeout(() => setAdoptNote(null), 2400)
+                  }
+                })()
+              }}
+            >
+              <ChromeIcon name="bookmark" size={15} />{adoptNote ?? t('sandbox.adoptApp')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className={menuItemClass}
               data-iui-sandbox-offline="1"
               disabled={offlineNote === t('sandbox.offlinePacking')}
               onClick={() => {
@@ -1702,7 +1758,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
           ]}
         />
       )}
-      <div style={fullscreen ? { position: 'relative', flex: 1, minHeight: 0 } : { position: 'relative' }}>
+      <div style={fullscreen ? { ...FRAME_WRAP_STYLE, flex: 1, minHeight: 0 } : FRAME_WRAP_STYLE}>
         {storageReady && <iframe
           ref={iframeRef}
           key={stopped ? `${srcdocRebuildKey}:stopped` : frozenHtml !== null ? `${srcdocRebuildKey}:frozen` : srcdocRebuildKey}
