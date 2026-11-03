@@ -70,7 +70,15 @@ export const STREAM_HEURISTICS: StreamHeuristics = {
     'read_file',
     'grep',
   ],
-  toolsAllowedBeforeFence: ['get_trip_stop_images', 'get_place_images', 'find_3d_models'],
+  toolsAllowedBeforeFence: [
+    'get_trip_stop_images',
+    'get_place_images',
+    'find_3d_models',
+    'search_text',
+    'route_intent',
+    'open_node',
+    'search_passages',
+  ],
   firstTokenDecideAfter: 3,
   midNudgeAfterSteps: 1,
   maxSameTurnSteers: 2,
@@ -151,7 +159,11 @@ export function isToolBeforeFenceName(
 ): boolean {
   const lower = toolName.toLowerCase()
   if (policy.toolsAllowedBeforeFence.some((n) => lower === n.toLowerCase())) return false
-  return policy.toolsBeforeFenceNames.some((n) => lower.includes(n.toLowerCase()))
+  return policy.toolsBeforeFenceNames.some((n) => {
+    const needle = n.toLowerCase()
+    if (needle === 'search') return lower === 'search' || lower.startsWith('web_search')
+    return lower === needle
+  })
 }
 
 const masqueradeOpenCache = new Map<string, RegExp>()

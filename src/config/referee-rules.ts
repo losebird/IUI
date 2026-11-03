@@ -178,7 +178,7 @@ export const INTENT_RULES: readonly IntentRule[] = [
       '地图', '导航', '怎么走', '怎么去', '路线', '定位', '位置', '目的地',
       '把.*地图', '给我.*地图', '打开.*地图', '高德', '百度地图', 'amap',
       'baidu map', 'google maps', 'directions?', 'navigate to',
-      'show (me )?the map', 'where is', '在哪', '在哪儿', '地址.*地图', '地图.*给',
+      'show (me )?the map', 'where is', '在哪儿', '在哪里', '地址.*地图', '地图.*给',
     ],
     mode: 'must_fence',
     preferredTypes: ['sandbox', 'leaflet', 'map'],
@@ -367,15 +367,15 @@ export const INTENT_RULES: readonly IntentRule[] = [
       '(?:^|\\n)\\s*[-*]\\s+\\S+\\s+[\\d.]+',
     ],
     successCriteria: [
-      '```iui-html 用 agGrid.createGrid + ag-theme-quartz ag-theme-iui。',
+      '```iui-html 用 agGrid.createGrid + ag-theme-quartz ag-theme-iui。工具栏搜索，不要 floatingFilter / agSetColumnFilter。',
       '禁止 Markdown 表冒充可筛数据表。行程小表不走这条。',
     ],
     recipe: sb(
-      '明细表',
-      '<div class="card border"><div class="card-body wrap"><h2>明细</h2><div id="grid" class="ag-theme-quartz ag-theme-iui" style="width:100%"></div></div></div>',
+      '本周订单',
+      '<div class="card border"><div class="card-body wrap"><div class="flex items-center justify-between gap-2 flex-wrap"><div><h2 class="card-title">本周订单</h2><p class="text-sm text-base-content/60">3 笔 · 示例数据 <span class="iui-badge-sample"></span></p></div><input id="q" class="input input-sm w-40" type="search" placeholder="搜索" autocomplete="off"></div><div id="grid" class="ag-theme-quartz ag-theme-iui" style="width:100%"></div></div></div>',
       '.wrap{gap:12px}',
-      "agGrid.createGrid(document.getElementById('grid'),{domLayout:'autoHeight',columnDefs:[{field:'name',headerName:'名称',filter:true,sortable:true},{field:'n',headerName:'数量',sortable:true}],rowData:[{name:'甲',n:3},{name:'乙',n:1},{name:'丙',n:8}]});",
-      360,
+      "var api=agGrid.createGrid(document.getElementById('grid'),{domLayout:'autoHeight',suppressCellFocus:true,rowSelection:'multiple',defaultColDef:{sortable:true,flex:1,minWidth:70,suppressHeaderMenuButton:true},columnDefs:[{field:'id',headerName:'单号',checkboxSelection:true,headerCheckboxSelection:true},{field:'name',headerName:'客户'},{field:'n',headerName:'金额',type:'rightAligned'}],rowData:[{id:'SO-1',name:'陈一鸣',n:2310},{id:'SO-2',name:'林晓雯',n:1286},{id:'SO-3',name:'李沐阳',n:1540}]});document.getElementById('q').oninput=function(){api.setGridOption('quickFilterText',this.value);};",
+      420,
     ),
     repairHint: '可筛/可排序数据表必须 ```iui-html + agGrid.createGrid（ag-theme-iui）。Markdown 表不算。行程里的预算小表不要改成 Grid。',
   },
@@ -469,7 +469,7 @@ const STRONG_UI_ASK =
 const UI_VERB = '给我[一个张份幅]|做|画|生成|制作|创建|设计|搭|弄|来[一个张份]|整[一个个]|展示|显示|呈现|给我看|make|build|create|draw|design|generate|render|show'
 /** Things that are pages / visuals, not prose. */
 const UI_ARTIFACT =
-  '可视化|看板|仪表盘|驾驶舱|地图|计算器|图表|折线|柱状|饼图|曲线|图|界面|页面|网页|页|卡片|卡|组件|小工具|表单|问卷|动画|游戏|小游戏|模拟器|仿真|番茄钟|计时器|倒计时|转盘|抽奖|时间线|行程|日程|攻略|食谱|菜单|课表|日历|清单|报表|表格|明细表|数据表|汇总表|对照表|海报|demo|dashboard|chart|map|calculator|widget|page|\\bui\\b|form|diagram|timeline|脑图|思维导图|流程图|甘特图'
+  '可视化|看板|仪表盘|驾驶舱|地图|计算器|图表|折线|柱状|饼图|曲线|界面|页面|网页|卡片|组件|小工具|表单|问卷|动画|游戏|小游戏|模拟器|仿真|番茄钟|计时器|倒计时|转盘|抽奖|时间线|行程|日程|攻略|食谱|菜单|课表|日历|清单|报表|表格|明细表|数据表|汇总表|对照表|海报|demo|dashboard|chart|map|calculator|widget|page|\\bui\\b|form|diagram|timeline|脑图|思维导图|流程图|甘特图'
 const VERB_THEN_ARTIFACT = new RegExp(`(?:${UI_VERB}).{0,24}?(?:${UI_ARTIFACT})`, 'iu')
 /** "把今日菜单给我看看 / 地图给我" — artifact first, then hand it over. */
 const ARTIFACT_THEN_SHOW = new RegExp(`(?:${UI_ARTIFACT}).{0,6}?给我(?:看|瞧)?`, 'iu')
@@ -577,7 +577,7 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'map',
     patterns: [...askPatternsOf('map'), '行程', '旅行', '旅游', '攻略', 'itinerary', 'trip'],
-    text: "Map / trip with 2+ places: real Leaflet in .iui-map-wrap (~300px) on a quiet grey basemap `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}` (World_Dark_Gray_Base when dark; attribution 'Tiles © Esri'; invalidateSize after layout; wheel/touch gestures are handled by the host); the route in ink (--color-base-content, weight 3), numbered L.divIcon `<span class=\"iui-pin-dot\">1</span>` pins with a permanent name label; day switch as tabs tabs-box tabs-xs; a 3-column strip of .iui-stop-card (photo + number + name + one line; phones swipe); click-to-detail: a pin or card opens an in-page detail panel (停留 / 票 / 怎么去 / 避坑). Optional `createTripAnimator({stopCount,durationMs:6000,pinElements,map,onFrame,onState})` → play/pause/replay/seek. Photos: Wikimedia Commons HTTPS only (or get_trip_stop_images / get_place_images before the fence; `data-iui-place` lets the host fill one); never Unsplash/random hosts.",
+    text: "Map / trip with 2+ places — Nanjing density, not a 3-pin skeleton: call get_trip_stop_images BEFORE the fence (English Wikipedia titles + coordinates; 明孝陵→Ming Xiaoling, 美龄宫→Meiling Palace, 中山陵→Sun Yat-sen Mausoleum, 栖霞寺→Qixia Temple). 2–4 stops per day, 6–10 across 3 days (hotel counts). Real Leaflet in .iui-map-wrap (~300px) on a quiet grey basemap `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}` (World_Dark_Gray_Base when dark; attribution 'Tiles © Esri'; invalidateSize after layout; wheel/touch gestures are handled by the host); the route in ink (--color-base-content, weight 3), numbered L.divIcon `<span class=\"iui-pin-dot\">1</span>` pins with a permanent name label; day switch as tabs tabs-box tabs-xs; a 3-column strip of .iui-stop-card (empty .photo + data-iui-place + data-lat/data-lng, then `.body` with `.num` + `.name` + `.meta`; never position:absolute, never white text on the card; selected = border only). Click-to-detail must fill 停留 (hours) / 票 (price or 免费+预约) / 怎么去 (metro line + exit) / 避坑 (one specific trap) + why this stop. Optional `createTripAnimator({stopCount,durationMs:6000,pinElements,map,onFrame,onState})` → play/pause/replay/seek. Overnight: .iui-hotel-card. Photos: Wikimedia only (tool or host fill); never Unsplash.",
   },
   {
     id: 'weather',
@@ -602,7 +602,7 @@ export const PATTERN_NOTES: readonly PatternNote[] = [
   {
     id: 'grid-table',
     patterns: askPatternsOf('grid-table'),
-    text: "Sortable/filterable data table: `agGrid.createGrid(el,{columnDefs,rowData})`, el class `ag-theme-quartz ag-theme-iui`, few rows → domLayout:'autoHeight'. Not for itinerary budgets or 3-tier pricing.",
+    text: "AG Grid 精修 (not itinerary budgets / 3-tier pricing): toolbar with title + count + `<input type=search autocomplete=off>` + 导出, then `#grid.ag-theme-quartz.ag-theme-iui`. `agGrid.createGrid(el,{domLayout:'autoHeight',rowSelection:'multiple',suppressCellFocus:true,defaultColDef:{sortable:true,flex:1,minWidth:70,suppressHeaderMenuButton:true}})`. Never `filter`/`floatingFilter`/`agSetColumnFilter` (Excel popup; community has no Set Filter) — search calls `api.setGridOption('quickFilterText',q)`. Money: `type:'rightAligned'` + `¥` thousands. Status: `cellRenderer` → `badge badge-sm badge-soft` (success/info/warning). First col checkbox. Sample data, badge it.",
   },
   {
     id: 'mindmap',

@@ -30,6 +30,7 @@ describe('live dsh E2E fixes', () => {
     expect(classifyIntentAsk('画一个本地咖啡探店地图')?.id).toBe('map')
     expect(classifyIntentAsk('帮我做一个三日华东行程：苏州→杭州→上海')).not.toBeNull()
     expect(classifyIntentAsk('上海明天天气怎么样？')).toBeNull()
+    expect(classifyIntentAsk('工作区文件里「金项链」出现在哪个文档？教培排班.pdf 里写了什么？值班隔离那条费用报销做到哪一步了？')).toBeNull()
   })
 })
 

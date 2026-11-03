@@ -151,6 +151,9 @@ describe('R5-3 find_3d_models tool', () => {
   it('may run before the fence', () => {
     expect(getStreamHeuristics().toolsAllowedBeforeFence).toContain('find_3d_models')
     expect(isToolBeforeFenceName('find_3d_models')).toBe(false)
+    expect(isToolBeforeFenceName('search_text')).toBe(false)
+    expect(isToolBeforeFenceName('route_intent')).toBe(false)
+    expect(isToolBeforeFenceName('web_search')).toBe(true)
   })
 })
 

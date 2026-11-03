@@ -11,6 +11,7 @@
 import {
   classifyIntentAsk,
   getIntentRule,
+  isExplicitUiAsk,
   listIntentRules,
   type IntentRule,
 } from '../config/referee-rules.ts'
@@ -96,6 +97,9 @@ export async function routeFormat(
 ): Promise<FormatRouteResult> {
   const text = ask.trim()
   if (text.length === 0) {
+    return { rule: null, formatId: PLAIN_OPTION, source: 'rules', confidence: 1 }
+  }
+  if (!isExplicitUiAsk(text)) {
     return { rule: null, formatId: PLAIN_OPTION, source: 'rules', confidence: 1 }
   }
 
