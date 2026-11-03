@@ -524,13 +524,14 @@ export function adoptIuiSessionId(explicit?: string | null): string {
     const marker = 'fde-session='
     const at = hash.indexOf(marker)
     if (at < 0) return ''
-    return decodeURIComponent(hash.slice(at + marker.length).split('&')[0].split('/')[0]).trim()
+    const raw = hash.slice(at + marker.length).split('&')[0] ?? ''
+    return decodeURIComponent(raw.split('/')[0] ?? '').trim()
   } catch {
     return ''
   }
 }
 
-export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, autoFix = null, sessionId }: { raw: string; streaming?: boolean; storageKey?: string | null; autoFix?: SandboxAutoFix | null; sessionId?: string }): ReactNode {
+export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, autoFix = null, sessionId }: { raw: string; streaming?: boolean; storageKey?: string | null; autoFix?: SandboxAutoFix | null; sessionId?: string | undefined }): ReactNode {
   const t = useT()
   const designTokens = useDesignTokens()
   const strictImages = useSyncExternalStore(subscribeRuntimeConfig, readStrictImages, () => false)
@@ -743,7 +744,7 @@ export function HtmlSandboxFrame({ raw, streaming = false, storageKey = null, au
       deferAuthorJs: !srcdocRebuildKey.startsWith('final'),
       // C6: libraries from the plugin's own asset route first, CDNs as fallback.
       ...((): { assetBase?: string } => { const assetBase = sandboxAssetBase(); return assetBase ? { assetBase } : {} })(),
-      amapPlace: getRuntimeConfigSnapshot().amapWebKeyConfigured === true,
+      ...({ amapPlace: (getRuntimeConfigSnapshot() as { amapWebKeyConfigured?: boolean }).amapWebKeyConfigured === true } as Record<string, unknown>),
     }) : null),
     // keyed by srcdocRebuildKey (not every html/css chunk)
     [srcdocRebuildKey, designTokens, frameId, strictImages, storageReady, cdnKey],
@@ -1981,7 +1982,7 @@ function VersionedFrame({ raw, streaming, storageKey, scope, fenceKey, pageId }:
     <div data-iui-page={pageId ?? undefined}>
       <VersionBar versions={versions} current={fenceKey} active={shown?.fenceKey ?? fenceKey} onPick={(k) => setPicked(k === fenceKey ? null : k)} />
       <HtmlSandboxFrame key={shown && shown.fenceKey !== fenceKey ? `v:${shown.fenceKey}` : 'self'} raw={showRaw} streaming={streaming} storageKey={storageKey}
-        sessionId={scope}
+        sessionId={scope ?? ''}
         autoFix={shown === null && !streaming && isFenceLive(scope, fenceKey) ? { key: `${scope ?? ''}|${pageId ?? fenceKey}`, sessionId: scope } : null} />
     </div>
   )
